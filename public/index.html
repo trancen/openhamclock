@@ -330,8 +330,8 @@
       },
       satellite: {
         name: 'Satellite',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+        url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        attribution: '&copy; Google'
       },
       terrain: {
         name: 'Terrain',
@@ -345,23 +345,23 @@
       },
       topo: {
         name: 'Topo',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
       },
-      ocean: {
-        name: 'Ocean',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+      watercolor: {
+        name: 'Artistic',
+        url: 'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg',
+        attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://stamen.com/">Stamen</a>'
       },
-      natgeo: {
-        name: 'NatGeo',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}',
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &copy; National Geographic'
+      hybrid: {
+        name: 'Hybrid',
+        url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        attribution: '&copy; Google'
       },
       gray: {
         name: 'Gray',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
       }
     };
 
@@ -800,7 +800,8 @@
         // Initial tile layer
         tileLayerRef.current = L.tileLayer(MAP_STYLES[mapStyle].url, {
           attribution: MAP_STYLES[mapStyle].attribution,
-          noWrap: true
+          noWrap: true,
+          crossOrigin: 'anonymous'
         }).addTo(map);
 
         // Day/night terminator with resolution option for smoother rendering
@@ -849,7 +850,8 @@
         mapInstanceRef.current.removeLayer(tileLayerRef.current);
         tileLayerRef.current = L.tileLayer(MAP_STYLES[mapStyle].url, {
           attribution: MAP_STYLES[mapStyle].attribution,
-          noWrap: true
+          noWrap: true,
+          crossOrigin: 'anonymous'
         }).addTo(mapInstanceRef.current);
         
         // Ensure terminator is on top
