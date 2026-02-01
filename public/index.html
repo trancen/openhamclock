@@ -725,6 +725,238 @@
       return { data, loading };
     };
 
+    // ============================================
+    // SHARED FILTER HELPER FUNCTIONS
+    // Used by both DX Cluster hook and Map component
+    // ============================================
+    
+    // Helper to get band from frequency (in kHz)
+    const getBandFromFreq = (freq) => {
+      const f = parseFloat(freq);
+      // Handle MHz input (convert to kHz)
+      const freqKhz = f < 1000 ? f * 1000 : f;
+      if (freqKhz >= 1800 && freqKhz <= 2000) return '160m';
+      if (freqKhz >= 3500 && freqKhz <= 4000) return '80m';
+      if (freqKhz >= 5330 && freqKhz <= 5405) return '60m';
+      if (freqKhz >= 7000 && freqKhz <= 7300) return '40m';
+      if (freqKhz >= 10100 && freqKhz <= 10150) return '30m';
+      if (freqKhz >= 14000 && freqKhz <= 14350) return '20m';
+      if (freqKhz >= 18068 && freqKhz <= 18168) return '17m';
+      if (freqKhz >= 21000 && freqKhz <= 21450) return '15m';
+      if (freqKhz >= 24890 && freqKhz <= 24990) return '12m';
+      if (freqKhz >= 28000 && freqKhz <= 29700) return '10m';
+      if (freqKhz >= 50000 && freqKhz <= 54000) return '6m';
+      if (freqKhz >= 144000 && freqKhz <= 148000) return '2m';
+      if (freqKhz >= 420000 && freqKhz <= 450000) return '70cm';
+      return 'other';
+    };
+    
+    // Helper to detect mode from comment
+    const detectMode = (comment) => {
+      if (!comment) return null;
+      const upper = comment.toUpperCase();
+      if (upper.includes('FT8')) return 'FT8';
+      if (upper.includes('FT4')) return 'FT4';
+      if (upper.includes('CW')) return 'CW';
+      if (upper.includes('SSB') || upper.includes('LSB') || upper.includes('USB')) return 'SSB';
+      if (upper.includes('RTTY')) return 'RTTY';
+      if (upper.includes('PSK')) return 'PSK';
+      if (upper.includes('AM')) return 'AM';
+      if (upper.includes('FM')) return 'FM';
+      return null;
+    };
+    
+    // Callsign prefix to CQ/ITU zone and continent mapping
+    const getCallsignInfo = (call) => {
+      if (!call) return { cqZone: null, ituZone: null, continent: null };
+      const upper = call.toUpperCase();
+      
+      // Simplified prefix->zone mapping (common prefixes)
+      const prefixMap = {
+        // North America
+        'W': { cq: 5, itu: 8, cont: 'NA' }, 'K': { cq: 5, itu: 8, cont: 'NA' }, 'N': { cq: 5, itu: 8, cont: 'NA' }, 'AA': { cq: 5, itu: 8, cont: 'NA' },
+        'VE': { cq: 5, itu: 4, cont: 'NA' }, 'VA': { cq: 5, itu: 4, cont: 'NA' }, 'VY': { cq: 2, itu: 4, cont: 'NA' },
+        'XE': { cq: 6, itu: 10, cont: 'NA' }, 'XF': { cq: 6, itu: 10, cont: 'NA' },
+        // Europe
+        'G': { cq: 14, itu: 27, cont: 'EU' }, 'M': { cq: 14, itu: 27, cont: 'EU' }, '2E': { cq: 14, itu: 27, cont: 'EU' },
+        'F': { cq: 14, itu: 27, cont: 'EU' }, 'DL': { cq: 14, itu: 28, cont: 'EU' }, 'D': { cq: 14, itu: 28, cont: 'EU' },
+        'I': { cq: 15, itu: 28, cont: 'EU' }, 'IK': { cq: 15, itu: 28, cont: 'EU' },
+        'EA': { cq: 14, itu: 37, cont: 'EU' }, 'EC': { cq: 14, itu: 37, cont: 'EU' },
+        'PA': { cq: 14, itu: 27, cont: 'EU' }, 'PD': { cq: 14, itu: 27, cont: 'EU' },
+        'ON': { cq: 14, itu: 27, cont: 'EU' }, 'OZ': { cq: 14, itu: 18, cont: 'EU' },
+        'SM': { cq: 14, itu: 18, cont: 'EU' }, 'LA': { cq: 14, itu: 18, cont: 'EU' },
+        'OH': { cq: 15, itu: 18, cont: 'EU' }, 'SP': { cq: 15, itu: 28, cont: 'EU' },
+        'OK': { cq: 15, itu: 28, cont: 'EU' }, 'OM': { cq: 15, itu: 28, cont: 'EU' },
+        'HA': { cq: 15, itu: 28, cont: 'EU' }, 'HB': { cq: 14, itu: 28, cont: 'EU' },
+        'OE': { cq: 15, itu: 28, cont: 'EU' }, 'LZ': { cq: 20, itu: 28, cont: 'EU' },
+        'YO': { cq: 20, itu: 28, cont: 'EU' }, 'YU': { cq: 15, itu: 28, cont: 'EU' },
+        'UA': { cq: 16, itu: 29, cont: 'EU' }, 'R': { cq: 16, itu: 29, cont: 'EU' },
+        'UR': { cq: 16, itu: 29, cont: 'EU' }, 'UT': { cq: 16, itu: 29, cont: 'EU' },
+        'LY': { cq: 15, itu: 29, cont: 'EU' }, 'ES': { cq: 15, itu: 29, cont: 'EU' },
+        'YL': { cq: 15, itu: 29, cont: 'EU' }, 'CT': { cq: 14, itu: 37, cont: 'EU' },
+        'EI': { cq: 14, itu: 27, cont: 'EU' }, 'GI': { cq: 14, itu: 27, cont: 'EU' },
+        'GM': { cq: 14, itu: 27, cont: 'EU' }, 'GW': { cq: 14, itu: 27, cont: 'EU' },
+        'SV': { cq: 20, itu: 28, cont: 'EU' }, '9A': { cq: 15, itu: 28, cont: 'EU' },
+        'S5': { cq: 15, itu: 28, cont: 'EU' },
+        // Asia
+        'JA': { cq: 25, itu: 45, cont: 'AS' }, 'JH': { cq: 25, itu: 45, cont: 'AS' }, 'JR': { cq: 25, itu: 45, cont: 'AS' },
+        'HL': { cq: 25, itu: 44, cont: 'AS' }, 'DS': { cq: 25, itu: 44, cont: 'AS' },
+        'BY': { cq: 24, itu: 44, cont: 'AS' }, 'BV': { cq: 24, itu: 44, cont: 'AS' },
+        'VU': { cq: 22, itu: 41, cont: 'AS' }, 'VK': { cq: 30, itu: 59, cont: 'OC' },
+        'DU': { cq: 27, itu: 50, cont: 'OC' }, '9M': { cq: 28, itu: 54, cont: 'AS' },
+        'HS': { cq: 26, itu: 49, cont: 'AS' }, 'XV': { cq: 26, itu: 49, cont: 'AS' },
+        // South America  
+        'LU': { cq: 13, itu: 14, cont: 'SA' }, 'PY': { cq: 11, itu: 15, cont: 'SA' },
+        'CE': { cq: 12, itu: 14, cont: 'SA' }, 'CX': { cq: 13, itu: 14, cont: 'SA' },
+        'HK': { cq: 9, itu: 12, cont: 'SA' }, 'YV': { cq: 9, itu: 12, cont: 'SA' },
+        'HC': { cq: 10, itu: 12, cont: 'SA' }, 'OA': { cq: 10, itu: 12, cont: 'SA' },
+        // Africa
+        'ZS': { cq: 38, itu: 57, cont: 'AF' }, '5N': { cq: 35, itu: 46, cont: 'AF' },
+        'EA8': { cq: 33, itu: 36, cont: 'AF' }, 'CN': { cq: 33, itu: 37, cont: 'AF' },
+        '7X': { cq: 33, itu: 37, cont: 'AF' }, 'SU': { cq: 34, itu: 38, cont: 'AF' },
+        'ST': { cq: 34, itu: 47, cont: 'AF' }, 'ET': { cq: 37, itu: 48, cont: 'AF' },
+        '5Z': { cq: 37, itu: 48, cont: 'AF' }, '5H': { cq: 37, itu: 53, cont: 'AF' },
+        // Oceania
+        'ZL': { cq: 32, itu: 60, cont: 'OC' }, 'FK': { cq: 32, itu: 56, cont: 'OC' },
+        'VK9': { cq: 30, itu: 60, cont: 'OC' }, 'YB': { cq: 28, itu: 51, cont: 'OC' },
+        'KH6': { cq: 31, itu: 61, cont: 'OC' }, 'KH2': { cq: 27, itu: 64, cont: 'OC' },
+        // Caribbean
+        'VP5': { cq: 8, itu: 11, cont: 'NA' }, 'PJ': { cq: 9, itu: 11, cont: 'SA' },
+        'HI': { cq: 8, itu: 11, cont: 'NA' }, 'CO': { cq: 8, itu: 11, cont: 'NA' },
+        'KP4': { cq: 8, itu: 11, cont: 'NA' }, 'FG': { cq: 8, itu: 11, cont: 'NA' },
+        // Antarctica
+        'DP0': { cq: 38, itu: 67, cont: 'AN' }, 'VP8': { cq: 13, itu: 73, cont: 'AN' },
+        'KC4': { cq: 13, itu: 67, cont: 'AN' }
+      };
+      
+      // Try to match prefix (longest match first)
+      for (let len = 4; len >= 1; len--) {
+        const prefix = upper.substring(0, len);
+        if (prefixMap[prefix]) {
+          return { 
+            cqZone: prefixMap[prefix].cq, 
+            ituZone: prefixMap[prefix].itu, 
+            continent: prefixMap[prefix].cont 
+          };
+        }
+      }
+      
+      // Fallback based on first character
+      const firstChar = upper[0];
+      const fallbackMap = {
+        'A': { cq: 21, itu: 39, cont: 'AS' },
+        'B': { cq: 24, itu: 44, cont: 'AS' },
+        'C': { cq: 14, itu: 27, cont: 'EU' },
+        'D': { cq: 14, itu: 28, cont: 'EU' },
+        'E': { cq: 14, itu: 27, cont: 'EU' },
+        'F': { cq: 14, itu: 27, cont: 'EU' },
+        'G': { cq: 14, itu: 27, cont: 'EU' },
+        'H': { cq: 14, itu: 27, cont: 'EU' },
+        'I': { cq: 15, itu: 28, cont: 'EU' },
+        'J': { cq: 25, itu: 45, cont: 'AS' },
+        'K': { cq: 5, itu: 8, cont: 'NA' },
+        'L': { cq: 13, itu: 14, cont: 'SA' },
+        'M': { cq: 14, itu: 27, cont: 'EU' },
+        'N': { cq: 5, itu: 8, cont: 'NA' },
+        'O': { cq: 15, itu: 18, cont: 'EU' },
+        'P': { cq: 11, itu: 15, cont: 'SA' },
+        'R': { cq: 16, itu: 29, cont: 'EU' },
+        'S': { cq: 15, itu: 28, cont: 'EU' },
+        'T': { cq: 37, itu: 48, cont: 'AF' },
+        'U': { cq: 16, itu: 29, cont: 'EU' },
+        'V': { cq: 5, itu: 4, cont: 'NA' },
+        'W': { cq: 5, itu: 8, cont: 'NA' },
+        'X': { cq: 6, itu: 10, cont: 'NA' },
+        'Y': { cq: 15, itu: 28, cont: 'EU' },
+        'Z': { cq: 38, itu: 57, cont: 'AF' }
+      };
+      
+      if (fallbackMap[firstChar]) {
+        return {
+          cqZone: fallbackMap[firstChar].cq,
+          ituZone: fallbackMap[firstChar].itu,
+          continent: fallbackMap[firstChar].cont
+        };
+      }
+      
+      return { cqZone: null, ituZone: null, continent: null };
+    };
+    
+    // Filter DX paths based on filters (same logic as spot filtering)
+    const filterDXPaths = (paths, filters) => {
+      if (!paths || !filters) return paths;
+      if (Object.keys(filters).length === 0) return paths;
+      
+      return paths.filter(path => {
+        // Get info for DX call (the target station)
+        const dxCallInfo = getCallsignInfo(path.dxCall);
+        // Get info for spotter (origin)
+        const spotterInfo = getCallsignInfo(path.spotter);
+        
+        // Watchlist filter - show ONLY watchlist if enabled
+        if (filters.watchlistOnly && filters.watchlist?.length > 0) {
+          const inWatchlist = filters.watchlist.some(w => 
+            path.dxCall?.toUpperCase().includes(w.toUpperCase()) ||
+            path.spotter?.toUpperCase().includes(w.toUpperCase())
+          );
+          if (!inWatchlist) return false;
+        }
+        
+        // Exclude list - hide matching callsigns
+        if (filters.excludeList?.length > 0) {
+          const isExcluded = filters.excludeList.some(e =>
+            path.dxCall?.toUpperCase().includes(e.toUpperCase()) ||
+            path.spotter?.toUpperCase().includes(e.toUpperCase())
+          );
+          if (isExcluded) return false;
+        }
+        
+        // CQ Zone filter (applies to DX station)
+        if (filters.cqZones?.length > 0) {
+          if (!dxCallInfo.cqZone || !filters.cqZones.includes(dxCallInfo.cqZone)) {
+            return false;
+          }
+        }
+        
+        // ITU Zone filter (applies to DX station)
+        if (filters.ituZones?.length > 0) {
+          if (!dxCallInfo.ituZone || !filters.ituZones.includes(dxCallInfo.ituZone)) {
+            return false;
+          }
+        }
+        
+        // Continent filter (applies to DX station)
+        if (filters.continents?.length > 0) {
+          if (!dxCallInfo.continent || !filters.continents.includes(dxCallInfo.continent)) {
+            return false;
+          }
+        }
+        
+        // Band filter
+        if (filters.bands?.length > 0) {
+          const freqKhz = parseFloat(path.freq) * 1000; // Convert MHz to kHz
+          const band = getBandFromFreq(freqKhz);
+          if (!filters.bands.includes(band)) return false;
+        }
+        
+        // Mode filter
+        if (filters.modes?.length > 0) {
+          const mode = detectMode(path.comment);
+          if (!mode || !filters.modes.includes(mode)) return false;
+        }
+        
+        // Callsign search filter
+        if (filters.callsign && filters.callsign.trim()) {
+          const search = filters.callsign.trim().toUpperCase();
+          const matchesDX = path.dxCall?.toUpperCase().includes(search);
+          const matchesSpotter = path.spotter?.toUpperCase().includes(search);
+          if (!matchesDX && !matchesSpotter) return false;
+        }
+        
+        return true;
+      });
+    };
+
     const useDXCluster = (source = 'auto', filters = {}) => {
       const [allSpots, setAllSpots] = useState([]); // All accumulated spots
       const [data, setData] = useState([]); // Filtered spots for display
@@ -732,155 +964,6 @@
       const [activeSource, setActiveSource] = useState('');
       const spotRetentionMs = 30 * 60 * 1000; // 30 minutes
       const pollInterval = 5000; // 5 seconds
-      
-      // Helper to get band from frequency
-      const getBandFromFreq = (freq) => {
-        if (freq >= 1800 && freq <= 2000) return '160m';
-        if (freq >= 3500 && freq <= 4000) return '80m';
-        if (freq >= 5330 && freq <= 5405) return '60m';
-        if (freq >= 7000 && freq <= 7300) return '40m';
-        if (freq >= 10100 && freq <= 10150) return '30m';
-        if (freq >= 14000 && freq <= 14350) return '20m';
-        if (freq >= 18068 && freq <= 18168) return '17m';
-        if (freq >= 21000 && freq <= 21450) return '15m';
-        if (freq >= 24890 && freq <= 24990) return '12m';
-        if (freq >= 28000 && freq <= 29700) return '10m';
-        if (freq >= 50000 && freq <= 54000) return '6m';
-        if (freq >= 144000 && freq <= 148000) return '2m';
-        if (freq >= 420000 && freq <= 450000) return '70cm';
-        return 'other';
-      };
-      
-      // Helper to detect mode from comment
-      const detectMode = (comment) => {
-        if (!comment) return null;
-        const upper = comment.toUpperCase();
-        if (upper.includes('FT8')) return 'FT8';
-        if (upper.includes('FT4')) return 'FT4';
-        if (upper.includes('CW')) return 'CW';
-        if (upper.includes('SSB') || upper.includes('LSB') || upper.includes('USB')) return 'SSB';
-        if (upper.includes('RTTY')) return 'RTTY';
-        if (upper.includes('PSK')) return 'PSK';
-        if (upper.includes('AM')) return 'AM';
-        if (upper.includes('FM')) return 'FM';
-        return null;
-      };
-      
-      // Callsign prefix to CQ/ITU zone and continent mapping
-      const getCallsignInfo = (call) => {
-        if (!call) return { cqZone: null, ituZone: null, continent: null };
-        const upper = call.toUpperCase();
-        
-        // Simplified prefix->zone mapping (common prefixes)
-        const prefixMap = {
-          // North America
-          'W': { cq: 5, itu: 8, cont: 'NA' }, 'K': { cq: 5, itu: 8, cont: 'NA' }, 'N': { cq: 5, itu: 8, cont: 'NA' }, 'AA': { cq: 5, itu: 8, cont: 'NA' },
-          'VE': { cq: 5, itu: 4, cont: 'NA' }, 'VA': { cq: 5, itu: 4, cont: 'NA' }, 'VY': { cq: 2, itu: 4, cont: 'NA' },
-          'XE': { cq: 6, itu: 10, cont: 'NA' }, 'XF': { cq: 6, itu: 10, cont: 'NA' },
-          // Europe
-          'G': { cq: 14, itu: 27, cont: 'EU' }, 'M': { cq: 14, itu: 27, cont: 'EU' }, '2E': { cq: 14, itu: 27, cont: 'EU' },
-          'F': { cq: 14, itu: 27, cont: 'EU' }, 'DL': { cq: 14, itu: 28, cont: 'EU' }, 'D': { cq: 14, itu: 28, cont: 'EU' },
-          'I': { cq: 15, itu: 28, cont: 'EU' }, 'IK': { cq: 15, itu: 28, cont: 'EU' },
-          'EA': { cq: 14, itu: 37, cont: 'EU' }, 'EC': { cq: 14, itu: 37, cont: 'EU' },
-          'PA': { cq: 14, itu: 27, cont: 'EU' }, 'PD': { cq: 14, itu: 27, cont: 'EU' },
-          'ON': { cq: 14, itu: 27, cont: 'EU' }, 'OZ': { cq: 14, itu: 18, cont: 'EU' },
-          'SM': { cq: 14, itu: 18, cont: 'EU' }, 'LA': { cq: 14, itu: 18, cont: 'EU' },
-          'OH': { cq: 15, itu: 18, cont: 'EU' }, 'SP': { cq: 15, itu: 28, cont: 'EU' },
-          'OK': { cq: 15, itu: 28, cont: 'EU' }, 'OM': { cq: 15, itu: 28, cont: 'EU' },
-          'HA': { cq: 15, itu: 28, cont: 'EU' }, 'HB': { cq: 14, itu: 28, cont: 'EU' },
-          'OE': { cq: 15, itu: 28, cont: 'EU' }, 'LZ': { cq: 20, itu: 28, cont: 'EU' },
-          'YO': { cq: 20, itu: 28, cont: 'EU' }, 'YU': { cq: 15, itu: 28, cont: 'EU' },
-          'UA': { cq: 16, itu: 29, cont: 'EU' }, 'R': { cq: 16, itu: 29, cont: 'EU' },
-          'UR': { cq: 16, itu: 29, cont: 'EU' }, 'UT': { cq: 16, itu: 29, cont: 'EU' },
-          'LY': { cq: 15, itu: 29, cont: 'EU' }, 'ES': { cq: 15, itu: 29, cont: 'EU' },
-          'YL': { cq: 15, itu: 29, cont: 'EU' }, 'CT': { cq: 14, itu: 37, cont: 'EU' },
-          'EI': { cq: 14, itu: 27, cont: 'EU' }, 'GI': { cq: 14, itu: 27, cont: 'EU' },
-          'GM': { cq: 14, itu: 27, cont: 'EU' }, 'GW': { cq: 14, itu: 27, cont: 'EU' },
-          'SV': { cq: 20, itu: 28, cont: 'EU' }, '9A': { cq: 15, itu: 28, cont: 'EU' },
-          'S5': { cq: 15, itu: 28, cont: 'EU' },
-          // Asia
-          'JA': { cq: 25, itu: 45, cont: 'AS' }, 'JH': { cq: 25, itu: 45, cont: 'AS' }, 'JR': { cq: 25, itu: 45, cont: 'AS' },
-          'HL': { cq: 25, itu: 44, cont: 'AS' }, 'DS': { cq: 25, itu: 44, cont: 'AS' },
-          'BY': { cq: 24, itu: 44, cont: 'AS' }, 'BV': { cq: 24, itu: 44, cont: 'AS' },
-          'VU': { cq: 22, itu: 41, cont: 'AS' }, 'VK': { cq: 30, itu: 59, cont: 'OC' },
-          'DU': { cq: 27, itu: 50, cont: 'OC' }, '9M': { cq: 28, itu: 54, cont: 'AS' },
-          'HS': { cq: 26, itu: 49, cont: 'AS' }, 'XV': { cq: 26, itu: 49, cont: 'AS' },
-          // South America  
-          'LU': { cq: 13, itu: 14, cont: 'SA' }, 'PY': { cq: 11, itu: 15, cont: 'SA' },
-          'CE': { cq: 12, itu: 14, cont: 'SA' }, 'CX': { cq: 13, itu: 14, cont: 'SA' },
-          'HK': { cq: 9, itu: 12, cont: 'SA' }, 'YV': { cq: 9, itu: 12, cont: 'SA' },
-          'HC': { cq: 10, itu: 12, cont: 'SA' }, 'OA': { cq: 10, itu: 12, cont: 'SA' },
-          // Africa
-          'ZS': { cq: 38, itu: 57, cont: 'AF' }, '5N': { cq: 35, itu: 46, cont: 'AF' },
-          'EA8': { cq: 33, itu: 36, cont: 'AF' }, 'CN': { cq: 33, itu: 37, cont: 'AF' },
-          '7X': { cq: 33, itu: 37, cont: 'AF' }, 'SU': { cq: 34, itu: 38, cont: 'AF' },
-          'ST': { cq: 34, itu: 47, cont: 'AF' }, 'ET': { cq: 37, itu: 48, cont: 'AF' },
-          '5Z': { cq: 37, itu: 48, cont: 'AF' }, '5H': { cq: 37, itu: 53, cont: 'AF' },
-          // Oceania
-          'ZL': { cq: 32, itu: 60, cont: 'OC' }, 'FK': { cq: 32, itu: 56, cont: 'OC' },
-          'VK9': { cq: 30, itu: 60, cont: 'OC' }, 'YB': { cq: 28, itu: 51, cont: 'OC' },
-          'KH6': { cq: 31, itu: 61, cont: 'OC' }, 'KH2': { cq: 27, itu: 64, cont: 'OC' },
-          // Caribbean
-          'VP5': { cq: 8, itu: 11, cont: 'NA' }, 'PJ': { cq: 9, itu: 11, cont: 'SA' },
-          'HI': { cq: 8, itu: 11, cont: 'NA' }, 'CO': { cq: 8, itu: 11, cont: 'NA' },
-          'KP4': { cq: 8, itu: 11, cont: 'NA' }, 'FG': { cq: 8, itu: 11, cont: 'NA' },
-          // Antarctica
-          'DP0': { cq: 38, itu: 67, cont: 'AN' }, 'VP8': { cq: 13, itu: 73, cont: 'AN' },
-          'KC4': { cq: 13, itu: 67, cont: 'AN' }
-        };
-        
-        // Try to match prefix (longest match first)
-        for (let len = 4; len >= 1; len--) {
-          const prefix = upper.substring(0, len);
-          if (prefixMap[prefix]) {
-            return { 
-              cqZone: prefixMap[prefix].cq, 
-              ituZone: prefixMap[prefix].itu, 
-              continent: prefixMap[prefix].cont 
-            };
-          }
-        }
-        
-        // Fallback based on first character
-        const firstChar = upper[0];
-        const fallbackMap = {
-          'A': { cq: 21, itu: 39, cont: 'AS' },
-          'B': { cq: 24, itu: 44, cont: 'AS' },
-          'C': { cq: 14, itu: 27, cont: 'EU' },
-          'D': { cq: 14, itu: 28, cont: 'EU' },
-          'E': { cq: 14, itu: 27, cont: 'EU' },
-          'F': { cq: 14, itu: 27, cont: 'EU' },
-          'G': { cq: 14, itu: 27, cont: 'EU' },
-          'H': { cq: 14, itu: 27, cont: 'EU' },
-          'I': { cq: 15, itu: 28, cont: 'EU' },
-          'J': { cq: 25, itu: 45, cont: 'AS' },
-          'K': { cq: 5, itu: 8, cont: 'NA' },
-          'L': { cq: 13, itu: 14, cont: 'SA' },
-          'M': { cq: 14, itu: 27, cont: 'EU' },
-          'N': { cq: 5, itu: 8, cont: 'NA' },
-          'O': { cq: 15, itu: 18, cont: 'EU' },
-          'P': { cq: 11, itu: 15, cont: 'SA' },
-          'R': { cq: 16, itu: 29, cont: 'EU' },
-          'S': { cq: 15, itu: 28, cont: 'EU' },
-          'T': { cq: 37, itu: 48, cont: 'AF' },
-          'U': { cq: 16, itu: 29, cont: 'EU' },
-          'V': { cq: 5, itu: 4, cont: 'NA' },
-          'W': { cq: 5, itu: 8, cont: 'NA' },
-          'X': { cq: 6, itu: 10, cont: 'NA' },
-          'Y': { cq: 15, itu: 28, cont: 'EU' },
-          'Z': { cq: 38, itu: 57, cont: 'AF' }
-        };
-        
-        if (fallbackMap[firstChar]) {
-          return {
-            cqZone: fallbackMap[firstChar].cq,
-            ituZone: fallbackMap[firstChar].itu,
-            continent: fallbackMap[firstChar].cont
-          };
-        }
-        
-        return { cqZone: null, ituZone: null, continent: null };
-      };
 
       // Apply filters to spots
       const applyFilters = useCallback((spots, filters) => {
@@ -2064,7 +2147,7 @@
     // ============================================
     // LEAFLET MAP COMPONENT
     // ============================================
-    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots, mySpots, dxPaths, satellites, showDXPaths, showPOTA, showSatellites, onToggleSatellites }) => {
+    const WorldMap = ({ deLocation, dxLocation, onDXChange, potaSpots, mySpots, dxPaths, dxFilters, satellites, showDXPaths, showPOTA, showSatellites, onToggleSatellites }) => {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const tileLayerRef = useRef(null);
@@ -2310,7 +2393,10 @@
 
         // Add new DX paths if enabled
         if (showDXPaths && dxPaths && dxPaths.length > 0) {
-          dxPaths.forEach((path, index) => {
+          // Apply filters to paths
+          const filteredPaths = filterDXPaths(dxPaths, dxFilters);
+          
+          filteredPaths.forEach((path, index) => {
             try {
               // Skip if missing or invalid coordinates
               if (!path.spotterLat || !path.spotterLon || !path.dxLat || !path.dxLon) return;
@@ -2421,7 +2507,7 @@
             }
           });
         }
-      }, [dxPaths, showDXPaths]);
+      }, [dxPaths, dxFilters, showDXPaths]);
 
       // Update POTA markers
       useEffect(() => {
@@ -3968,6 +4054,7 @@
               potaSpots={potaSpots.data}
               mySpots={mySpots.data}
               dxPaths={dxPaths.data}
+              dxFilters={dxFilters}
               satellites={satellites.positions}
               showDXPaths={mapLayers.showDXPaths}
               showPOTA={mapLayers.showPOTA}
@@ -4987,7 +5074,8 @@
               onDXChange={handleDXChange} 
               potaSpots={potaSpots.data} 
               mySpots={mySpots.data} 
-              dxPaths={dxPaths.data} 
+              dxPaths={dxPaths.data}
+              dxFilters={dxFilters}
               satellites={satellites.positions}
               showDXPaths={mapLayers.showDXPaths}
               showPOTA={mapLayers.showPOTA}
