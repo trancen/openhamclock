@@ -278,8 +278,13 @@ export const WorldMap = ({
             dxPathsLinesRef.current.push(line);
           }
 
+          // Use unwrapped endpoint so marker sits where the line ends
+          const endPoint = pathPoints[pathPoints.length - 1];
+          const dxLatDisplay = endPoint[0];
+          const dxLonDisplay = endPoint[1];
+
           // Add DX marker
-          const dxCircle = L.circleMarker([path.dxLat, path.dxLon], {
+          const dxCircle = L.circleMarker([dxLatDisplay, dxLonDisplay], {
             radius: isHovered ? 10 : 6,
             fillColor: isHovered ? '#ffffff' : color,
             color: isHovered ? color : '#fff',
@@ -300,7 +305,7 @@ export const WorldMap = ({
               iconSize: null,
               iconAnchor: [0, 0]
             });
-            const label = L.marker([path.dxLat, path.dxLon], { icon: labelIcon, interactive: false }).addTo(map);
+            const label = L.marker([dxLatDisplay, dxLonDisplay], { icon: labelIcon, interactive: false }).addTo(map);
             dxPathsMarkersRef.current.push(label);
           }
         } catch (err) {
@@ -502,8 +507,8 @@ export const WorldMap = ({
     if (showPSKReporter && pskReporterSpots && pskReporterSpots.length > 0 && hasValidDE) {
       pskReporterSpots.forEach(spot => {
         // Validate spot coordinates are valid numbers
-        const spotLat = parseFloat(spot.lat);
-        const spotLon = parseFloat(spot.lon);
+        let spotLat = parseFloat(spot.lat);
+        let spotLon = parseFloat(spot.lon);
         
         if (!isNaN(spotLat) && !isNaN(spotLon)) {
           const displayCall = spot.receiver || spot.sender;
@@ -528,6 +533,11 @@ export const WorldMap = ({
                 dashArray: '4, 4'
               }).addTo(map);
               pskMarkersRef.current.push(line);
+              
+              // Use unwrapped endpoint so dot sits where the line ends
+              const endPoint = points[points.length - 1];
+              spotLat = endPoint[0];
+              spotLon = endPoint[1];
             }
             
             // Add small dot marker at spot location
