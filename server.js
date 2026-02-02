@@ -468,7 +468,7 @@ const DXSPIDER_PROXY_URL = process.env.DXSPIDER_PROXY_URL || 'https://dxspider-p
 
 // Cache for DX Spider telnet spots (to avoid excessive connections)
 let dxSpiderCache = { spots: [], timestamp: 0 };
-const DXSPIDER_CACHE_TTL = 60000; // 60 seconds cache
+const DXSPIDER_CACHE_TTL = 90000; // 90 seconds cache - reduces reconnection frequency
 
 app.get('/api/dxcluster/spots', async (req, res) => {
   const source = (req.query.source || 'auto').toLowerCase();
@@ -561,25 +561,54 @@ app.get('/api/dxcluster/spots', async (req, res) => {
   }
   
   // Helper function for DX Spider (telnet-based, works locally/Pi)
+  // Multiple nodes for failover
+  const DXSPIDER_NODES = [
+    { host: 'dxspider.co.uk', port: 7300 },
+    { host: 'w6kk.no-ip.org', port: 7300 },
+    { host: 'dxc.nc7j.com', port: 7373 },
+    { host: 'dx.k3lr.com', port: 7300 }
+  ];
+  
   async function fetchDXSpider() {
-    // Check cache first
+    // Check cache first (use longer cache to reduce connection attempts)
     if (Date.now() - dxSpiderCache.timestamp < DXSPIDER_CACHE_TTL && dxSpiderCache.spots.length > 0) {
       console.log('[DX Cluster] DX Spider: returning', dxSpiderCache.spots.length, 'cached spots');
       return dxSpiderCache.spots;
     }
     
+    // Try each node until one succeeds
+    for (const node of DXSPIDER_NODES) {
+      const result = await tryDXSpiderNode(node);
+      if (result && result.length > 0) {
+        return result;
+      }
+    }
+    
+    console.log('[DX Cluster] DX Spider: all nodes failed');
+    return null;
+  }
+  
+  function tryDXSpiderNode(node) {
     return new Promise((resolve) => {
       const spots = [];
       let buffer = '';
       let loginSent = false;
       let commandSent = false;
+      let resolved = false;
       
       const client = new net.Socket();
-      client.setTimeout(15000);
+      client.setTimeout(12000);
+      
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          try { client.destroy(); } catch(e) {}
+        }
+      };
       
       // Try connecting to DX Spider node
-      client.connect(7300, 'dxspider.co.uk', () => {
-        console.log('[DX Cluster] DX Spider: connected to dxspider.co.uk:7300');
+      client.connect(node.port, node.host, () => {
+        console.log(`[DX Cluster] DX Spider: connected to ${node.host}:${node.port}`);
       });
       
       client.on('data', (data) => {
@@ -589,7 +618,6 @@ app.get('/api/dxcluster/spots', async (req, res) => {
         if (!loginSent && (buffer.includes('login:') || buffer.includes('Please enter your call') || buffer.includes('enter your callsign'))) {
           loginSent = true;
           client.write('GUEST\r\n');
-          console.log('[DX Cluster] DX Spider: sent login');
           return;
         }
         
@@ -597,14 +625,14 @@ app.get('/api/dxcluster/spots', async (req, res) => {
         if (loginSent && !commandSent && (buffer.includes('Hello') || buffer.includes('de ') || buffer.includes('>') || buffer.includes('GUEST'))) {
           commandSent = true;
           setTimeout(() => {
-            client.write('sh/dx 25\r\n');
-            console.log('[DX Cluster] DX Spider: sent sh/dx 25');
+            if (!resolved) {
+              client.write('sh/dx 25\r\n');
+            }
           }, 1000);
           return;
         }
         
         // Parse DX spots from the output
-        // Format: DX de W3LPL:     14195.0  TI5/AA8HH    FT8 -09 dB           1234Z
         const lines = buffer.split('\n');
         for (const line of lines) {
           if (line.includes('DX de ')) {
@@ -639,40 +667,51 @@ app.get('/api/dxcluster/spots', async (req, res) => {
         // If we have enough spots, close connection
         if (spots.length >= 20) {
           client.write('bye\r\n');
-          setTimeout(() => client.destroy(), 500);
+          setTimeout(cleanup, 500);
         }
       });
       
       client.on('timeout', () => {
-        console.log('[DX Cluster] DX Spider: timeout');
-        client.destroy();
+        cleanup();
       });
       
       client.on('error', (err) => {
-        console.error('[DX Cluster] DX Spider error:', err.message);
-        client.destroy();
+        // Only log unexpected errors, not connection resets (they're common)
+        if (!err.message.includes('ECONNRESET') && !err.message.includes('ETIMEDOUT')) {
+          console.error(`[DX Cluster] DX Spider ${node.host} error:`, err.message);
+        }
+        cleanup();
       });
       
       client.on('close', () => {
-        if (spots.length > 0) {
-          console.log('[DX Cluster] DX Spider:', spots.length, 'spots');
-          dxSpiderCache = { spots: spots, timestamp: Date.now() };
-          resolve(spots);
-        } else {
-          console.log('[DX Cluster] DX Spider: no spots received');
-          resolve(null);
+        if (!resolved) {
+          resolved = true;
+          if (spots.length > 0) {
+            console.log('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
+            dxSpiderCache = { spots: spots, timestamp: Date.now() };
+            resolve(spots);
+          } else {
+            resolve(null);
+          }
         }
       });
       
-      // Fallback timeout - close after 20 seconds regardless
+      // Fallback timeout - close after 15 seconds regardless
       setTimeout(() => {
-        if (spots.length > 0) {
-          client.destroy();
-        } else if (client.readable) {
-          client.destroy();
-          resolve(null);
+        if (!resolved) {
+          if (spots.length > 0) {
+            resolved = true;
+            console.log('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
+            dxSpiderCache = { spots: spots, timestamp: Date.now() };
+            resolve(spots);
+          }
+          cleanup();
+          if (!resolved) {
+            resolved = true;
+            resolve(null);
+          }
         }
-      }, 20000);
+      }, 15000);
     });
   }
   
