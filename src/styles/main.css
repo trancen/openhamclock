@@ -734,3 +734,62 @@ body::before {
 .wspr-stats div[style*="font-size: 18px"] {
   animation: wspr-score-glow 2s ease-in-out infinite;
 }
+
+/* ============================================
+   EARTHQUAKE PLUGIN ANIMATIONS
+   ============================================ */
+
+/* New earthquake pulse animation */
+@keyframes earthquake-pulse {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* Pulsing ring for new earthquakes */
+.earthquake-pulse-ring {
+  animation: earthquake-pulse 3s ease-out;
+}
+
+/* Growing dot animation for new earthquakes */
+@keyframes earthquake-grow {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.earthquake-pulse-new {
+  animation: earthquake-grow 0.6s ease-out;
+}
+
+/* Subtle pulse for regular earthquake markers */
+@keyframes earthquake-subtle-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.earthquake-marker {
+  animation: earthquake-subtle-pulse 2s ease-in-out infinite;
+}
