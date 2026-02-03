@@ -14,6 +14,7 @@
   "station.settings.button.save": "Guardar Configuración",
   "station.settings.button.save.confirm": "La configuración se guarda en tu navegador",
   "station.settings.callsign": "Tu Indicativo",
+  "station.settings.callsignSize": "El tamaño de tu Indicativo",
   "station.settings.describe": "Ingresa tu indicativo y cuadrícula para comenzar. Tu configuración se guardará en el navegador.",
   "station.settings.dx.describe": "→ Feed en tiempo real de DX Spider a través de nuestro servicio proxy dedicado",
   "station.settings.dx.option1": "⭐ Proxy DX Spider (Recomendado)",

@@ -10,6 +10,7 @@
 
 export const DEFAULT_CONFIG = {
   callsign: 'N0CALL',
+  callsignSize: 1.0, // Float multiplies base px size (0.1 to 2.0)
   locator: '',
   location: { lat: 40.0150, lon: -105.2705 }, // Boulder, CO (default)
   defaultDX: { lat: 35.6762, lon: 139.6503 }, // Tokyo

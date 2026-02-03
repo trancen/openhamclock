@@ -14,6 +14,7 @@
   "station.settings.button.save": "Save Settings",
   "station.settings.button.save.confirm": "Settings saved to your browser",
   "station.settings.callsign": "Your Callsign",
+  "station.settings.callsignSize": "Your Callsign's size",
   "station.settings.describe": "Enter your callsign and grid square to get started. Settings are saved in your browser.",
   "station.settings.dx.describe": "→ Real-time DX Spider feed via our dedicated proxy service",
   "station.settings.dx.option1": "⭐ DX Spider Proxy (Recommended)",

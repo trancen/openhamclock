@@ -9,6 +9,7 @@ import { LANGUAGES } from '../lang/i18n.js';
 
 export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   const [callsign, setCallsign] = useState(config?.callsign || '');
+  const [callsignSize, setCallsignSize] = useState(config?.callsignSize || 1.0);
   const [gridSquare, setGridSquare] = useState('');
   const [lat, setLat] = useState(config?.location?.lat || 0);
   const [lon, setLon] = useState(config?.location?.lon || 0);
@@ -17,7 +18,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   const [timezone, setTimezone] = useState(config?.timezone || '');
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
   const { t, i18n } = useTranslation();
-  
+
   // Layer controls
   const [layers, setLayers] = useState([]);
   const [activeTab, setActiveTab] = useState('station');
@@ -25,6 +26,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   useEffect(() => {
     if (config) {
       setCallsign(config.callsign || '');
+      setCallsignSize(config.callsignSize || 1.0)
       setLat(config.location?.lat || 0);
       setLon(config.location?.lon || 0);
       setTheme(config.theme || 'dark');
@@ -70,22 +72,22 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
   const parseGridSquare = (grid) => {
     grid = grid.toUpperCase();
     if (grid.length < 4) return null;
-    
+
     const lon1 = (grid.charCodeAt(0) - 65) * 20 - 180;
     const lat1 = (grid.charCodeAt(1) - 65) * 10 - 90;
     const lon2 = parseInt(grid[2]) * 2;
     const lat2 = parseInt(grid[3]) * 1;
-    
+
     let lon = lon1 + lon2 + 1;
     let lat = lat1 + lat2 + 0.5;
-    
+
     if (grid.length >= 6) {
       const lon3 = (grid.charCodeAt(4) - 65) * (2/24);
       const lat3 = (grid.charCodeAt(5) - 65) * (1/24);
       lon = lon1 + lon2 + lon3 + (1/24);
       lat = lat1 + lat2 + lat3 + (1/48);
     }
-    
+
     return { lat, lon };
   };
 
@@ -116,17 +118,17 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
     if (window.hamclockLayerControls) {
       const layer = layers.find(l => l.id === layerId);
       const newEnabledState = !layer.enabled;
-      
+
       // Update the control
       window.hamclockLayerControls.toggleLayer(layerId, newEnabledState);
-      
+
       // Force immediate UI update
-      setLayers(prevLayers => 
-        prevLayers.map(l => 
+      setLayers(prevLayers =>
+        prevLayers.map(l =>
           l.id === layerId ? { ...l, enabled: newEnabledState } : l
         )
       );
-      
+
       // Refresh after a short delay to get the updated state
       setTimeout(() => {
         if (window.hamclockLayerControls) {
@@ -147,6 +149,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
     onSave({
       ...config,
       callsign: callsign.toUpperCase(),
+      callsignSize: callsignSize,
       location: { lat: parseFloat(lat), lon: parseFloat(lon) },
       theme,
       layout,
@@ -198,8 +201,8 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
         maxHeight: '90vh',
         overflowY: 'auto'
       }}>
-        <h2 style={{ 
-          color: 'var(--accent-cyan)', 
+        <h2 style={{
+          color: 'var(--accent-cyan)',
           marginTop: 0,
           marginBottom: '24px',
           textAlign: 'center',
@@ -302,6 +305,35 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
               />
             </div>
 
+            {/* Callsign Size*/}
+            <div style={{ marginBottom: '20px'}}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase' }}>
+                  {t('station.settings.callsignSize')}
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={isNaN(lat) ? '' : callsignSize}
+                  onChange={(e) => {
+                    if (e.target.value >= 0.1 && e.target.value <= 2.0) {
+                      setCallsignSize(e.target.value)
+                    }}}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+            
             {/* Grid Square */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -601,15 +633,15 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave }) => {
                     onClick={() => i18n.changeLanguage(lang.code)}
                     style={{
                       padding: '8px 6px',
-                      background: i18n.language === lang.code || (i18n.language && i18n.language.startsWith(lang.code)) 
-                        ? 'rgba(0, 221, 255, 0.2)' 
+                      background: i18n.language === lang.code || (i18n.language && i18n.language.startsWith(lang.code))
+                        ? 'rgba(0, 221, 255, 0.2)'
                         : 'var(--bg-tertiary)',
                       border: `1px solid ${i18n.language === lang.code || (i18n.language && i18n.language.startsWith(lang.code))
-                        ? 'var(--accent-cyan)' 
+                        ? 'var(--accent-cyan)'
                         : 'var(--border-color)'}`,
                       borderRadius: '6px',
                       color: i18n.language === lang.code || (i18n.language && i18n.language.startsWith(lang.code))
-                        ? 'var(--accent-cyan)' 
+                        ? 'var(--accent-cyan)'
                         : 'var(--text-secondary)',
                       fontSize: '12px',
                       cursor: 'pointer',
