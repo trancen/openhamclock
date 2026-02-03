@@ -7,6 +7,7 @@ import * as EarthquakesPlugin from './layers/useEarthquakes.js';
 import * as AuroraPlugin from './layers/useAurora.js';
 import * as WSPRPlugin from './layers/useWSPR.js';
 import * as GrayLinePlugin from './layers/useGrayLine.js';
+import * as LightningPlugin from './layers/useLightning.js';
 
 const layerPlugins = [
   WXRadarPlugin,
@@ -14,6 +15,7 @@ const layerPlugins = [
   AuroraPlugin,
   WSPRPlugin,
   GrayLinePlugin,
+  LightningPlugin,
 ];
 
 export function getAllLayers() {
