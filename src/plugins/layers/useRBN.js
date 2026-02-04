@@ -523,18 +523,31 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
     // Get user's location (DE marker)
     const deLocation = window.deLocation || { lat: 43.6785, lon: -79.2935 }; // Default to Toronto
 
-    // Filter spots
+    // Filter spots by band, SNR, and AGE
+    const now = Date.now();
+    const timeWindowMs = timeWindow * 60 * 1000; // Convert minutes to milliseconds
+    
     const filteredSpots = spots.filter(spot => {
       const band = freqToBand(spot.frequency || spot.freq || 0);
       const snr = spot.snr || spot.db || 0;
       
+      // Band filter
       if (selectedBand !== 'all' && selectedBand !== 'All' && band !== selectedBand) return false;
+      
+      // SNR filter
       if (snr < minSNR) return false;
+      
+      // AGE filter - only show spots within the time window
+      const spotTimestamp = new Date(spot.timestamp).getTime();
+      const ageMs = now - spotTimestamp;
+      if (ageMs > timeWindowMs) {
+        return false; // Spot is too old, don't show it
+      }
       
       return true;
     });
 
-    console.log(`[RBN] Rendering ${filteredSpots.length} spots`);
+    console.log(`[RBN] Rendering ${filteredSpots.length} spots (within ${timeWindow < 1 ? (timeWindow * 60).toFixed(0) + 's' : timeWindow.toFixed(1) + 'min'} window)`);
 
     // Render each spot
     filteredSpots.forEach(spot => {
@@ -612,7 +625,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
       layersRef.current.push(marker);
     });
 
-  }, [map, enabled, spots, selectedBand, minSNR, showPaths, opacity, callsign]);
+  }, [map, enabled, spots, selectedBand, minSNR, showPaths, opacity, callsign, timeWindow]);
 
   // Create control panel
   useEffect(() => {
