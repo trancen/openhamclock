@@ -70,24 +70,24 @@ function getMarkerSize(snr) {
   return 14;
 }
 
-// Calculate great circle path with proper dateline handling
+// Calculate great circle path - returns array of path segments (split at dateline)
 function getGreatCirclePath(lat1, lon1, lat2, lon2, numPoints = 30) {
   if (!isFinite(lat1) || !isFinite(lon1) || !isFinite(lat2) || !isFinite(lon2)) {
-    return [[lat1, lon1], [lat2, lon2]];
+    return [[[lat1, lon1], [lat2, lon2]]];
   }
   
   const deltaLat = Math.abs(lat2 - lat1);
   const deltaLon = Math.abs(lon2 - lon1);
   if (deltaLat < 0.5 && deltaLon < 0.5) {
-    return [[lat1, lon1], [lat2, lon2]];
+    return [[[lat1, lon1], [lat2, lon2]]];
   }
   
   // Normalize longitudes to handle dateline crossing
   let lon1Norm = lon1;
   let lon2Norm = lon2;
+  const crossesDateline = Math.abs(lon2 - lon1) > 180;
   
-  // Check if path crosses dateline (longitude difference > 180°)
-  if (Math.abs(lon2 - lon1) > 180) {
+  if (crossesDateline) {
     // Adjust longitudes to take shorter path
     if (lon2 > lon1) {
       lon1Norm = lon1 + 360;
@@ -112,7 +112,7 @@ function getGreatCirclePath(lat1, lon1, lat2, lon2, numPoints = 30) {
   
   // Handle very small distances
   if (isNaN(d) || d < 0.0001) {
-    return [[lat1, lon1], [lat2, lon2]];
+    return [[[lat1, lon1], [lat2, lon2]]];
   }
   
   // Generate points along the path
@@ -137,7 +137,36 @@ function getGreatCirclePath(lat1, lon1, lat2, lon2, numPoints = 30) {
     path.push([lat, lon]);
   }
   
-  return path;
+  // If path crosses dateline, split into segments
+  if (crossesDateline) {
+    const segments = [];
+    let currentSegment = [path[0]];
+    
+    for (let i = 1; i < path.length; i++) {
+      const prevLon = path[i - 1][1];
+      const currLon = path[i][1];
+      
+      // Check if this segment crosses dateline (jump > 180°)
+      if (Math.abs(currLon - prevLon) > 180) {
+        // Finish current segment
+        segments.push(currentSegment);
+        // Start new segment
+        currentSegment = [path[i]];
+      } else {
+        currentSegment.push(path[i]);
+      }
+    }
+    
+    // Add final segment
+    if (currentSegment.length > 0) {
+      segments.push(currentSegment);
+    }
+    
+    return segments;
+  }
+  
+  // Return single segment
+  return [path];
 }
 
 // Convert frequency to band
@@ -333,20 +362,23 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
 
       // Create path line from YOUR location to the SKIMMER
       if (showPaths) {
-        const pathPoints = getGreatCirclePath(
+        const pathSegments = getGreatCirclePath(
           deLocation.lat, deLocation.lon,
           skimmerLoc.lat, skimmerLoc.lon
         );
 
-        const pathLine = L.polyline(pathPoints, {
-          color: getSNRColor(snr),
-          weight: 2,
-          opacity: opacity * 0.6,
-          dashArray: '5, 5'
-        });
+        // Draw each segment (handles dateline crossing)
+        pathSegments.forEach(pathPoints => {
+          const pathLine = L.polyline(pathPoints, {
+            color: getSNRColor(snr),
+            weight: 2,
+            opacity: opacity * 0.6,
+            dashArray: '5, 5'
+          });
 
-        pathLine.addTo(map);
-        layersRef.current.push(pathLine);
+          pathLine.addTo(map);
+          layersRef.current.push(pathLine);
+        });
       }
 
       // Create skimmer marker
