@@ -1,4 +1,7 @@
-{
+{"band.conditions": "CONDITION DE LA BANDE",
+"band.conditions.good": "BONNE",
+"band.conditions.fair": "MOYENNE",
+"band.conditions.poor": "MAUVAISE",
   "cancel": "Annuler",
   "station.settings.language": "Langue",
   "station.settings.language.en": "English",
@@ -55,8 +58,8 @@
   "plugins.layers.wxradar.name": "Radar météo",
   "plugins.layers.wxradar.description": "Surcouche du radar météo NEXRAD pour l’Amérique du Nord",
   "plugins.layers.wxradar.attribution": "Données météo © Iowa State University Mesonet",
-  "station.settings.layout.tablet": "Tablet",
+  "station.settings.layout.tablet": "Tablette",
   "station.settings.layout.tablet.describe": "→ Optimized for 7-10\" widescreen displays (16:9)",
-  "station.settings.layout.compact": "Compact",
-  "station.settings.layout.compact.describe": "→ Data-first layout for 4:3 and smaller screens"
+  "station.settings.layout.compact": "Compacte",
+  "station.settings.layout.compact.describe": "→ Mise en page privilégiant les données pour les écrans 4:3 et plus petits"
 }

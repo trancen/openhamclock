@@ -1,4 +1,8 @@
 {
+  "band.conditions": "⌇ BAND CONDITIONS",
+  "band.conditions.good": "GOOD",
+  "band.conditions.fair": "FAIR",
+  "band.conditions.poor": "POOR",
   "cancel": "Cancel",
   "station.settings.language": "Language",
   "station.settings.language.en": "English",
