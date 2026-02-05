@@ -746,14 +746,34 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
 
   // Create proximity panel control (30km radius)
   useEffect(() => {
-    if (!map || typeof L === 'undefined' || !enabled || !window.hamclockConfig) return;
-    if (proximityControl) return; // Already created
+    if (!map || typeof L === 'undefined') {
+      console.log('[Lightning] Proximity: map or Leaflet not available');
+      return;
+    }
+    if (!enabled) {
+      console.log('[Lightning] Proximity: plugin not enabled');
+      return;
+    }
+    if (proximityControl) {
+      console.log('[Lightning] Proximity: already created');
+      return; // Already created
+    }
+    
+    if (!window.hamclockConfig) {
+      console.log('[Lightning] Proximity: window.hamclockConfig not available');
+      return;
+    }
     
     const config = window.hamclockConfig;
     const stationLat = config.latitude;
     const stationLon = config.longitude;
     
-    if (!stationLat || !stationLon) return;
+    console.log('[Lightning] Proximity: Station location:', { stationLat, stationLon });
+    
+    if (!stationLat || !stationLon) {
+      console.log('[Lightning] Proximity: Station location not set - skipping proximity panel');
+      return;
+    }
 
     console.log('[Lightning] Creating proximity panel control...');
 
