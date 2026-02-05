@@ -839,11 +839,15 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     setProximityControl(control);
     console.log('[Lightning] Proximity: State updated with control');
 
-    // Make draggable and add minimize toggle
-    setTimeout(() => {
-      console.log('[Lightning] Proximity: Looking for .lightning-proximity container...');
+    // Make draggable and add minimize toggle - retry until found
+    let retries = 0;
+    const maxRetries = 20; // Try for up to 2 seconds
+    const retryInterval = setInterval(() => {
+      retries++;
+      console.log(`[Lightning] Proximity: Looking for .lightning-proximity container... (attempt ${retries}/${maxRetries})`);
       const container = document.querySelector('.lightning-proximity');
       if (container) {
+        clearInterval(retryInterval);
         console.log('[Lightning] Proximity: Container found! Making draggable...');
         const saved = localStorage.getItem('lightning-proximity-position');
         if (saved) {
@@ -863,12 +867,14 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         makeDraggable(container, 'lightning-proximity-position');
         addMinimizeToggle(container, 'lightning-proximity-position');
         console.log('[Lightning] Proximity: Panel is now draggable and minimizable');
-      } else {
-        console.error('[Lightning] Proximity: Container NOT FOUND!');
+      } else if (retries >= maxRetries) {
+        clearInterval(retryInterval);
+        console.error('[Lightning] Proximity: Container NOT FOUND after 20 retries!');
       }
-    }, 150);
+    }, 100);
 
     return () => {
+      clearInterval(retryInterval);
       if (control && map) {
         try {
           map.removeControl(control);
