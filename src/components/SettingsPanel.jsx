@@ -16,6 +16,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
   const [theme, setTheme] = useState(config?.theme || 'dark');
   const [layout, setLayout] = useState(config?.layout || 'modern');
   const [timezone, setTimezone] = useState(config?.timezone || '');
+  const [units, setUnits] = useState(config?.units || 'metric');
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
   const { t, i18n } = useTranslation();
 
@@ -32,6 +33,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       setTheme(config.theme || 'dark');
       setLayout(config.layout || 'modern');
       setTimezone(config.timezone || '');
+      setUnits(config.units || 'metric');
       setDxClusterSource(config.dxClusterSource || 'dxspider-proxy');
       if (config.location?.lat && config.location?.lon) {
         setGridSquare(calculateGridSquare(config.location.lat, config.location.lon));
@@ -154,6 +156,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       theme,
       layout,
       timezone,
+      units,
       dxClusterSource
     });
     onClose();
@@ -636,6 +639,50 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
                 Set this if your local time shows incorrectly (e.g. same as UTC).
                 Privacy browsers like Librewolf may spoof your timezone.
                 {timezone ? '' : ' Currently using browser default.'}
+              </div>
+            </div>
+
+            {/* Units (metric/imperial) */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                📏 Units
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <button
+                  onClick={() => setUnits('metric')}
+                  style={{
+                    padding: '12px',
+                    background: units === 'metric' ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${units === 'metric' ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: units === 'metric' ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: units === 'metric' ? '700' : '400',
+                    fontFamily: 'JetBrains Mono, monospace'
+                  }}
+                >
+                  🌍 Metric (km, °C)
+                </button>
+                <button
+                  onClick={() => setUnits('imperial')}
+                  style={{
+                    padding: '12px',
+                    background: units === 'imperial' ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${units === 'imperial' ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: units === 'imperial' ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: units === 'imperial' ? '700' : '400',
+                    fontFamily: 'JetBrains Mono, monospace'
+                  }}
+                >
+                  🦅 Imperial (mi, °F)
+                </button>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                Choose distance and temperature units for Lightning proximity, DX Target, and Weather displays.
               </div>
             </div>
 
