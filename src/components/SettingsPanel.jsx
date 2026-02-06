@@ -866,7 +866,14 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
               maxHeight: '400px',
               overflowY: 'auto'
             }}>
-              {(satellites || []).map(sat => {
+              {(satellites || [])
+                .sort((a, b) => {
+                  // Sort by priority (lower number = higher priority), then by name
+                  const priorityDiff = (a.priority || 99) - (b.priority || 99);
+                  if (priorityDiff !== 0) return priorityDiff;
+                  return a.name.localeCompare(b.name);
+                })
+                .map(sat => {
                 const isSelected = satelliteFilters.includes(sat.name);
                 return (
                   <button
@@ -915,15 +922,6 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}>{sat.name}</div>
-                      {sat.visible !== undefined && (
-                        <div style={{
-                          fontSize: '9px',
-                          color: sat.visible ? '#00ff88' : 'var(--text-muted)',
-                          marginTop: '2px'
-                        }}>
-                          {sat.visible ? '● Visible' : '○ Below horizon'}
-                        </div>
-                      )}
                     </div>
                   </button>
                 );

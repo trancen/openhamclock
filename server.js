@@ -3633,10 +3633,22 @@ app.get('/api/satellites/tle', async (req, res) => {
       }
     }
     
+    // Add all HAM_SATELLITES to the response, even if they don't have TLE data yet
+    // This ensures the Settings panel shows all satellites for configuration
+    for (const [key, sat] of Object.entries(HAM_SATELLITES)) {
+      if (!tleData[key]) {
+        tleData[key] = {
+          ...sat,
+          tle1: null,
+          tle2: null
+        };
+      }
+    }
+    
     // Cache the result
     tleCache = { data: tleData, timestamp: now };
     
-    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).length, 'satellites');
+    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).filter(k => tleData[k].tle1).length, 'satellites,', Object.keys(tleData).length, 'total in list');
     res.json(tleData);
     
   } catch (error) {

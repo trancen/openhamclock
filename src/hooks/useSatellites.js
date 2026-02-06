@@ -143,7 +143,7 @@ export const useSatellites = (observerLocation) => {
     return () => clearInterval(interval);
   }, [calculatePositions]);
 
-  return { data, loading };
+  return { data, loading, tleData };
 };
 
 export default useSatellites;
