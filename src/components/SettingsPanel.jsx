@@ -15,6 +15,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
   const [lon, setLon] = useState(config?.location?.lon || 0);
   const [theme, setTheme] = useState(config?.theme || 'dark');
   const [layout, setLayout] = useState(config?.layout || 'modern');
+  const [units, setUnits] = useState(config?.units || 'metric');
   const [timezone, setTimezone] = useState(config?.timezone || '');
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
   const [customDxCluster, setCustomDxCluster] = useState(config?.customDxCluster || { enabled: false, host: '', port: 7300 });
@@ -34,6 +35,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       setLon(config.location?.lon || 0);
       setTheme(config.theme || 'dark');
       setLayout(config.layout || 'modern');
+      setUnits(config.units || 'metric');
       setTimezone(config.timezone || '');
       setDxClusterSource(config.dxClusterSource || 'dxspider-proxy');
       setCustomDxCluster(config.customDxCluster || { enabled: false, host: '', port: 7300 });
@@ -158,6 +160,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       location: { lat: parseFloat(lat), lon: parseFloat(lon) },
       theme,
       layout,
+      units,
       timezone,
       dxClusterSource,
       customDxCluster,
@@ -479,6 +482,37 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
                 {themeDescriptions[theme]}
+              </div>
+            </div>
+
+            {/* Units */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Units
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {['imperial', 'metric'].map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnits(u)}
+                    style={{
+                      padding: '12px',
+                      background: units === u ? 'var(--accent-cyan)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${units === u ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
+                      borderRadius: '6px',
+                      color: units === u ? '#000' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: units === u ? '700' : '400',
+                      textTransform: 'capitalize'
+                    }}
+                  >
+                    {u === 'imperial' ? '🇺🇸' : '🌍'} {u}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {units === 'imperial' ? '°F, miles (mi)' : '°C, kilometers (km)'}
               </div>
             </div>
 
