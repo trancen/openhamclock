@@ -19,6 +19,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
   const [customDxCluster, setCustomDxCluster] = useState(config?.customDxCluster || { enabled: false, host: '', port: 7300 });
   const [lowMemoryMode, setLowMemoryMode] = useState(config?.lowMemoryMode || false);
+  const [satelliteSearch, setSatelliteSearch] = useState('');
   const { t, i18n } = useTranslation();
 
   // Layer controls
@@ -262,23 +263,6 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
             }}
           >
             {t('station.settings.tab2.title')}
-          </button>
-          <button
-            onClick={() => setActiveTab('satellites')}
-            style={{
-              flex: 1,
-              padding: '10px',
-              background: activeTab === 'satellites' ? 'var(--accent-amber)' : 'transparent',
-              border: 'none',
-              borderRadius: '6px 6px 0 0',
-              color: activeTab === 'satellites' ? '#000' : 'var(--text-secondary)',
-              fontSize: '13px',
-              cursor: 'pointer',
-              fontWeight: activeTab === 'satellites' ? '700' : '400',
-              fontFamily: 'JetBrains Mono, monospace'
-            }}
-          >
-            ⛊ Satellites
           </button>
           <button
             onClick={() => setActiveTab('satellites')}
@@ -996,6 +980,47 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
                 : `${satelliteFilters.length} satellite(s) selected`}
             </div>
             
+            {/* Search Box */}
+            <div style={{
+              position: 'relative',
+              marginBottom: '12px'
+            }}>
+              <input
+                type="text"
+                value={satelliteSearch}
+                onChange={(e) => setSatelliteSearch(e.target.value)}
+                placeholder="🔍 Search satellites..."
+                style={{
+                  width: '100%',
+                  padding: '8px 32px 8px 12px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+              {satelliteSearch && (
+                <button
+                  onClick={() => setSatelliteSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ff6666',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    padding: '4px 8px'
+                  }}
+                >×</button>
+              )}
+            </div>
+            
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
@@ -1003,7 +1028,12 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
               maxHeight: '400px',
               overflowY: 'auto'
             }}>
-              {(satellites || []).map(sat => {
+              {(satellites || [])
+                .filter(sat => 
+                  !satelliteSearch || 
+                  sat.name.toLowerCase().includes(satelliteSearch.toLowerCase())
+                )
+                .map(sat => {
                 const isSelected = satelliteFilters.includes(sat.name);
                 return (
                   <button
