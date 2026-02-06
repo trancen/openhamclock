@@ -308,6 +308,21 @@ const App = () => {
   const mySpots = useMySpots(config.callsign);
   const satellites = useSatellites(config.location);
   
+  // Create static satellite list for Settings (doesn't reorder with visibility changes)
+  // Only updates when new satellites are added/removed from TLE data
+  const satelliteNameList = useMemo(() => {
+    if (!satellites.data || satellites.data.length === 0) return [];
+    
+    // Create a Set of current names to track what we've seen
+    const currentNames = new Set(satellites.data.map(s => s.name));
+    
+    // Keep existing order if satellites haven't changed
+    // Sort alphabetically by name for stable display
+    return satellites.data
+      .map(s => ({ name: s.name, mode: s.mode, color: s.color }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [satellites.data?.length]); // Only recompute when satellite count changes
+  
   // Filter satellites based on selection
   const filteredSatellites = satelliteFilters.length > 0 
     ? (satellites.data || []).filter(sat => satelliteFilters.includes(sat.name))
@@ -1718,7 +1733,7 @@ const App = () => {
         config={config}
         onSave={handleSaveConfig}
         onResetLayout={handleResetLayout}
-        satellites={satellites.data}
+        satellites={satelliteNameList}
         satelliteFilters={satelliteFilters}
         onSatelliteFiltersChange={setSatelliteFilters}
       />
