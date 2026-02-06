@@ -258,8 +258,17 @@ export const usePSKReporter = (callsign, options = {}) => {
     }
 
     // Prevent duplicate connections (React StrictMode protection)
-    if (isConnectingRef.current || clientRef.current) {
-      console.log('[PSKReporter] Connection already in progress or exists, skipping...');
+    if (isConnectingRef.current) {
+      console.log('[PSKReporter] Connection already in progress, skipping...');
+      return;
+    }
+    
+    // If a connection exists, reuse it instead of creating a new one
+    if (clientRef.current && clientRef.current.connected) {
+      console.log('[PSKReporter MQTT] Reusing existing connection for', upperCallsign);
+      setConnected(true);
+      setSource('mqtt');
+      setLoading(false);
       return;
     }
 
@@ -314,8 +323,14 @@ export const usePSKReporter = (callsign, options = {}) => {
           clientId: `ohc_${upperCallsign}_${Math.random().toString(16).substr(2, 8)}`,
           clean: true,
           connectTimeout: 15000,
-          reconnectPeriod: 0, // Disable auto-reconnect to prevent loops
-          keepalive: 60
+          reconnectPeriod: 0, // Disable auto-reconnect (we handle it manually)
+          keepalive: 60,
+          will: {
+            topic: 'disconnect',
+            payload: upperCallsign,
+            qos: 0,
+            retain: false
+          }
         });
 
         clientRef.current = client;
@@ -344,9 +359,16 @@ export const usePSKReporter = (callsign, options = {}) => {
           const txTopic = `pskr/filter/v2/+/+/${upperCallsign}/#`;
           const rxTopic = `pskr/filter/v2/+/+/+/${upperCallsign}/#`;
           
+          // Ensure client is still connected before subscribing
+          if (!client.connected) {
+            console.warn('[PSKReporter MQTT] Client disconnected before subscribe, waiting...');
+            return;
+          }
+          
           client.subscribe([txTopic, rxTopic], { qos: 0 }, (err) => {
             if (err) {
-              console.error('[PSKReporter MQTT] Subscribe error:', err.message);
+              console.error('[PSKReporter MQTT] Subscribe error:', err.message || err);
+              // Don't treat subscribe errors as fatal - connection may still work
             } else {
               console.log('[PSKReporter MQTT] Subscribed - awaiting real-time messages');
             }
@@ -408,7 +430,7 @@ export const usePSKReporter = (callsign, options = {}) => {
       }
       isConnectingRef.current = false;
     };
-  }, [callsign, enabled, useMQTT, fetchHTTP, processMessage, connected]);
+  }, [callsign, enabled, useMQTT, fetchHTTP, processMessage]);
 
   // Periodically clean old spots and update ages
   useEffect(() => {
