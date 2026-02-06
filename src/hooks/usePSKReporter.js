@@ -88,7 +88,8 @@ export const usePSKReporter = (callsign, options = {}) => {
     minutes = 15,           // Time window to keep spots
     enabled = true,         // Enable/disable fetching
     maxSpots = 100,         // Max spots to keep
-    useMQTT = ENABLE_MQTT   // Enable MQTT (true by default for real-time updates)
+    useMQTT = ENABLE_MQTT,  // Enable MQTT (true by default for real-time updates)
+    mode = null             // Filter by mode (e.g., 'WSPR', 'FT8', 'FT4') - null = all modes
   } = options;
 
   const [txReports, setTxReports] = useState([]);
@@ -176,13 +177,18 @@ export const usePSKReporter = (callsign, options = {}) => {
         rc: receiverCallsign,
         rl: receiverLocator,
         f: frequency,
-        md: mode,
+        md: messageMode,
         rp: snr,
         t: timestamp,
         b: band
       } = data;
 
       if (!senderCallsign || !receiverCallsign) return;
+      
+      // Filter by mode if specified (e.g., 'WSPR' only)
+      if (mode && messageMode && messageMode.toUpperCase() !== mode.toUpperCase()) {
+        return; // Skip spots that don't match the requested mode
+      }
 
       const senderLoc = gridToLatLon(senderLocator);
       const receiverLoc = gridToLatLon(receiverLocator);
@@ -197,7 +203,7 @@ export const usePSKReporter = (callsign, options = {}) => {
         freq,
         freqMHz: freq ? (freq / 1000000).toFixed(3) : '?',
         band: band || getBandFromHz(freq),
-        mode: mode || 'Unknown',
+        mode: messageMode || 'Unknown',
         snr: snr !== undefined ? parseInt(snr) : null,
         timestamp: timestamp ? timestamp * 1000 : now,
         age: 0,
@@ -242,7 +248,7 @@ export const usePSKReporter = (callsign, options = {}) => {
     } catch (err) {
       // Silently ignore parse errors - malformed messages happen
     }
-  }, [callsign, minutes, maxSpots, cleanOldSpots]);
+  }, [callsign, minutes, maxSpots, cleanOldSpots, mode]);
 
   // Connect with MQTT-first (real-time subscription) with HTTP fallback
   useEffect(() => {
