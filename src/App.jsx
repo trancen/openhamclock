@@ -1475,6 +1475,24 @@ const App = () => {
                 <div style={{ flex: 1 }}>
                   <div style={{ color: 'var(--accent-amber)', fontSize: '22px', fontWeight: '700', letterSpacing: '1px' }}>{dxGrid}</div>
                   <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>{dxLocation.lat.toFixed(4)}°, {dxLocation.lon.toFixed(4)}°</div>
+                  <div style={{ color: 'var(--accent-cyan)', fontSize: '13px', marginTop: '4px', fontWeight: '600' }}>
+                    {(() => {
+                      // Haversine distance formula
+                      const R = 6371; // Earth radius in km
+                      const deLat = config.location.lat * Math.PI / 180;
+                      const deLon = config.location.lon * Math.PI / 180;
+                      const dxLat = dxLocation.lat * Math.PI / 180;
+                      const dxLon = dxLocation.lon * Math.PI / 180;
+                      const dLat = dxLat - deLat;
+                      const dLon = dxLon - deLon;
+                      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                                Math.cos(deLat) * Math.cos(dxLat) *
+                                Math.sin(dLon/2) * Math.sin(dLon/2);
+                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                      const km = R * c;
+                      return `📏 ${Math.round(km).toLocaleString()} km`;
+                    })()}
+                  </div>
                   <div style={{ marginTop: '8px', fontSize: '13px' }}>
                     <span style={{ color: 'var(--text-secondary)' }}>☀ </span>
                     <span style={{ color: 'var(--accent-amber)', fontWeight: '600' }}>{dxSunTimes.sunrise}</span>
