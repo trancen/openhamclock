@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { usePSKReporter } from '../../hooks/usePSKReporter';
 
 /**
- * WSPR Propagation Heatmap Plugin v1.5.0
+ * WSPR Propagation Heatmap Plugin v1.6.0
  * 
  * Advanced Features:
  * - Great circle curved path lines between transmitters and receivers
@@ -23,9 +24,12 @@ import { useState, useEffect, useRef } from 'react';
  * - Minimize/maximize toggle for all panels (v1.5.0)
  * - Statistics display (total stations, spots)
  * - Signal strength legend
+ * - HTTP+MQTT hybrid mode (v1.6.0)
+ * - Real-time WSPR spots via MQTT (v1.6.0)
+ * - Unified data source with PSKReporter plugin (v1.6.0)
  * 
- * Data source: PSK Reporter API (WSPR mode spots)
- * Update interval: 5 minutes
+ * Data source: PSKReporter MQTT + HTTP API (WSPR mode)
+ * Update: Real-time via MQTT (HTTP fallback for grid filter mode)
  */
 
 export const metadata = {
@@ -36,7 +40,7 @@ export const metadata = {
   category: 'propagation',
   defaultEnabled: false,
   defaultOpacity: 0.7,
-  version: '1.5.0'
+  version: '1.6.0'
 };
 
 // Convert grid square to lat/lon
@@ -382,6 +386,20 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [chartControl, setChartControl] = useState(null);
   
   const animationFrameRef = useRef(null);
+  
+  // v1.6.0 - Use usePSKReporter for WSPR data (HTTP+MQTT hybrid)
+  const { 
+    txReports: txWSPR, 
+    rxReports: rxWSPR,
+    connected: mqttConnected,
+    source: dataSource
+  } = usePSKReporter(callsign, {
+    minutes: timeWindow,
+    enabled: enabled && !filterByGrid, // Only fetch when not using grid filter
+    maxSpots: 200,
+    useMQTT: true,
+    mode: 'WSPR' // Filter for WSPR mode only
+  });
 
   // Fetch WSPR data with dynamic time window and band filter
   
@@ -396,14 +414,96 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       setGridFilter(locator.substring(0, 4).toUpperCase());
     }
   }, [locator]);
-
+  
+  // v1.6.0 - Convert PSKReporter data to WSPR spot format
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || filterByGrid) return;
+    if (!callsign || callsign === 'N0CALL') return;
+    
+    const baseCall = stripCallsign(callsign);
+    
+    // Combine TX and RX reports into WSPR spot format
+    const spots = [];
+    
+    // TX reports: I transmitted, someone received
+    txWSPR.forEach(report => {
+      spots.push({
+        sender: baseCall, // I'm the sender
+        senderGrid: locator || 'FN03',
+        senderLat: null,
+        senderLon: null,
+        receiver: stripCallsign(report.receiver),
+        receiverGrid: report.receiverGrid,
+        receiverLat: report.lat,
+        receiverLon: report.lon,
+        freq: report.freq,
+        freqMHz: report.freqMHz,
+        band: report.band,
+        mode: report.mode,
+        snr: report.snr,
+        timestamp: report.timestamp,
+        age: report.age
+      });
+    });
+    
+    // RX reports: Someone transmitted, I received
+    rxWSPR.forEach(report => {
+      spots.push({
+        sender: stripCallsign(report.sender),
+        senderGrid: report.senderGrid,
+        senderLat: report.lat,
+        senderLon: report.lon,
+        receiver: baseCall, // I'm the receiver
+        receiverGrid: locator || 'FN03',
+        receiverLat: null,
+        receiverLon: null,
+        freq: report.freq,
+        freqMHz: report.freqMHz,
+        band: report.band,
+        mode: report.mode,
+        snr: report.snr,
+        timestamp: report.timestamp,
+        age: report.age
+      });
+    });
+    
+    // Convert grid squares to lat/lon if coordinates are missing
+    const spotsWithCoords = spots.map(spot => {
+      let updated = { ...spot };
+      
+      // Convert sender grid to lat/lon if missing
+      if ((!spot.senderLat || !spot.senderLon) && spot.senderGrid) {
+        const loc = gridToLatLon(spot.senderGrid);
+        if (loc) {
+          updated.senderLat = loc.lat;
+          updated.senderLon = loc.lon;
+        }
+      }
+      
+      // Convert receiver grid to lat/lon if missing
+      if ((!spot.receiverLat || !spot.receiverLon) && spot.receiverGrid) {
+        const loc = gridToLatLon(spot.receiverGrid);
+        if (loc) {
+          updated.receiverLat = loc.lat;
+          updated.receiverLon = loc.lon;
+        }
+      }
+      
+      return updated;
+    });
+    
+    setWsprData(spotsWithCoords);
+    console.log(`[WSPR Plugin] Loaded ${spotsWithCoords.length} spots via ${dataSource} (${timeWindow}min, mode: WSPR)`);
+  }, [enabled, callsign, locator, txWSPR, rxWSPR, filterByGrid, timeWindow, dataSource]);
+
+  // v1.6.0 - HTTP fetch only for grid filter mode (all spots)
+  useEffect(() => {
+    if (!enabled || !filterByGrid) return; // Only fetch when grid filter is ON
 
     const fetchWSPR = async () => {
       try {
         const timestamp = new Date().toLocaleTimeString();
-        console.log(`[WSPR] Fetching data at ${timestamp}...`);
+        console.log(`[WSPR] Fetching ALL spots (grid filter mode) at ${timestamp}...`);
         const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
         if (response.ok) {
           const data = await response.json();
@@ -418,22 +518,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             };
           });
           
-          // Filter by callsign ONLY if grid filter is OFF
-          if (!filterByGrid && callsign && callsign !== 'N0CALL') {
-            const baseCall = stripCallsign(callsign);
-            console.log(`[WSPR] Filtering for callsign: ${baseCall} (grid filter OFF)`);
-            
-            spots = spots.filter(spot => {
-              // Show spots where I'm TX or RX
-              const isTX = spot.sender === baseCall;
-              const isRX = spot.receiver === baseCall;
-              return isTX || isRX;
-            });
-            
-            console.log(`[WSPR] Found ${spots.length} spots for ${baseCall} (TX or RX)`);
-          } else if (filterByGrid) {
-            console.log(`[WSPR] Grid filter ON - fetching ALL spots (${spots.length} total)`);
-          }
+          console.log(`[WSPR] Grid filter mode - loaded ${spots.length} total spots`);
           
           // Convert grid squares to lat/lon if coordinates are missing
           spots = spots.map(spot => {
@@ -472,7 +557,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     const interval = setInterval(fetchWSPR, 60000); // Poll every 60 seconds
 
     return () => clearInterval(interval);
-  }, [enabled, bandFilter, timeWindow, callsign, filterByGrid]);
+  }, [enabled, bandFilter, timeWindow, filterByGrid]); // Removed callsign dependency
 
   // Create UI controls once (v1.2.0+)
   useEffect(() => {
