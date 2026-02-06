@@ -727,6 +727,26 @@ const App = () => {
               >
                 ⚙ Settings
               </button>
+              
+              {/* DX Lock button overlay */}
+              <button
+                onClick={handleToggleDxLock}
+                title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  left: '110px',
+                  background: dxLocked ? 'rgba(255,180,0,0.9)' : 'rgba(0,0,0,0.7)',
+                  border: '1px solid #444',
+                  color: dxLocked ? '#000' : '#fff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                {dxLocked ? '🔒 DX Locked' : '🔓 DX Unlocked'}
+              </button>
             </div>
           </div>
           
@@ -900,6 +920,26 @@ const App = () => {
                 hoveredSpot={hoveredSpot}
                 hideOverlays={true}
               />
+              {/* DX Lock button overlay */}
+              <button
+                onClick={handleToggleDxLock}
+                title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  left: '10px',
+                  background: dxLocked ? 'rgba(255,180,0,0.9)' : 'rgba(0,0,0,0.7)',
+                  border: '1px solid #444',
+                  color: dxLocked ? '#000' : '#fff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  zIndex: 1000
+                }}
+              >
+                {dxLocked ? '🔒 DX Locked' : '🔓 DX Unlocked'}
+              </button>
               {/* Compact Band Legend */}
               <div style={{
                 position: 'absolute',
@@ -1226,9 +1266,27 @@ const App = () => {
                 color: 'var(--text-muted)',
                 background: 'rgba(0,0,0,0.7)',
                 padding: '3px 10px',
-                borderRadius: '4px'
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                {deGrid} → {dxGrid} • Click map to set DX
+                <span>{deGrid} → {dxGrid} • {dxLocked ? 'DX locked' : 'Click map to set DX'}</span>
+                <button
+                  onClick={handleToggleDxLock}
+                  title={dxLocked ? 'Unlock DX position' : 'Lock DX position'}
+                  style={{
+                    background: dxLocked ? 'var(--accent-amber)' : 'transparent',
+                    color: dxLocked ? '#000' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '3px',
+                    padding: '1px 4px',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {dxLocked ? '🔒' : '🔓'}
+                </button>
               </div>
               {/* Compact Band Legend */}
               <div style={{
@@ -1383,7 +1441,24 @@ const App = () => {
           {/* DX Location */}
           {config.panels?.dxLocation?.visible !== false && (
             <div className="panel" style={{ padding: '14px', flex: '0 0 auto' }}>
-              <div style={{ fontSize: '14px', color: 'var(--accent-green)', fontWeight: '700', marginBottom: '10px' }}>🎯 DX - TARGET</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div style={{ fontSize: '14px', color: 'var(--accent-green)', fontWeight: '700' }}>🎯 DX - TARGET</div>
+                <button
+                  onClick={handleToggleDxLock}
+                  title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                  style={{
+                    background: dxLocked ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    color: dxLocked ? '#000' : 'var(--text-secondary)',
+                    border: '1px solid ' + (dxLocked ? 'var(--accent-amber)' : 'var(--border-color)'),
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {dxLocked ? '🔒' : '🔓'}
+                </button>
+              </div>
               <div style={{ fontFamily: 'JetBrains Mono', fontSize: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ color: 'var(--accent-amber)', fontSize: '22px', fontWeight: '700', letterSpacing: '1px' }}>{dxGrid}</div>

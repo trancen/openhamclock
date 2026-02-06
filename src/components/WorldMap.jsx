@@ -158,7 +158,11 @@ export const WorldMap = ({
     // Click handler for setting DX (only if not locked)
     map.on('click', (e) => {
       if (onDXChange && !dxLockedRef.current) {
-        onDXChange({ lat: e.latlng.lat, lon: e.latlng.lng });
+        // Normalize longitude to -180 to 180 range (Leaflet can return values outside this range when map wraps)
+        let lon = e.latlng.lng;
+        while (lon > 180) lon -= 360;
+        while (lon < -180) lon += 360;
+        onDXChange({ lat: e.latlng.lat, lon });
       }
     });
     
@@ -166,7 +170,11 @@ export const WorldMap = ({
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
-      setMapView({ center: [center.lat, center.lng], zoom });
+      // Normalize longitude to -180 to 180 range
+      let lng = center.lng;
+      while (lng > 180) lng -= 360;
+      while (lng < -180) lng += 360;
+      setMapView({ center: [center.lat, lng], zoom });
     });
 
     mapInstanceRef.current = map;

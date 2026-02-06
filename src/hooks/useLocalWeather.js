@@ -48,6 +48,20 @@ function windDirection(deg) {
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
+// Normalize longitude to -180 to 180 range
+function normalizeLon(lon) {
+  if (lon == null) return lon;
+  while (lon > 180) lon -= 360;
+  while (lon < -180) lon += 360;
+  return lon;
+}
+
+// Normalize latitude to -90 to 90 range
+function normalizeLat(lat) {
+  if (lat == null) return lat;
+  return Math.max(-90, Math.min(90, lat));
+}
+
 // Conversion helpers — always from Celsius/metric base
 const cToF = (c) => c * 9 / 5 + 32;
 const kmhToMph = (k) => k * 0.621371;
@@ -64,9 +78,13 @@ export const useLocalWeather = (location, tempUnit = 'F') => {
 
     const fetchWeather = async () => {
       try {
+        // Normalize coordinates to valid ranges
+        const lat = normalizeLat(location.lat);
+        const lon = normalizeLon(location.lon);
+        
         const params = [
-          `latitude=${location.lat}`,
-          `longitude=${location.lon}`,
+          `latitude=${lat}`,
+          `longitude=${lon}`,
           'current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,uv_index,visibility,dew_point_2m,is_day',
           'daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,weather_code,sunrise,sunset,uv_index_max,wind_speed_10m_max',
           'hourly=temperature_2m,precipitation_probability,weather_code',
