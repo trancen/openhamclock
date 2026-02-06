@@ -1478,7 +1478,7 @@ const App = () => {
                   <div style={{ color: 'var(--accent-cyan)', fontSize: '13px', marginTop: '4px', fontWeight: '600' }}>
                     {(() => {
                       // Haversine distance formula
-                      const R = 6371; // Earth radius in km
+                      const R = config.units === 'imperial' ? 3963.1 : 6371; // Earth radius in miles or km
                       const deLat = config.location.lat * Math.PI / 180;
                       const deLon = config.location.lon * Math.PI / 180;
                       const dxLat = dxLocation.lat * Math.PI / 180;
@@ -1489,8 +1489,9 @@ const App = () => {
                                 Math.cos(deLat) * Math.cos(dxLat) *
                                 Math.sin(dLon/2) * Math.sin(dLon/2);
                       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                      const km = R * c;
-                      return `📏 ${Math.round(km).toLocaleString()} km`;
+                      const distance = R * c;
+                      const unit = config.units === 'imperial' ? 'mi' : 'km';
+                      return `📏 ${Math.round(distance).toLocaleString()} ${unit}`;
                     })()}
                   </div>
                   <div style={{ marginTop: '8px', fontSize: '13px' }}>
@@ -1536,7 +1537,7 @@ const App = () => {
                   <div style={{ fontSize: '13px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
                     <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{(() => {
                       // Haversine distance formula
-                      const R = 6371; // Earth radius in km
+                      const R = config.units === 'imperial' ? 3963.1 : 6371; // Earth radius in miles or km
                       const deLat = config.location.lat * Math.PI / 180;
                       const deLon = config.location.lon * Math.PI / 180;
                       const dxLat = dxLocation.lat * Math.PI / 180;
@@ -1547,8 +1548,9 @@ const App = () => {
                                 Math.cos(deLat) * Math.cos(dxLat) *
                                 Math.sin(dLon/2) * Math.sin(dLon/2);
                       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                      const km = R * c;
-                      return `📏 ${Math.round(km).toLocaleString()} km`;
+                      const distance = R * c;
+                      const unit = config.units === 'imperial' ? 'mi' : 'km';
+                      return `📏 ${Math.round(distance).toLocaleString()} ${unit}`;
                     })()}</span>
                   </div>
                 </div>
@@ -1611,6 +1613,7 @@ const App = () => {
             hoveredSpot={hoveredSpot}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
+            units={config.units}
           />
           <div style={{ 
             position: 'absolute', 

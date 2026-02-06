@@ -1082,15 +1082,6 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}>{sat.name}</div>
-                      {sat.visible !== undefined && (
-                        <div style={{
-                          fontSize: '9px',
-                          color: sat.visible ? '#00ff88' : 'var(--text-muted)',
-                          marginTop: '2px'
-                        }}>
-                          {sat.visible ? '● Visible' : '○ Below horizon'}
-                        </div>
-                      )}
                     </div>
                   </button>
                 );
