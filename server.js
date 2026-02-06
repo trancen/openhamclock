@@ -2887,11 +2887,11 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
     if (!response.ok) {
       // Back off on rate-limit or access errors to avoid hammering
       if (response.status === 503) {
-        psk503Backoff = Date.now() + (15 * 60 * 1000);
-        logErrorOnce('PSKReporter HTTP', '503 - backing off for 15 minutes');
+        psk503Backoff = Date.now() + (2 * 60 * 1000); // Reduced to 2 minutes
+        logErrorOnce('PSKReporter HTTP', '503 - backing off for 2 minutes');
       } else if (response.status === 403 || response.status === 429) {
-        psk503Backoff = Date.now() + (30 * 60 * 1000);
-        logErrorOnce('PSKReporter HTTP', `${response.status} - backing off for 30 minutes (server-side HTTP proxy blocked; users unaffected via MQTT)`);
+        psk503Backoff = Date.now() + (5 * 60 * 1000); // Reduced to 5 minutes
+        logErrorOnce('PSKReporter HTTP', `${response.status} - backing off for 5 minutes (server-side HTTP proxy rate-limited)`);
       }
       throw new Error(`HTTP ${response.status}`);
     }
@@ -2980,6 +2980,20 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
       reports: []
     });
   }
+});
+
+// Admin endpoint to clear PSKReporter backoff (for debugging/testing)
+app.post('/api/pskreporter/admin/clear-backoff', (req, res) => {
+  const previousBackoff = psk503Backoff;
+  psk503Backoff = 0;
+  pskHttpCache = {}; // Also clear cache
+  
+  res.json({
+    success: true,
+    message: 'PSKReporter backoff cleared',
+    previousBackoff: previousBackoff > 0 ? new Date(previousBackoff).toISOString() : 'none',
+    cacheCleared: true
+  });
 });
 
 // Combined endpoint that tries MQTT cache first, falls back to HTTP
@@ -3678,11 +3692,31 @@ app.get('/api/satellites/tle', async (req, res) => {
       }
     }
     
-    // Cache the result
-    tleCache = { data: tleData, timestamp: now };
+    // Deduplicate by NORAD ID (keep HAM_SATELLITES entries, prefer manually configured over auto-detected)
+    const seenNorad = new Set();
+    const deduped = {};
     
-    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).length, 'satellites from CelesTrak');
-    res.json(tleData);
+    // First pass: Add all HAM_SATELLITES entries
+    for (const [key, sat] of Object.entries(tleData)) {
+      if (HAM_SATELLITES[key]) {
+        deduped[key] = sat;
+        seenNorad.add(sat.norad);
+      }
+    }
+    
+    // Second pass: Add dynamic satellites if NORAD ID not seen
+    for (const [key, sat] of Object.entries(tleData)) {
+      if (!HAM_SATELLITES[key] && !seenNorad.has(sat.norad)) {
+        deduped[key] = sat;
+        seenNorad.add(sat.norad);
+      }
+    }
+    
+    // Cache the result
+    tleCache = { data: deduped, timestamp: now };
+    
+    logDebug('[Satellites] Loaded TLE for', Object.keys(deduped).length, 'satellites (deduplicated from', Object.keys(tleData).length, 'total)');
+    res.json(deduped);
     
   } catch (error) {
     // Don't spam logs for timeouts (AbortError) or network issues
