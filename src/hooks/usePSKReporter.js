@@ -1,22 +1,28 @@
 /**
  * usePSKReporter Hook
- * Fetches PSKReporter data via HTTP API (primary) with optional MQTT enhancement
+ * Fetches PSKReporter data via MQTT (primary) with HTTP fallback
  * 
  * Architecture:
- * - PRIMARY: HTTP API (retrieve.pskreporter.info/query) via server proxy
- * - OPTIONAL: Real-time MQTT enhancement (mqtt.pskreporter.info)
- * - MQTT is disabled by default due to mixed-content issues on HTTPS sites
+ * - PRIMARY: Real-time MQTT feed (mqtt.pskreporter.info) - No rate limits!
+ * - FALLBACK: HTTP API (retrieve.pskreporter.info) via server proxy
+ * - MQTT is enabled by default for real-time updates
  * 
- * HTTP API (via /api/pskreporter/:callsign):
- * - Reliable, works on all sites (HTTP and HTTPS)
+ * Why MQTT First:
+ * - No rate limits (HTTP has aggressive throttling for large time windows)
+ * - Real-time updates (no 2-minute polling delay)
+ * - Lower server load (client-side connection)
+ * - Better user experience (instant spot display)
+ * 
+ * HTTP Fallback:
+ * - Activates after 8-second MQTT timeout
  * - 2-minute polling interval
  * - Server-side caching (10 minutes)
  * - Rate-limit protection with backoff
  * 
- * MQTT Enhancement (optional, experimental):
- * - Real-time updates (no polling delay)
- * - Only works on HTTP sites or with HTTPS WebSocket proxy
- * - Falls back to HTTP if connection fails
+ * HTTPS Mixed-Content Note:
+ * - MQTT uses WSS (WebSocket Secure) on port 1886
+ * - Works on both HTTP and HTTPS sites
+ * - Falls back to HTTP if MQTT unavailable
  * 
  * Based on PSKReporter Developer Documentation:
  * https://pskreporter.info/pskdev.html
@@ -65,17 +71,19 @@ function getBandFromHz(freqHz) {
   return 'Unknown';
 }
 
-// HTTP poll interval (primary method)
-const HTTP_POLL_INTERVAL = 120000; // 2 minutes - matches original OHC behavior
-// MQTT is disabled by default (experimental, HTTPS mixed-content issues)
-const ENABLE_MQTT = false;
+// HTTP poll interval (fallback method after MQTT timeout)
+const HTTP_POLL_INTERVAL = 120000; // 2 minutes
+// MQTT connection timeout - if MQTT doesn't connect, fall back to HTTP
+const MQTT_TIMEOUT_MS = 8000; // 8 seconds (reduced from 12s for faster fallback)
+// MQTT is enabled by default for real-time updates (no rate limits)
+const ENABLE_MQTT = true;
 
 export const usePSKReporter = (callsign, options = {}) => {
   const {
     minutes = 15,           // Time window to keep spots
     enabled = true,         // Enable/disable fetching
     maxSpots = 100,         // Max spots to keep
-    useMQTT = ENABLE_MQTT   // Enable MQTT (experimental, disabled by default)
+    useMQTT = ENABLE_MQTT   // Enable MQTT (true by default for real-time updates)
   } = options;
 
   const [txReports, setTxReports] = useState([]);
@@ -91,6 +99,7 @@ export const usePSKReporter = (callsign, options = {}) => {
   const rxReportsRef = useRef([]);
   const mountedRef = useRef(true);
   const httpIntervalRef = useRef(null);
+  const mqttTimeoutRef = useRef(null);
 
   // Clean old spots (older than specified minutes)
   const cleanOldSpots = useCallback((spots, maxAgeMinutes) => {
@@ -229,7 +238,7 @@ export const usePSKReporter = (callsign, options = {}) => {
     }
   }, [callsign, minutes, maxSpots, cleanOldSpots]);
 
-  // Connect with HTTP polling (primary) and optional MQTT enhancement
+  // Connect with MQTT-first (real-time, no rate limits) with HTTP fallback
   useEffect(() => {
     mountedRef.current = true;
     
@@ -253,29 +262,39 @@ export const usePSKReporter = (callsign, options = {}) => {
     setError(null);
     setSource(useMQTT ? 'connecting' : 'http');
 
-    console.log(`[PSKReporter] Starting ${useMQTT ? 'HTTP+MQTT' : 'HTTP-only'} mode for ${upperCallsign}`);
+    console.log(`[PSKReporter] Starting ${useMQTT ? 'MQTT-first (HTTP fallback)' : 'HTTP-only'} mode for ${upperCallsign}`);
 
-    // PRIMARY: Start HTTP polling immediately
-    fetchHTTP(upperCallsign);
-    httpIntervalRef.current = setInterval(() => {
-      if (mountedRef.current) fetchHTTP(upperCallsign);
-    }, HTTP_POLL_INTERVAL);
+    let mqttFailed = false;
 
-    // OPTIONAL: MQTT enhancement (disabled by default due to HTTPS mixed-content issues)
-    let client = null;
+    // MQTT-FIRST: Try MQTT for real-time updates (no rate limits!)
     if (useMQTT) {
-      console.log(`[PSKReporter MQTT] Attempting connection for ${upperCallsign}...`);
+      console.log(`[PSKReporter MQTT] Connecting for ${upperCallsign}...`);
       
-      // Try importing mqtt dynamically (might not be available)
+      // Set timeout - if MQTT doesn't connect within timeout, fall back to HTTP
+      mqttTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current || connected) return;
+        
+        mqttFailed = true;
+        console.log('[PSKReporter] MQTT timeout, falling back to HTTP...');
+        setSource('http-fallback');
+        
+        // Start HTTP polling as fallback
+        fetchHTTP(upperCallsign);
+        httpIntervalRef.current = setInterval(() => {
+          if (mountedRef.current) fetchHTTP(upperCallsign);
+        }, HTTP_POLL_INTERVAL);
+      }, MQTT_TIMEOUT_MS);
+
+      // Try importing mqtt dynamically
       import('mqtt').then(({ default: mqtt }) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || mqttFailed) return;
         
         // Connect to PSKReporter MQTT via WebSocket (TLS on port 1886)
-        client = mqtt.connect('wss://mqtt.pskreporter.info:1886/mqtt', {
+        const client = mqtt.connect('wss://mqtt.pskreporter.info:1886/mqtt', {
           clientId: `ohc_${upperCallsign}_${Math.random().toString(16).substr(2, 6)}`,
           clean: true,
           connectTimeout: 15000,
-          reconnectPeriod: 0, // Don't auto-reconnect, HTTP is primary
+          reconnectPeriod: 60000, // Auto-reconnect every minute
           keepalive: 60
         });
 
@@ -284,19 +303,41 @@ export const usePSKReporter = (callsign, options = {}) => {
         client.on('connect', () => {
           if (!mountedRef.current) return;
           
-          console.log('[PSKReporter MQTT] Connected! (Enhancement mode)');
-          setSource('http+mqtt');
+          // Cancel HTTP fallback since MQTT connected
+          if (mqttTimeoutRef.current) {
+            clearTimeout(mqttTimeoutRef.current);
+            mqttTimeoutRef.current = null;
+          }
+          if (httpIntervalRef.current) {
+            clearInterval(httpIntervalRef.current);
+            httpIntervalRef.current = null;
+          }
+          
+          mqttFailed = false;
+          console.log('[PSKReporter MQTT] Connected!');
+          setConnected(true);
+          setLoading(false);
+          setSource('mqtt');
+          setError(null);
 
           // Subscribe to TX and RX topics
           const txTopic = `pskr/filter/v2/+/+/${upperCallsign}/#`;
           const rxTopic = `pskr/filter/v2/+/+/+/${upperCallsign}/#`;
           
           client.subscribe(txTopic, { qos: 0 }, (err) => {
-            if (!err) console.log(`[PSKReporter MQTT] Subscribed TX: ${txTopic}`);
+            if (err) {
+              console.error('[PSKReporter MQTT] TX subscribe error:', err);
+            } else {
+              console.log(`[PSKReporter MQTT] Subscribed TX: ${txTopic}`);
+            }
           });
           
           client.subscribe(rxTopic, { qos: 0 }, (err) => {
-            if (!err) console.log(`[PSKReporter MQTT] Subscribed RX: ${rxTopic}`);
+            if (err) {
+              console.error('[PSKReporter MQTT] RX subscribe error:', err);
+            } else {
+              console.log(`[PSKReporter MQTT] Subscribed RX: ${rxTopic}`);
+            }
           });
         });
 
@@ -304,33 +345,64 @@ export const usePSKReporter = (callsign, options = {}) => {
 
         client.on('error', (err) => {
           if (!mountedRef.current) return;
-          console.warn('[PSKReporter MQTT] Connection failed (HTTP still working):', err.message);
-          // Don't set error state - HTTP is primary
+          console.error('[PSKReporter MQTT] Error:', err.message);
+          setError('MQTT connection error');
+          // Timeout will trigger HTTP fallback
         });
 
         client.on('close', () => {
           if (!mountedRef.current) return;
-          console.log('[PSKReporter MQTT] Disconnected (HTTP continues)');
-          setSource('http');
+          console.log('[PSKReporter MQTT] Disconnected');
+          setConnected(false);
+        });
+
+        client.on('offline', () => {
+          if (!mountedRef.current) return;
+          console.log('[PSKReporter MQTT] Offline');
+          setConnected(false);
+          if (!mqttFailed) setSource('offline');
+        });
+
+        client.on('reconnect', () => {
+          if (!mountedRef.current) return;
+          console.log('[PSKReporter MQTT] Reconnecting...');
+          if (!mqttFailed) setSource('reconnecting');
         });
       }).catch((err) => {
-        console.log('[PSKReporter MQTT] Not available:', err.message);
+        console.error('[PSKReporter MQTT] Failed to load:', err.message);
+        mqttFailed = true;
+        // Fall back to HTTP
+        fetchHTTP(upperCallsign);
+        httpIntervalRef.current = setInterval(() => {
+          if (mountedRef.current) fetchHTTP(upperCallsign);
+        }, HTTP_POLL_INTERVAL);
       });
+    } else {
+      // HTTP-only mode (MQTT disabled)
+      fetchHTTP(upperCallsign);
+      httpIntervalRef.current = setInterval(() => {
+        if (mountedRef.current) fetchHTTP(upperCallsign);
+      }, HTTP_POLL_INTERVAL);
     }
 
     // Cleanup on unmount or callsign change
     return () => {
       mountedRef.current = false;
+      if (mqttTimeoutRef.current) {
+        clearTimeout(mqttTimeoutRef.current);
+        mqttTimeoutRef.current = null;
+      }
       if (httpIntervalRef.current) {
         clearInterval(httpIntervalRef.current);
         httpIntervalRef.current = null;
       }
-      if (client) {
+      if (clientRef.current) {
         console.log('[PSKReporter MQTT] Cleaning up...');
-        client.end(true);
+        clientRef.current.end(true);
+        clientRef.current = null;
       }
     };
-  }, [callsign, enabled, useMQTT, fetchHTTP, processMessage]);
+  }, [callsign, enabled, useMQTT, fetchHTTP, processMessage, connected]);
 
   // Periodically clean old spots and update ages
   useEffect(() => {
