@@ -3585,15 +3585,60 @@ app.get('/api/satellites/tle', async (req, res) => {
           // Extract NORAD ID from line 1
           const noradId = parseInt(line1.substring(2, 7));
           
-          // Check if this is a satellite we care about
-          for (const [key, sat] of Object.entries(HAM_SATELLITES)) {
+          // Create a unique key for this satellite (use name as key, sanitized)
+          const key = name.replace(/[^A-Z0-9-]/gi, '_').toUpperCase();
+          
+          // Check if we have metadata for this satellite in HAM_SATELLITES
+          let metadata = null;
+          for (const [metaKey, sat] of Object.entries(HAM_SATELLITES)) {
             if (sat.norad === noradId) {
-              tleData[key] = {
-                ...sat,
-                tle1: line1,
-                tle2: line2
-              };
+              metadata = sat;
+              break;
             }
+          }
+          
+          // If we have metadata, use it; otherwise create basic entry
+          if (metadata) {
+            tleData[key] = {
+              ...metadata,
+              tle1: line1,
+              tle2: line2
+            };
+          } else {
+            // Dynamic satellite - create basic metadata
+            // Assign priority based on common patterns
+            let priority = 4; // Default: low priority
+            let color = '#999999'; // Gray for unknown
+            let mode = 'Unknown';
+            
+            // Popular satellites get higher priority
+            if (name.includes('ISS') || name.includes('ZARYA')) {
+              priority = 1;
+              color = '#00ffff';
+              mode = 'FM/APRS/SSTV';
+            } else if (name.includes('SO-') || name.includes('AO-') || name.includes('FO-')) {
+              priority = 2;
+              color = '#00ff00';
+              mode = 'FM';
+            } else if (name.includes('RS') || name.includes('CAS-') || name.includes('XW-')) {
+              priority = 3;
+              color = '#ff9900';
+              mode = 'Linear';
+            } else if (name.includes('TEVEL')) {
+              priority = 3;
+              color = '#66ccff';
+              mode = 'FM';
+            }
+            
+            tleData[key] = {
+              norad: noradId,
+              name: name,
+              color: color,
+              priority: priority,
+              mode: mode,
+              tle1: line1,
+              tle2: line2
+            };
           }
         }
       }
@@ -3633,22 +3678,10 @@ app.get('/api/satellites/tle', async (req, res) => {
       }
     }
     
-    // Add all HAM_SATELLITES to the response, even if they don't have TLE data yet
-    // This ensures the Settings panel shows all satellites for configuration
-    for (const [key, sat] of Object.entries(HAM_SATELLITES)) {
-      if (!tleData[key]) {
-        tleData[key] = {
-          ...sat,
-          tle1: null,
-          tle2: null
-        };
-      }
-    }
-    
     // Cache the result
     tleCache = { data: tleData, timestamp: now };
     
-    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).filter(k => tleData[k].tle1).length, 'satellites,', Object.keys(tleData).length, 'total in list');
+    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).length, 'satellites from CelesTrak');
     res.json(tleData);
     
   } catch (error) {
