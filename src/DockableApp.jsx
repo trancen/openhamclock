@@ -203,6 +203,7 @@ export const DockableApp = ({
         dxPaths={dxClusterData.paths}
         dxFilters={dxFilters}
         satellites={satellites.data}
+        pskReporter={pskReporter}
         pskReporterSpots={filteredPskSpots}
         showDXPaths={mapLayers.showDXPaths}
         showDXLabels={mapLayers.showDXLabels}
@@ -214,6 +215,8 @@ export const DockableApp = ({
         showWSJTX={mapLayers.showWSJTX}
         onToggleSatellites={toggleSatellites}
         hoveredSpot={hoveredSpot}
+        callsign={config.callsign}
+        locator={config.locator}
         leftSidebarVisible={true}
         rightSidebarVisible={true}
       />

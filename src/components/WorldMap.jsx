@@ -27,6 +27,7 @@ export const WorldMap = ({
   dxPaths, 
   dxFilters, 
   satellites, 
+  pskReporter = {},
   pskReporterSpots,
   wsjtxSpots,
   showDXPaths, 
@@ -39,6 +40,7 @@ export const WorldMap = ({
   onToggleSatellites, 
   hoveredSpot,
   callsign = 'N0CALL',
+  locator = '',
   hideOverlays
 }) => {
   const mapRef = useRef(null);
@@ -771,6 +773,8 @@ export const WorldMap = ({
           opacity={pluginLayerStates[layerDef.id]?.opacity || layerDef.defaultOpacity}
           map={mapInstanceRef.current}
           callsign={callsign}
+          locator={locator}
+          pskReporter={pskReporter}
         />
       ))}
       

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { usePSKReporter } from '../../hooks/usePSKReporter';
 
 /**
  * WSPR Propagation Heatmap Plugin v1.6.0
@@ -355,7 +354,7 @@ function addMinimizeToggle(element, storageKey) {
   });
 }
 
-export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign, locator }) {
+export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign, locator, pskReporter = {} }) {
   const [pathLayers, setPathLayers] = useState([]);
   const [markerLayers, setMarkerLayers] = useState([]);
   const [heatmapLayer, setHeatmapLayer] = useState(null);
@@ -387,19 +386,11 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   
   const animationFrameRef = useRef(null);
   
-  // v1.6.0 - Use usePSKReporter for WSPR data (HTTP+MQTT hybrid)
+  // v1.6.0 - Use global PSKReporter data (passed as prop) filtered for WSPR
   const { 
-    txReports: txWSPR, 
-    rxReports: rxWSPR,
-    connected: mqttConnected,
-    source: dataSource
-  } = usePSKReporter(callsign, {
-    minutes: timeWindow,
-    enabled: enabled && !filterByGrid, // Only fetch when not using grid filter
-    maxSpots: 200,
-    useMQTT: true,
-    mode: 'WSPR' // Filter for WSPR mode only
-  });
+    txReports: txPSK = [], 
+    rxReports: rxPSK = []
+  } = pskReporter;
 
   // Fetch WSPR data with dynamic time window and band filter
   
@@ -415,57 +406,61 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     }
   }, [locator]);
   
-  // v1.6.0 - Convert PSKReporter data to WSPR spot format
+  // v1.6.0 - Convert global PSKReporter data to WSPR spot format (filter by WSPR mode)
   useEffect(() => {
     if (!enabled || filterByGrid) return;
     if (!callsign || callsign === 'N0CALL') return;
     
     const baseCall = stripCallsign(callsign);
     
-    // Combine TX and RX reports into WSPR spot format
+    // Filter for WSPR mode only, then combine TX and RX reports
     const spots = [];
     
-    // TX reports: I transmitted, someone received
-    txWSPR.forEach(report => {
-      spots.push({
-        sender: baseCall, // I'm the sender
-        senderGrid: locator || 'FN03',
-        senderLat: null,
-        senderLon: null,
-        receiver: stripCallsign(report.receiver),
-        receiverGrid: report.receiverGrid,
-        receiverLat: report.lat,
-        receiverLon: report.lon,
-        freq: report.freq,
-        freqMHz: report.freqMHz,
-        band: report.band,
-        mode: report.mode,
-        snr: report.snr,
-        timestamp: report.timestamp,
-        age: report.age
+    // TX reports: I transmitted, someone received (filter WSPR mode)
+    txPSK
+      .filter(report => report.mode && report.mode.toUpperCase() === 'WSPR')
+      .forEach(report => {
+        spots.push({
+          sender: baseCall, // I'm the sender
+          senderGrid: locator || 'FN03',
+          senderLat: null,
+          senderLon: null,
+          receiver: stripCallsign(report.receiver),
+          receiverGrid: report.receiverGrid,
+          receiverLat: report.lat,
+          receiverLon: report.lon,
+          freq: report.freq,
+          freqMHz: report.freqMHz,
+          band: report.band,
+          mode: report.mode,
+          snr: report.snr,
+          timestamp: report.timestamp,
+          age: report.age
+        });
       });
-    });
     
-    // RX reports: Someone transmitted, I received
-    rxWSPR.forEach(report => {
-      spots.push({
-        sender: stripCallsign(report.sender),
-        senderGrid: report.senderGrid,
-        senderLat: report.lat,
-        senderLon: report.lon,
-        receiver: baseCall, // I'm the receiver
-        receiverGrid: locator || 'FN03',
-        receiverLat: null,
-        receiverLon: null,
-        freq: report.freq,
-        freqMHz: report.freqMHz,
-        band: report.band,
-        mode: report.mode,
-        snr: report.snr,
-        timestamp: report.timestamp,
-        age: report.age
+    // RX reports: Someone transmitted, I received (filter WSPR mode)
+    rxPSK
+      .filter(report => report.mode && report.mode.toUpperCase() === 'WSPR')
+      .forEach(report => {
+        spots.push({
+          sender: stripCallsign(report.sender),
+          senderGrid: report.senderGrid,
+          senderLat: report.lat,
+          senderLon: report.lon,
+          receiver: baseCall, // I'm the receiver
+          receiverGrid: locator || 'FN03',
+          receiverLat: null,
+          receiverLon: null,
+          freq: report.freq,
+          freqMHz: report.freqMHz,
+          band: report.band,
+          mode: report.mode,
+          snr: report.snr,
+          timestamp: report.timestamp,
+          age: report.age
+        });
       });
-    });
     
     // Convert grid squares to lat/lon if coordinates are missing
     const spotsWithCoords = spots.map(spot => {
@@ -493,8 +488,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     });
     
     setWsprData(spotsWithCoords);
-    console.log(`[WSPR Plugin] Loaded ${spotsWithCoords.length} spots via ${dataSource} (${timeWindow}min, mode: WSPR)`);
-  }, [enabled, callsign, locator, txWSPR, rxWSPR, filterByGrid, timeWindow, dataSource]);
+    const source = pskReporter.source || 'global';
+    console.log(`[WSPR Plugin] Loaded ${spotsWithCoords.length} spots via ${source} (30min, mode: WSPR)`);
+  }, [enabled, callsign, locator, txPSK, rxPSK, filterByGrid, pskReporter.source]);
 
   // v1.6.0 - HTTP fetch only for grid filter mode (all spots)
   useEffect(() => {

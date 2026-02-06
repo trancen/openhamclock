@@ -290,7 +290,17 @@ const App = () => {
     : satellites.data;
   
   const localWeather = useWeather(config.location, tempUnit);
-  const pskReporter = usePSKReporter(config.callsign, { minutes: 15, enabled: config.callsign !== 'N0CALL' });
+  
+  // Global PSKReporter data source (HTTP+MQTT hybrid)
+  // All plugins/components filter from this single source
+  const pskReporter = usePSKReporter(config.callsign, { 
+    minutes: 30,  // Longer window for all consumers
+    enabled: config.callsign !== 'N0CALL',
+    maxSpots: 500,  // More spots for multiple plugins
+    useMQTT: true,  // Real-time updates
+    mode: null  // All modes (WSPR, FT8, FT4, etc.)
+  });
+  
   const wsjtx = useWSJTX();
 
   // Filter PSKReporter spots for map display
@@ -1524,6 +1534,7 @@ const App = () => {
               <div style={{ flex: `${config.panels.pskReporter.size || 1} 1 auto`, minHeight: '140px', overflow: 'hidden' }}>
                 <PSKReporterPanel 
                 callsign={config.callsign}
+                pskReporter={pskReporter}
                 showOnMap={mapLayers.showPSKReporter}
                 onToggleMap={togglePSKReporter}
                 filters={pskFilters}

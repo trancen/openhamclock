@@ -4,9 +4,9 @@
  */
 import React from 'react';
 
-export const PluginLayer = ({ plugin, enabled, opacity, map, callsign }) => {
+export const PluginLayer = ({ plugin, enabled, opacity, map, callsign, locator, pskReporter }) => {
   // Call the plugin's hook (this is allowed because it's in a component)
-  const result = plugin.hook({ enabled, opacity, map, callsign });
+  const result = plugin.hook({ enabled, opacity, map, callsign, locator, pskReporter });
   
   // Plugin hook handles its own rendering to the map
   // This component doesn't render anything to the DOM
