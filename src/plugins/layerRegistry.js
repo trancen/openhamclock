@@ -25,7 +25,6 @@ const layerPlugins = [
 ];
 
 export function getAllLayers() {
-  console.log("Loaded layer plugins:", layerPlugins.map(p => p?.metadata?.id));
   return layerPlugins
     .filter(plugin => plugin.metadata && plugin.useLayer)
     .map(plugin => ({
