@@ -280,6 +280,23 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
           >
             ⛊ Satellites
           </button>
+          <button
+            onClick={() => setActiveTab('satellites')}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: activeTab === 'satellites' ? 'var(--accent-amber)' : 'transparent',
+              border: 'none',
+              borderRadius: '6px 6px 0 0',
+              color: activeTab === 'satellites' ? '#000' : 'var(--text-secondary)',
+              fontSize: '13px',
+              cursor: 'pointer',
+              fontWeight: activeTab === 'satellites' ? '700' : '400',
+              fontFamily: 'JetBrains Mono, monospace'
+            }}
+          >
+            ⛊ Satellites
+          </button>
         </div>
 
         {/* Station Settings Tab */}
