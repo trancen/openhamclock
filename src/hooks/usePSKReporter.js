@@ -289,6 +289,13 @@ export const usePSKReporter = (callsign, options = {}) => {
     if (useMQTT) {
       isConnectingRef.current = true;
       
+      // Load historical data via HTTP FIRST, then switch to MQTT for real-time updates
+      console.log('[PSKReporter] Loading historical data via HTTP...');
+      fetchHTTP(upperCallsign).then(() => {
+        if (!mountedRef.current) return;
+        console.log('[PSKReporter] Historical data loaded, now connecting to MQTT for real-time updates...');
+      });
+      
       // Timeout: Fall back to HTTP if MQTT doesn't connect
       mqttTimeoutRef.current = setTimeout(() => {
         if (!mountedRef.current || connected) return;
@@ -377,6 +384,7 @@ export const usePSKReporter = (callsign, options = {}) => {
 
         client.on('message', (topic, message) => {
           // Real-time message received!
+          console.log('[PSKReporter MQTT] Real-time spot received:', topic);
           processMessage(topic, message);
         });
 
