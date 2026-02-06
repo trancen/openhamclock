@@ -186,8 +186,13 @@ export const usePSKReporter = (callsign, options = {}) => {
       if (!senderCallsign || !receiverCallsign) return;
       
       // Filter by mode if specified (e.g., 'WSPR' only)
-      if (mode && messageMode && messageMode.toUpperCase() !== mode.toUpperCase()) {
-        return; // Skip spots that don't match the requested mode
+      if (mode && messageMode) {
+        if (messageMode.toUpperCase() !== mode.toUpperCase()) {
+          return; // Skip spots that don't match the requested mode
+        }
+        console.log(`[PSKReporter MQTT] Mode filter passed: ${messageMode} matches ${mode}`);
+      } else if (!mode) {
+        console.log(`[PSKReporter MQTT] No mode filter - accepting ${messageMode || 'unknown'} spot`);
       }
 
       const senderLoc = gridToLatLon(senderLocator);
