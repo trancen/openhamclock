@@ -1406,8 +1406,9 @@ const App = () => {
                   </div>
                   <div style={{ fontSize: '13px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
                     <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{(() => {
-                      // Haversine distance formula
-                      const R = 6371; // Earth radius in km
+                      // Haversine distance formula with units support
+                      const units = config.units || 'metric';
+                      const R = units === 'imperial' ? 3963.1 : 6371; // Earth radius in miles or km
                       const deLat = config.location.lat * Math.PI / 180;
                       const deLon = config.location.lon * Math.PI / 180;
                       const dxLat = dxLocation.lat * Math.PI / 180;
@@ -1418,8 +1419,9 @@ const App = () => {
                                 Math.cos(deLat) * Math.cos(dxLat) *
                                 Math.sin(dLon/2) * Math.sin(dLon/2);
                       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                      const km = R * c;
-                      return `📏 ${Math.round(km).toLocaleString()} km`;
+                      const distance = R * c;
+                      const unitLabel = units === 'imperial' ? 'mi' : 'km';
+                      return `📏 ${Math.round(distance).toLocaleString()} ${unitLabel}`;
                     })()}</span>
                   </div>
                 </div>
@@ -1584,7 +1586,7 @@ const App = () => {
         config={config}
         onSave={handleSaveConfig}
         onResetLayout={handleResetLayout}
-        satellites={satellites.data}
+        satellites={Object.values(satellites.tleData || {})}
         satelliteFilters={satelliteFilters}
         onSatelliteFiltersChange={setSatelliteFilters}
       />

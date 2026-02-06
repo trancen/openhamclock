@@ -43,8 +43,9 @@ function lzwDecode(compressed) {
 }
 
 // Haversine formula for distance calculation
-function calculateDistance(lat1, lon1, lat2, lon2, unit = 'km') {
-  const R = unit === 'km' ? 6371.14 : 3963.1; // Earth radius in km or miles
+// Returns distance in km or miles based on the units parameter
+function calculateDistance(lat1, lon1, lat2, lon2, units = 'metric') {
+  const R = units === 'imperial' ? 3963.1 : 6371.14; // Earth radius in miles or km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = 
@@ -738,7 +739,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     }
   }, [statsControl, enabled, lightningData]);
 
-  // Proximity detection and alerts (30km radius)
+  // Proximity detection and alerts (30km or ~19mi radius)
   useEffect(() => {
     if (!enabled) return;
     
@@ -754,19 +755,20 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     
     const stationLat = config.location?.lat || config.latitude;
     const stationLon = config.location?.lon || config.longitude;
+    const units = config.units || 'metric'; // Get units from config
     
     if (!stationLat || !stationLon || lightningData.length === 0) return;
     
-    const ALERT_RADIUS_KM = 30;
+    const ALERT_RADIUS = units === 'imperial' ? 19 : 30; // 19 miles or 30 km
     const now = Date.now();
     const ONE_MINUTE_AGO = now - 60000;
     
-    // Check for new strikes within 30km in the last minute
+    // Check for new strikes within alert radius in the last minute
     const nearbyNewStrikes = lightningData.filter(strike => {
       if (strike.timestamp < ONE_MINUTE_AGO) return false;
       
-      const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, 'km');
-      return distance <= ALERT_RADIUS_KM;
+      const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, units);
+      return distance <= ALERT_RADIUS;
     });
     
     // Flash the stats panel red if there are nearby strikes
@@ -792,7 +794,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     }
   }, [enabled, lightningData]);
 
-  // Create proximity panel control (30km radius)
+  // Create proximity panel control (30km or ~19mi radius)
   useEffect(() => {
     console.log('[Lightning] Proximity effect triggered - enabled:', enabled, 'map:', !!map, 'proximityControl:', !!proximityControlRef.current);
     
@@ -833,6 +835,8 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     
     const stationLat = config.location?.lat || config.latitude;
     const stationLon = config.location?.lon || config.longitude;
+    const units = config.units || 'metric'; // Get units from config
+    const distanceLabel = units === 'imperial' ? '19mi' : '30km';
     
     console.log('[Lightning] Proximity: Station location:', { stationLat, stationLon });
     
@@ -859,7 +863,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
           max-width: 280px;
         `;
         div.innerHTML = `
-          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">📍 Nearby Strikes (30km)</div>
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">📍 Nearby Strikes (${distanceLabel})</div>
           <div style="opacity: 0.7; font-size: 10px;">No recent strikes</div>
         `;
         
@@ -965,19 +969,21 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     
     const stationLat = config.location?.lat || config.latitude;
     const stationLon = config.location?.lon || config.longitude;
+    const units = config.units || 'metric'; // Get units from config
     
     if (!stationLat || !stationLon) return;
 
-    const PROXIMITY_RADIUS_KM = 30;
+    const PROXIMITY_RADIUS = units === 'imperial' ? 19 : 30; // 19 miles or 30 km
+    const distanceLabel = units === 'imperial' ? 'mi' : 'km';
     const now = Date.now();
 
-    // Find all strikes within 30km
+    // Find all strikes within proximity radius
     const nearbyStrikes = lightningData
       .map(strike => {
-        const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, 'km');
+        const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, units);
         return { ...strike, distance };
       })
-      .filter(strike => strike.distance <= PROXIMITY_RADIUS_KM)
+      .filter(strike => strike.distance <= PROXIMITY_RADIUS)
       .sort((a, b) => a.distance - b.distance); // Sort by distance (closest first)
 
     let contentHTML = '';
@@ -985,7 +991,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     if (nearbyStrikes.length === 0) {
       contentHTML = `
         <div style="opacity: 0.7; font-size: 10px; text-align: center; padding: 10px 0;">
-          ✅ No strikes within 30km<br>
+          ✅ No strikes within ${PROXIMITY_RADIUS}${distanceLabel}<br>
           <span style="font-size: 9px; color: var(--text-muted);">All clear</span>
         </div>
       `;
@@ -1001,7 +1007,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
             ⚡ ${nearbyStrikes.length} strike${nearbyStrikes.length > 1 ? 's' : ''} detected
           </div>
           <div style="font-size: 10px;">
-            <strong>Closest:</strong> ${closestStrike.distance.toFixed(1)} km<br>
+            <strong>Closest:</strong> ${closestStrike.distance.toFixed(1)} ${distanceLabel}<br>
             <strong>Time:</strong> ${ageStr}<br>
             <strong>Polarity:</strong> ${closestStrike.polarity === 'positive' ? '+' : '-'} ${Math.round(closestStrike.intensity)} kA
           </div>
@@ -1014,7 +1020,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
               const timeStr = age < 60 ? `${age}s` : `${Math.floor(age / 60)}m`;
               return `
                 <div style="padding: 2px 0; border-bottom: 1px dotted var(--border-color);">
-                  ${idx + 1}. ${strike.distance.toFixed(1)} km • ${timeStr} • ${strike.polarity === 'positive' ? '+' : '-'}${Math.round(strike.intensity)} kA
+                  ${idx + 1}. ${strike.distance.toFixed(1)} ${distanceLabel} • ${timeStr} • ${strike.polarity === 'positive' ? '+' : '-'}${Math.round(strike.intensity)} kA
                 </div>
               `;
             }).join('')}

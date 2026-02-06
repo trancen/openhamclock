@@ -185,17 +185,6 @@ Now clearly shows this is the ionosonde data source
 
 ### Satellite System Fixes
 
-#### Initialization Error
-**Fixed**: Critical error preventing app startup
-
-**Error**: `ReferenceError: Cannot access 'U' before initialization`
-
-**Root Cause**: `filteredSatellites` was referencing `satellites.data` before `satellites` hook was initialized
-
-**Solution**: Moved satellite filtering logic to run AFTER `satellites = useSatellites(config.location)`
-
-**Related Commits**:
-- `53e1ff6` - fix(satellites): Fix initialization order error
 
 ---
 
@@ -474,7 +463,7 @@ const filteredSatellites = satelliteFilters.length > 0
 - **Status**: Ready to merge
 
 ### Documentation
-- **Live Demo**: https://3000-i8p7orsqmt3alnk1f322i-5185f4aa.sandbox.novita.ai
+- **Live Demo**: 
 - **Server**: Node.js with Express
 - **Frontend**: React with Vite
 - **Map**: Leaflet.js
