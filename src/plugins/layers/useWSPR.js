@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 /**
  * WSPR Propagation Heatmap Plugin v1.6.0
@@ -407,9 +407,11 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   }, [locator]);
   
   // v1.6.0 - Convert global PSKReporter data to WSPR spot format (filter by WSPR mode)
-  useEffect(() => {
-    if (!enabled || filterByGrid) return;
-    if (!callsign || callsign === 'N0CALL') return;
+  // Use useMemo to prevent infinite re-render loops
+  const wsprSpotsFromGlobal = useMemo(() => {
+    if (!enabled || filterByGrid || !callsign || callsign === 'N0CALL') {
+      return [];
+    }
     
     const baseCall = stripCallsign(callsign);
     
@@ -421,7 +423,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       .filter(report => report.mode && report.mode.toUpperCase() === 'WSPR')
       .forEach(report => {
         spots.push({
-          sender: baseCall, // I'm the sender
+          sender: baseCall,
           senderGrid: locator || 'FN03',
           senderLat: null,
           senderLon: null,
@@ -448,7 +450,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           senderGrid: report.senderGrid,
           senderLat: report.lat,
           senderLon: report.lon,
-          receiver: baseCall, // I'm the receiver
+          receiver: baseCall,
           receiverGrid: locator || 'FN03',
           receiverLat: null,
           receiverLon: null,
@@ -463,10 +465,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       });
     
     // Convert grid squares to lat/lon if coordinates are missing
-    const spotsWithCoords = spots.map(spot => {
+    return spots.map(spot => {
       let updated = { ...spot };
       
-      // Convert sender grid to lat/lon if missing
       if ((!spot.senderLat || !spot.senderLon) && spot.senderGrid) {
         const loc = gridToLatLon(spot.senderGrid);
         if (loc) {
@@ -475,7 +476,6 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         }
       }
       
-      // Convert receiver grid to lat/lon if missing
       if ((!spot.receiverLat || !spot.receiverLon) && spot.receiverGrid) {
         const loc = gridToLatLon(spot.receiverGrid);
         if (loc) {
@@ -486,11 +486,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       
       return updated;
     });
-    
-    setWsprData(spotsWithCoords);
+  }, [enabled, callsign, locator, txPSK, rxPSK, filterByGrid]);
+  
+  // Update wsprData when filtered spots change
+  useEffect(() => {
+    setWsprData(wsprSpotsFromGlobal);
     const source = pskReporter.source || 'global';
-    console.log(`[WSPR Plugin] Loaded ${spotsWithCoords.length} spots via ${source} (30min, mode: WSPR)`);
-  }, [enabled, callsign, locator, txPSK, rxPSK, filterByGrid, pskReporter.source]);
+    console.log(`[WSPR Plugin] Loaded ${wsprSpotsFromGlobal.length} spots via ${source} (30min, mode: WSPR)`);
+  }, [wsprSpotsFromGlobal, pskReporter.source]);
 
   // v1.6.0 - HTTP fetch only for grid filter mode (all spots)
   useEffect(() => {
