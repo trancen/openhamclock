@@ -226,7 +226,7 @@ const App = () => {
 
   const handleUpdateClick = useCallback(async () => {
     if (updateInProgress) return;
-    const confirmed = window.confirm('Run update now? The server will restart when finished.');
+    const confirmed = window.confirm(t('app.update.confirm'));
     if (!confirmed) return;
     setUpdateInProgress(true);
     try {
@@ -234,17 +234,17 @@ const App = () => {
       let payload = {};
       try { payload = await res.json(); } catch {}
       if (!res.ok) {
-        throw new Error(payload.error || 'Update failed to start');
+        throw new Error(payload.error || t('app.update.failedToStart'));
       }
-      alert('Update started. The page will reload after the server restarts.');
+      alert(t('app.update.started'));
       setTimeout(() => {
         try { window.location.reload(); } catch {}
       }, 15000);
     } catch (err) {
       setUpdateInProgress(false);
-      alert(`Update failed: ${err.message || 'Unknown error'}`);
+      alert(t('app.update.failed', { error: err.message || t('app.update.unknownError') }));
     }
-  }, [updateInProgress]);
+  }, [updateInProgress, t]);
 
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
@@ -535,19 +535,19 @@ const App = () => {
                   lineHeight: 1
                 }}
                 onClick={() => setShowSettings(true)}
-                title="Click for settings"
+                title={t('app.settings.click')}
               >
                 {config.callsign}
               </div>
               <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
-                Up 35d 18h • v4.20
+                {t('app.uptime', { uptime, version: 'v4.20' })}
               </div>
               <div style={{ marginTop: '8px' }}>
                 <div style={{ fontSize: '36px', fontWeight: '700', color: '#00ff00', fontFamily: 'JetBrains Mono, Consolas, monospace', lineHeight: 1, width: '180px' }}>
                   {utcTime}<span style={{ fontSize: '20px', color: '#00cc00' }}>:{String(new Date().getUTCSeconds()).padStart(2, '0')}</span>
                 </div>
                 <div style={{ fontSize: '14px', color: '#00cc00', marginTop: '2px' }}>
-                  {utcDate} <span style={{ color: '#666', marginLeft: '8px' }}>UTC</span>
+                  {utcDate} <span style={{ color: '#666', marginLeft: '8px' }}>{t('app.time.utc')}</span>
                 </div>
               </div>
             </div>
@@ -556,7 +556,7 @@ const App = () => {
             <div style={{ display: 'flex', borderRight: '1px solid #333' }}>
               {/* SSN */}
               <div style={{ flex: 1, padding: '8px', borderRight: '1px solid #333' }}>
-                <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>Sunspot Number</div>
+                <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>{t('app.solar.sunspotNumber')}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ flex: 1, height: '70px', background: '#001100', border: '1px solid #333', borderRadius: '2px', padding: '4px' }}>
                     {solarIndices?.data?.ssn?.history?.length > 0 && (
@@ -581,12 +581,12 @@ const App = () => {
                     {solarIndices?.data?.ssn?.current || '--'}
                   </div>
                 </div>
-                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '2px' }}>-30 Days</div>
+                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '2px' }}>{t('app.solar.last30Days')}</div>
               </div>
               
               {/* SFI */}
               <div style={{ flex: 1, padding: '8px' }}>
-                <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>10.7 cm Solar flux</div>
+                <div style={{ fontSize: '10px', color: '#888', textAlign: 'center' }}>{t('app.solar.solarFlux')}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ flex: 1, height: '70px', background: '#001100', border: '1px solid #333', borderRadius: '2px', padding: '4px' }}>
                     {solarIndices?.data?.sfi?.history?.length > 0 && (
@@ -611,7 +611,7 @@ const App = () => {
                     {solarIndices?.data?.sfi?.current || '--'}
                   </div>
                 </div>
-                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '2px' }}>-30 Days +7</div>
+                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', marginTop: '2px' }}>{t('app.solar.last30DaysPlus7')}</div>
               </div>
             </div>
             
@@ -619,8 +619,10 @@ const App = () => {
             <div style={{ display: 'flex' }}>
               {/* Live Spots by Band */}
               <div style={{ flex: 1, padding: '8px', borderRight: '1px solid #333' }}>
-                <div style={{ fontSize: '12px', color: '#ff6666', fontWeight: '700' }}>Live Spots</div>
-                <div style={{ fontSize: '9px', color: '#888', marginBottom: '4px' }}>of {deGrid} - 15 mins</div>
+                <div style={{ fontSize: '12px', color: '#ff6666', fontWeight: '700' }}>{t('app.liveSpots.title')}</div>
+                <div style={{ fontSize: '9px', color: '#888', marginBottom: '4px' }}>
+                  {t('app.liveSpots.ofGridLastMinutes', { grid: deGrid, minutes: 15 })}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px', fontSize: '10px' }}>
                   {[
                     { band: '160m', color: '#ff6666' },
@@ -656,19 +658,19 @@ const App = () => {
               {/* Space Weather Indices */}
               <div style={{ width: '70px', padding: '8px', fontSize: '11px' }}>
                 <div style={{ marginBottom: '6px' }}>
-                  <div style={{ color: '#888' }}>X-Ray</div>
+                  <div style={{ color: '#888' }}>{t('app.spaceWeather.xray')}</div>
                   <div style={{ color: '#ffff00', fontSize: '16px', fontWeight: '700' }}>M3.0</div>
                 </div>
                 <div style={{ marginBottom: '6px' }}>
-                  <div style={{ color: '#888' }}>Kp</div>
+                  <div style={{ color: '#888' }}>{t('app.spaceWeather.kp')}</div>
                   <div style={{ color: '#00ff00', fontSize: '16px', fontWeight: '700' }}>{solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex ?? '--'}</div>
                 </div>
                 <div style={{ marginBottom: '6px' }}>
-                  <div style={{ color: '#888' }}>Bz</div>
+                  <div style={{ color: '#888' }}>{t('app.spaceWeather.bz')}</div>
                   <div style={{ color: '#00ffff', fontSize: '16px', fontWeight: '700' }}>-0</div>
                 </div>
                 <div>
-                  <div style={{ color: '#888' }}>Aurora</div>
+                  <div style={{ color: '#888' }}>{t('app.spaceWeather.aurora')}</div>
                   <div style={{ color: '#ff00ff', fontSize: '16px', fontWeight: '700' }}>18</div>
                 </div>
               </div>
@@ -680,7 +682,7 @@ const App = () => {
             {/* DX Cluster List */}
             <div style={{ width: '220px', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#000' }}>
               <div style={{ padding: '4px 8px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#ff6666', fontSize: '14px', fontWeight: '700' }}>Cluster</span>
+                <span style={{ color: '#ff6666', fontSize: '14px', fontWeight: '700' }}>{t('app.dxCluster.shortTitle')}</span>
                 <span style={{ color: '#00ff00', fontSize: '10px' }}>dxspider.co.uk:7300</span>
               </div>
               <div style={{ flex: 1, overflow: 'auto', fontSize: '11px' }}>
@@ -756,7 +758,7 @@ const App = () => {
               {/* DX Lock button overlay */}
               <button
                 onClick={handleToggleDxLock}
-                title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                title={dxLocked ? t('app.dxLock.unlockTooltip') : t('app.dxLock.lockTooltip')}
                 style={{
                   position: 'absolute',
                   top: '10px',
@@ -770,7 +772,7 @@ const App = () => {
                   borderRadius: '4px'
                 }}
               >
-                {dxLocked ? '🔒 DX Locked' : '🔓 DX Unlocked'}
+                {dxLocked ? t('app.dxLock.locked') : t('app.dxLock.unlocked')}
               </button>
             </div>
           </div>
@@ -786,7 +788,7 @@ const App = () => {
             color: '#000',
             fontWeight: '700'
           }}>
-            <span>MHz</span>
+              <span>{t('app.units.mhz')}</span>
             <span>5</span>
             <span>10</span>
             <span>15</span>
@@ -830,14 +832,14 @@ const App = () => {
                 whiteSpace: 'nowrap'
               }}
               onClick={() => setShowSettings(true)}
-              title="Settings"
+              title={t('app.settings.title')}
             >
               {config.callsign}
             </span>
 
             {/* UTC */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-              <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>UTC</span>
+              <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>{t('app.time.utc')}</span>
               <span style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-cyan)' }}>{utcTime}</span>
             </div>
 
@@ -845,26 +847,26 @@ const App = () => {
             <div
               style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
               onClick={handleTimeFormatToggle}
-              title={`Click for ${use12Hour ? '24h' : '12h'} format`}
+              title={t('app.time.toggleFormat', { format: use12Hour ? '24h' : '12h' })}
             >
-              <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>LOC</span>
+              <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>{t('app.time.locShort')}</span>
               <span style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-amber)' }}>{localTime}</span>
             </div>
 
             {/* Solar Quick Stats */}
             <div style={{ display: 'flex', gap: '10px', fontSize: '15px', whiteSpace: 'nowrap' }}>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>SFI </span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.sfiShort')} </span>
                 <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>{solarIndices?.data?.sfi?.current || spaceWeather?.data?.solarFlux || '--'}</span>
               </span>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>K </span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.kpShort')} </span>
                 <span style={{ color: parseInt(solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex) >= 4 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: '700' }}>
                   {solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex ?? '--'}
                 </span>
               </span>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>SSN </span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.ssnShort')} </span>
                 <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || '--'}</span>
               </span>
             </div>
@@ -889,7 +891,7 @@ const App = () => {
                   cursor: 'pointer',
                   whiteSpace: 'nowrap'
                 }}
-                title="Donate via PayPal"
+                title={t('app.donate.paypal')}
               >💳</a>
               <button
                 onClick={() => setShowSettings(true)}
@@ -949,7 +951,7 @@ const App = () => {
               {/* DX Lock button overlay */}
               <button
                 onClick={handleToggleDxLock}
-                title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                title={dxLocked ? t('app.dxLock.unlockTooltip') : t('app.dxLock.lockTooltip')}
                 style={{
                   position: 'absolute',
                   top: '10px',
@@ -964,7 +966,7 @@ const App = () => {
                   zIndex: 1000
                 }}
               >
-                {dxLocked ? '🔒 DX Locked' : '🔓 DX Unlocked'}
+                {dxLocked ? t('app.dxLock.locked') : t('app.dxLock.unlocked')}
               </button>
               {/* Compact Band Legend */}
               <div style={{
@@ -1014,7 +1016,9 @@ const App = () => {
             }}>
               {/* Band Conditions Grid */}
               <div style={{ padding: '8px', borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '13px', color: 'var(--accent-amber)', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Band Conditions</div>
+                <div style={{ fontSize: '13px', color: 'var(--accent-amber)', fontWeight: '700', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {t('band.conditions')}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
                   {(bandConditions?.data || []).slice(0, 13).map((band, idx) => {
                     const colors = {
@@ -1040,8 +1044,8 @@ const App = () => {
                 {/* MUF/LUF */}
                 {propagation.data && (
                   <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '14px', justifyContent: 'center' }}>
-                    <span><span style={{ color: 'var(--text-muted)' }}>MUF </span><span style={{ color: '#ff8800', fontWeight: '700' }}>{propagation.data.muf || '?'}</span></span>
-                    <span><span style={{ color: 'var(--text-muted)' }}>LUF </span><span style={{ color: '#00aaff', fontWeight: '700' }}>{propagation.data.luf || '?'}</span></span>
+                    <span><span style={{ color: 'var(--text-muted)' }}>{t('app.propagation.muf')} </span><span style={{ color: '#ff8800', fontWeight: '700' }}>{propagation.data.muf || '?'}</span></span>
+                    <span><span style={{ color: 'var(--text-muted)' }}>{t('app.propagation.luf')} </span><span style={{ color: '#00aaff', fontWeight: '700' }}>{propagation.data.luf || '?'}</span></span>
                   </div>
                 )}
               </div>
@@ -1049,8 +1053,10 @@ const App = () => {
               {/* Compact DX Cluster */}
               <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>DX Cluster</span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxClusterData.spots?.length || 0} spots</span>
+                  <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>{t('app.dxCluster.title')}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {t('app.dxCluster.spotsCount', { count: dxClusterData.spots?.length || 0 })}
+                  </span>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
                   {dxClusterData.spots?.slice(0, 30).map((spot, i) => (
@@ -1121,22 +1127,22 @@ const App = () => {
                   cursor: 'pointer'
                 }}
                 onClick={() => setShowSettings(true)}
-                title="Settings"
+                title={t('app.settings.title')}
               >
                 {config.callsign}
               </span>
               <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>UTC</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>{t('app.time.utc')}</div>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--accent-cyan)', lineHeight: 1 }}>{utcTime}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{utcDate}</div>
                 </div>
                 <div
                   style={{ textAlign: 'center', cursor: 'pointer' }}
                   onClick={handleTimeFormatToggle}
-                  title={`Click for ${use12Hour ? '24h' : '12h'}`}
+                  title={t('app.time.toggleFormat', { format: use12Hour ? '24h' : '12h' })}
                 >
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Local</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>{t('app.time.local')}</div>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--accent-amber)', lineHeight: 1 }}>{localTime}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{localDate}</div>
                 </div>
@@ -1159,7 +1165,7 @@ const App = () => {
                     alignItems: 'center',
                     cursor: 'pointer'
                   }}
-                  title="Donate via PayPal"
+                  title={t('app.donate.paypal')}
                 >💳</a>
                 <button
                   onClick={() => setShowSettings(true)}
@@ -1190,28 +1196,28 @@ const App = () => {
             {/* Row 2: Solar indices inline */}
             <div style={{ display: 'flex', gap: '16px', fontSize: '15px', justifyContent: 'center' }}>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>SFI </span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.sfiShort')} </span>
                 <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>{solarIndices?.data?.sfi?.current || spaceWeather?.data?.solarFlux || '--'}</span>
               </span>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>K </span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.kpShort')} </span>
                 <span style={{ color: parseInt(solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex) >= 4 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: '700' }}>
                   {solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex ?? '--'}
                 </span>
               </span>
               <span>
-                <span style={{ color: 'var(--text-muted)' }}>SSN </span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.ssnShort')} </span>
                 <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || '--'}</span>
               </span>
               {propagation.data && (
                 <>
                   <span>
-                    <span style={{ color: 'var(--text-muted)' }}>MUF </span>
-                    <span style={{ color: '#ff8800', fontWeight: '600' }}>{propagation.data.muf || '?'} MHz</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('app.propagation.muf')} </span>
+                          <span style={{ color: '#ff8800', fontWeight: '600' }}>{propagation.data.muf || '?'} {t('app.units.mhz')}</span>
                   </span>
                   <span>
-                    <span style={{ color: 'var(--text-muted)' }}>LUF </span>
-                    <span style={{ color: '#00aaff', fontWeight: '600' }}>{propagation.data.luf || '?'} MHz</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('app.propagation.luf')} </span>
+                          <span style={{ color: '#00aaff', fontWeight: '600' }}>{propagation.data.luf || '?'} {t('app.units.mhz')}</span>
                   </span>
                 </>
               )}
@@ -1298,10 +1304,10 @@ const App = () => {
                 alignItems: 'center',
                 gap: '8px'
               }}>
-                <span>{deGrid} → {dxGrid} • {dxLocked ? 'DX locked' : 'Click map to set DX'}</span>
+                <span>{deGrid} → {dxGrid} • {dxLocked ? t('app.dxLock.lockedShort') : t('app.dxLock.clickToSet')}</span>
                 <button
                   onClick={handleToggleDxLock}
-                  title={dxLocked ? 'Unlock DX position' : 'Lock DX position'}
+                  title={dxLocked ? t('app.dxLock.unlockShort') : t('app.dxLock.lockShort')}
                   style={{
                     background: dxLocked ? 'var(--accent-amber)' : 'transparent',
                     color: dxLocked ? '#000' : 'var(--text-muted)',
@@ -1362,7 +1368,7 @@ const App = () => {
               overflow: 'hidden'
             }}>
               <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>DX Cluster</span>
+                <span style={{ fontSize: '14px', color: 'var(--accent-red)', fontWeight: '700', textTransform: 'uppercase' }}>{t('app.dxCluster.title')}</span>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dxClusterData.spots?.length || 0}</span>
               </div>
               <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1445,7 +1451,9 @@ const App = () => {
             {/* DE Location + Weather */}
             {config.panels?.deLocation?.visible !== false && (
               <div className="panel" style={{ padding: '14px', flex: '0 0 auto' }}>
-              <div style={{ fontSize: '14px', color: 'var(--accent-cyan)', fontWeight: '700', marginBottom: '10px' }}>📍 DE - YOUR LOCATION</div>
+              <div style={{ fontSize: '14px', color: 'var(--accent-cyan)', fontWeight: '700', marginBottom: '10px' }}>
+                {t('app.dxLocation.deTitle')}
+              </div>
               <div style={{ fontFamily: 'JetBrains Mono', fontSize: '14px' }}>
                 <div style={{ color: 'var(--accent-amber)', fontSize: '22px', fontWeight: '700', letterSpacing: '1px' }}>{deGrid}</div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>{config.location.lat.toFixed(4)}°, {config.location.lon.toFixed(4)}°</div>
@@ -1469,10 +1477,12 @@ const App = () => {
           {config.panels?.dxLocation?.visible !== false && (
             <div className="panel" style={{ padding: '14px', flex: '0 0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <div style={{ fontSize: '14px', color: 'var(--accent-green)', fontWeight: '700' }}>🎯 DX - TARGET</div>
+                <div style={{ fontSize: '14px', color: 'var(--accent-green)', fontWeight: '700' }}>
+                  {t('app.dxLocation.dxTitle')}
+                </div>
                 <button
                   onClick={handleToggleDxLock}
-                  title={dxLocked ? 'Unlock DX position (allow map clicks)' : 'Lock DX position (prevent map clicks)'}
+                  title={dxLocked ? t('app.dxLock.unlockTooltip') : t('app.dxLock.lockTooltip')}
                   style={{
                     background: dxLocked ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
                     color: dxLocked ? '#000' : 'var(--text-secondary)',
@@ -1517,9 +1527,9 @@ const App = () => {
                   </div>
                 </div>
                 <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '12px', marginLeft: '12px', minWidth: '90px' }}>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '4px' }}>Beam Dir:</div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '4px' }}>{t('app.dxLocation.beamDir')}</div>
                   <div style={{ fontSize: '13px', marginBottom: '3px' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>SP: </span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{t('app.dxLocation.sp')} </span>
                     <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{(() => {
                       const deLat = config.location.lat * Math.PI / 180;
                       const deLon = config.location.lon * Math.PI / 180;
@@ -1534,7 +1544,7 @@ const App = () => {
                     })()}°</span>
                   </div>
                   <div style={{ fontSize: '13px', marginBottom: '6px' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>LP: </span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{t('app.dxLocation.lp')} </span>
                     <span style={{ color: 'var(--accent-purple)', fontWeight: '700' }}>{(() => {
                       const deLat = config.location.lat * Math.PI / 180;
                       const deLon = config.location.lon * Math.PI / 180;

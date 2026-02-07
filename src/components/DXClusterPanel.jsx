@@ -3,6 +3,7 @@
  * Displays DX cluster spots with filtering controls and ON/OFF toggle
  */
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { getBandColor } from '../utils/callsign.js';
 import { IconSearch, IconMap, IconGlobe } from './Icons.jsx';
 
@@ -18,6 +19,7 @@ export const DXClusterPanel = ({
   showOnMap,
   onToggleMap
 }) => {
+  const { t } = useTranslation();
   const getActiveFilterCount = () => {
     let count = 0;
     if (filters?.continents?.length) count++;
@@ -57,12 +59,12 @@ export const DXClusterPanel = ({
         justifyContent: 'space-between', 
         alignItems: 'center' 
       }}>
-        <span><IconGlobe size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />DX CLUSTER <span style={{ color: 'var(--accent-green)', fontSize: '10px' }}>● LIVE</span></span>
+        <span><IconGlobe size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />{t('dxClusterPanel.title')} <span style={{ color: 'var(--accent-green)', fontSize: '10px' }}>● {t('dxClusterPanel.live')}</span></span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>{spots.length}/{totalSpots || spots.length}</span>
           <button
             onClick={onOpenFilters}
-            title="Filter DX spots by band, mode, or continent"
+            title={t('dxClusterPanel.filterTooltip')}
             style={{
               background: filterCount > 0 ? 'rgba(255, 170, 0, 0.3)' : 'rgba(100, 100, 100, 0.3)',
               border: `1px solid ${filterCount > 0 ? '#ffaa00' : '#666'}`,
@@ -74,11 +76,11 @@ export const DXClusterPanel = ({
               cursor: 'pointer'
             }}
           >
-            <IconSearch size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />Filters
+            <IconSearch size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />{t('dxClusterPanel.filtersButton')}
           </button>
           <button
             onClick={onToggleMap}
-            title={showOnMap ? 'Hide DX spots on map' : 'Show DX spots on map'}
+            title={showOnMap ? t('dxClusterPanel.mapToggleHide') : t('dxClusterPanel.mapToggleShow')}
             style={{
               background: showOnMap ? 'rgba(68, 136, 255, 0.3)' : 'rgba(100, 100, 100, 0.3)',
               border: `1px solid ${showOnMap ? '#4488ff' : '#666'}`,
@@ -90,7 +92,7 @@ export const DXClusterPanel = ({
               cursor: 'pointer'
             }}
           >
-            <IconMap size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />{showOnMap ? 'ON' : 'OFF'}
+            <IconMap size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />{showOnMap ? t('dxClusterPanel.mapToggleOn') : t('dxClusterPanel.mapToggleOff')}
           </button>
         </div>
       </div>
@@ -99,7 +101,7 @@ export const DXClusterPanel = ({
       <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
         <input
           type="text"
-          placeholder="Quick search..."
+          placeholder={t('dxClusterPanel.quickSearch')}
           value={filters?.callsign || ''}
           onChange={(e) => onFilterChange?.({ ...filters, callsign: e.target.value || undefined })}
           style={{
@@ -127,7 +129,7 @@ export const DXClusterPanel = ({
           color: 'var(--text-muted)',
           fontSize: '12px'
         }}>
-          {filterCount > 0 ? 'No spots match filters' : 'No spots available'}
+          {filterCount > 0 ? t('dxClusterPanel.noSpotsFiltered') : t('dxClusterPanel.noSpots')}
         </div>
       ) : (
         <div style={{ 
@@ -195,7 +197,7 @@ export const DXClusterPanel = ({
                   whiteSpace: 'nowrap',
                   alignSelf: 'center'
                 }}>
-                  de {spot.spotter || '?'}
+                  {t('dxClusterPanel.spotter', { spotter: spot.spotter || '?' })}
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
                   {spot.time || ''}

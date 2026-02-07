@@ -7,8 +7,16 @@
  * 2. Server config (from .env file)
  * 3. Default values
  */
-
-export const DEFAULT_CONFIG = {
+  // Map offset for MODIS Gibs imagery to attempt to load latest global planetary coverage
+  const getGIBSUrl = (offsetDays = 0) => {
+    // Subtracts offsetDays and 12 hours to ensure a complete global pass
+    const date = new Date(Date.now() - (offsetDays * 24 + 12) * 60 * 60 * 1000);
+    const dateString = date.toISOString().split('T')[0];
+    
+    return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${dateString}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`;
+  };
+  // *Offset delay end code here *
+  export const DEFAULT_CONFIG = {
   callsign: 'N0CALL',
   headerSize: 1.0, // Float multiplies base px size (0.1 to 2.0)
   locator: '',
@@ -181,6 +189,11 @@ export const MAP_STYLES = {
     name: 'Satellite',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri'
+  },
+  MODIS: {
+    name: 'Modis Truecolor', // NASA GIBS MODIS Truecolor Imagery
+    url: '', // Handled dynamically in WorldMap.jsx 
+    attribution: '&copy; NASA GIBS'
   },
   terrain: {
     name: 'Terrain',

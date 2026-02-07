@@ -4,7 +4,7 @@
  * Replaces separate useDXCluster and useDXPaths hooks
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getBandFromFreq, detectMode, getCallsignInfo } from '../utils/callsign.js';
+import { applyDXFilters } from '../utils/callsign.js';
 
 export const useDXClusterData = (filters = {}, config = {}) => {
   const [allData, setAllData] = useState([]);
@@ -14,7 +14,7 @@ export const useDXClusterData = (filters = {}, config = {}) => {
   const lastFetchRef = useRef(0);
   
   const spotRetentionMs = (filters?.spotRetentionMinutes || 30) * 60 * 1000;
-  const pollInterval = config.lowMemoryMode ? 60000 : 30000; // 60s in low memory, 30s otherwise
+  const pollInterval = config.lowMemoryMode ? 120000 : 60000; // 120s in low memory, 60s otherwise - reduced to save bandwidth
 
   // Build query params for custom cluster settings
   const buildQueryParams = useCallback(() => {
@@ -42,81 +42,10 @@ export const useDXClusterData = (filters = {}, config = {}) => {
     return params.toString();
   }, [config.dxClusterSource, config.customDxCluster, config.callsign]);
 
-  // Apply filters to data
+  // Apply filters using the consolidated filter function from callsign.js
   const applyFilters = useCallback((data, filters) => {
     if (!filters || Object.keys(filters).length === 0) return data;
-    
-    return data.filter(item => {
-      // Get spotter info for origin-based filtering
-      const spotterInfo = getCallsignInfo(item.spotter);
-      const call = item.dxCall || item.call;
-      // Get DX station info for destination-based filtering
-      const dxInfo = getCallsignInfo(call);
-      
-      // Watchlist only mode
-      if (filters.watchlistOnly && filters.watchlist?.length > 0) {
-        const matchesWatchlist = filters.watchlist.some(w => 
-          call?.toUpperCase().includes(w.toUpperCase())
-        );
-        if (!matchesWatchlist) return false;
-      }
-      
-      // Exclude list
-      if (filters.excludeList?.length > 0) {
-        const isExcluded = filters.excludeList.some(exc =>
-          call?.toUpperCase().startsWith(exc.toUpperCase())
-        );
-        if (isExcluded) return false;
-      }
-      
-      // CQ Zone filter (by spotter's zone)
-      if (filters.cqZones?.length > 0) {
-        if (!spotterInfo.cqZone || !filters.cqZones.includes(spotterInfo.cqZone)) {
-          return false;
-        }
-      }
-      
-      // ITU Zone filter
-      if (filters.ituZones?.length > 0) {
-        if (!spotterInfo.ituZone || !filters.ituZones.includes(spotterInfo.ituZone)) {
-          return false;
-        }
-      }
-      
-      // Continent filter (spotter FROM selected continent, DX OUTSIDE that continent)
-      if (filters.continents?.length > 0) {
-        // Spotter must be from one of the selected continents
-        if (!spotterInfo.continent || !filters.continents.includes(spotterInfo.continent)) {
-          return false;
-        }
-        // DX must be OUTSIDE all selected continents (to show actual DX, not domestic)
-        if (dxInfo.continent && filters.continents.includes(dxInfo.continent)) {
-          return false;
-        }
-      }
-      
-      // Band filter
-      if (filters.bands?.length > 0) {
-        const band = getBandFromFreq(parseFloat(item.freq) * 1000);
-        if (!filters.bands.includes(band)) return false;
-      }
-      
-      // Mode filter
-      if (filters.modes?.length > 0) {
-        const mode = detectMode(item.comment);
-        if (!mode || !filters.modes.includes(mode)) return false;
-      }
-      
-      // Callsign search filter
-      if (filters.callsign && filters.callsign.trim()) {
-        const search = filters.callsign.trim().toUpperCase();
-        const matchesCall = call?.toUpperCase().includes(search);
-        const matchesSpotter = item.spotter?.toUpperCase().includes(search);
-        if (!matchesCall && !matchesSpotter) return false;
-      }
-      
-      return true;
-    });
+    return data.filter(item => applyDXFilters(item, filters));
   }, []);
 
   // Fetch data from unified paths endpoint (has all the data we need)

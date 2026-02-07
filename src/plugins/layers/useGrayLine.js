@@ -110,17 +110,9 @@ function splitAtDateLine(points) {
   const maxLon = Math.max(...lons);
   const span = maxLon - minLon;
   
-  console.log('🔍 splitAtDateLine debug:', {
-    totalPoints: points.length,
-    lonRange: `${minLon.toFixed(1)} to ${maxLon.toFixed(1)}`,
-    span: span.toFixed(1)
-  });
-  
   // If the line spans close to 360°, it wraps around the world
   // We need to split it at the ±180° boundary
   if (span > 350) {
-    console.log('🔍 Full-world span detected, splitting at ±180°');
-    
     // Strategy: Create two segments that meet at ±180° longitude
     // Segment 1: Western hemisphere (-180° to slightly past 0°)
     // Segment 2: Eastern hemisphere (slightly before 0° to +180°)
@@ -142,13 +134,6 @@ function splitAtDateLine(points) {
     if (westSegment.length >= 2) segments.push(westSegment);
     if (eastSegment.length >= 2) segments.push(eastSegment);
     
-    console.log('🔍 Split into segments:', segments.map(s => {
-      const lons = s.map(p => p[1]);
-      return {
-        points: s.length,
-        lonRange: `${Math.min(...lons).toFixed(1)} to ${Math.max(...lons).toFixed(1)}`
-      };
-    }));
     return segments;
   }
   
@@ -165,7 +150,6 @@ function splitAtDateLine(points) {
     
     // If longitude jumps more than 180°, we've crossed the date line
     if (lonDiff > 180) {
-      console.log(`🔍 Date line jump detected at index ${i}: ${prevLon.toFixed(1)}° → ${currLon.toFixed(1)}°`);
       segments.push(currentSegment);
       currentSegment = [curr];
     } else {
@@ -177,7 +161,6 @@ function splitAtDateLine(points) {
     segments.push(currentSegment);
   }
   
-  console.log('🔍 splitAtDateLine result:', segments.length, 'segments');
   return segments.filter(seg => seg.length >= 2);
 }
 
@@ -629,13 +612,6 @@ export function useLayer({ enabled = false, opacity = 0.5, map = null }) {
         const upperSegments = splitAtDateLine(enhancedUpper);
         const lowerSegments = splitAtDateLine(enhancedLower);
         
-        console.log('🔶 Enhanced DX Zone segments:', {
-          upperCount: upperSegments.length,
-          lowerCount: lowerSegments.length,
-          upperSegmentLengths: upperSegments.map(s => s.length),
-          lowerSegmentLengths: lowerSegments.map(s => s.length)
-        });
-        
         // Create polygon for each corresponding segment pair
         // Both upper and lower should have same number of segments
         const numSegments = Math.min(upperSegments.length, lowerSegments.length);
@@ -648,18 +624,6 @@ export function useLayer({ enabled = false, opacity = 0.5, map = null }) {
             // Create polygon from upper segment + reversed lower segment
             // This creates a closed shape between the two lines
             const enhancedZone = [...upperSeg, ...lowerSeg.slice().reverse()];
-            
-            // Debug: Show longitude range of this polygon
-            const polyLons = enhancedZone.map(p => p[1]);
-            const polyMinLon = Math.min(...polyLons);
-            const polyMaxLon = Math.max(...polyLons);
-            
-            console.log(`🔶 Creating Enhanced DX polygon segment ${i+1}/${numSegments}:`, {
-              upperPoints: upperSeg.length,
-              lowerPoints: lowerSeg.length,
-              totalPolygonPoints: enhancedZone.length,
-              lonRange: `${polyMinLon.toFixed(1)} to ${polyMaxLon.toFixed(1)}`
-            });
             
             const enhancedPoly = L.polygon(enhancedZone, {
               color: '#ffaa00',
@@ -754,8 +718,6 @@ export function useLayer({ enabled = false, opacity = 0.5, map = null }) {
     
     setLayers(newLayers);
     
-    console.log(`[Gray Line] Rendered terminator and ${showTwilight ? '3 twilight zones' : 'no twilight'} at ${currentTime.toUTCString()}`);
-    
     return () => {
       newLayers.forEach(layer => {
         try {
@@ -770,9 +732,8 @@ export function useLayer({ enabled = false, opacity = 0.5, map = null }) {
     if (!enabled && map && controlRef.current) {
       try {
         map.removeControl(controlRef.current);
-        console.log('[Gray Line] Removed control');
       } catch (e) {
-        console.error('[Gray Line] Error removing control:', e);
+        // Silently handle removal errors
       }
       controlRef.current = null;
       

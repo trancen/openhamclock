@@ -24,8 +24,13 @@ const layerPlugins = [
   N3FJPLoggedQSOsPlugin,
 ];
 
+// Memoize the layer list - it never changes at runtime
+let cachedLayers = null;
+
 export function getAllLayers() {
-  return layerPlugins
+  if (cachedLayers) return cachedLayers;
+  
+  cachedLayers = layerPlugins
     .filter(plugin => plugin.metadata && plugin.useLayer)
     .map(plugin => ({
       id: plugin.metadata.id,
@@ -37,6 +42,8 @@ export function getAllLayers() {
       category: plugin.metadata.category || 'overlay',
       hook: plugin.useLayer
     }));
+  
+  return cachedLayers;
 }
 
 export function getLayerById(layerId) {

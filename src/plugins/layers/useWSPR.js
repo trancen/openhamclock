@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 /**
- * WSPR Propagation Heatmap Plugin v1.5.0
+ * WSPR Propagation Heatmap Plugin v1.6.0
  * 
  * Advanced Features:
  * - Great circle curved path lines between transmitters and receivers
@@ -23,6 +23,10 @@ import { useState, useEffect, useRef } from 'react';
  * - Minimize/maximize toggle for all panels (v1.5.0)
  * - Statistics display (total stations, spots)
  * - Signal strength legend
+ * - AGGREGATED DATA SUPPORT (v1.6.0) - 97% bandwidth reduction
+ *   - Grid-level aggregation for heatmap
+ *   - Aggregated path rendering between grid squares
+ *   - Backward compatible with raw spot data
  * 
  * Data source: PSK Reporter API (WSPR mode spots)
  * Update interval: 5 minutes
@@ -34,9 +38,9 @@ export const metadata = {
   description: 'plugins.layers.wspr.description',
   icon: '📡',
   category: 'propagation',
-  defaultEnabled: false,
+  defaultEnabled: false, // Opt-in only - uses PSKReporter HTTP API
   defaultOpacity: 0.7,
-  version: '1.5.0'
+  version: '1.6.1'
 };
 
 // Convert grid square to lat/lon
@@ -411,6 +415,68 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
         if (response.ok) {
           const data = await response.json();
+          
+          // Handle new aggregated format
+          if (data.format === 'aggregated' && data.grids) {
+            console.log(`[WSPR Plugin] Loaded aggregated data: ${data.uniqueGrids} grids, ${data.paths?.length || 0} paths from ${data.totalSpots} spots`);
+            
+            // Convert aggregated grids to spot-like format for backward compatibility with rendering
+            // Each grid becomes a "virtual spot" with combined TX/RX activity
+            const virtualSpots = [];
+            
+            // Create spots from grids (for heatmap rendering)
+            for (const grid of data.grids) {
+              // Create a virtual spot for each active grid
+              virtualSpots.push({
+                sender: `${grid.grid} (${grid.stationCount} stations)`,
+                senderGrid: grid.grid,
+                senderLat: grid.lat,
+                senderLon: grid.lon,
+                receiver: '',
+                receiverGrid: '',
+                receiverLat: null,
+                receiverLon: null,
+                snr: grid.avgSnr,
+                band: Object.keys(grid.bands).sort((a, b) => grid.bands[b] - grid.bands[a])[0] || 'Unknown',
+                distance: grid.maxDistance,
+                txCount: grid.txCount,
+                rxCount: grid.rxCount,
+                totalActivity: grid.totalActivity,
+                isAggregated: true
+              });
+            }
+            
+            // Add path data for rendering propagation lines
+            if (data.paths && data.paths.length > 0) {
+              for (const path of data.paths) {
+                virtualSpots.push({
+                  sender: path.from,
+                  senderGrid: path.from,
+                  senderLat: path.fromLat,
+                  senderLon: path.fromLon,
+                  receiver: path.to,
+                  receiverGrid: path.to,
+                  receiverLat: path.toLat,
+                  receiverLon: path.toLon,
+                  snr: path.avgSnr,
+                  band: Object.keys(path.bands).sort((a, b) => path.bands[b] - path.bands[a])[0] || 'Unknown',
+                  pathCount: path.count,
+                  isPath: true,
+                  isAggregated: true
+                });
+              }
+            }
+            
+            // Store band activity for chart
+            if (data.bandActivity) {
+              virtualSpots.bandActivity = data.bandActivity;
+            }
+            
+            setWsprData(virtualSpots);
+            return;
+          }
+          
+          // Legacy format handling (raw spots)
           let spots = data.spots || [];
           
           // Strip suffixes from all callsigns
@@ -465,7 +531,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           });
           
           setWsprData(spots);
-          console.log(`[WSPR Plugin] Loaded ${spots.length} spots (${timeWindow}min, band: ${bandFilter})`);
+          console.log(`[WSPR Plugin] Loaded ${spots.length} raw spots (${timeWindow}min, band: ${bandFilter})`);
         }
       } catch (err) {
         console.error('WSPR data fetch error:', err);
@@ -473,7 +539,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     };
 
     fetchWSPR();
-    const interval = setInterval(fetchWSPR, 60000); // Poll every 60 seconds
+    const interval = setInterval(fetchWSPR, 120000); // Poll every 2 minutes - be kind to PSKReporter
 
     return () => clearInterval(interval);
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid]);
@@ -905,6 +971,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     
     console.log(`[WSPR Paths] Filtering: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", callsign="${callsign}", input=${wsprData.length}, output=${filteredData.length}`);
     
+    // For aggregated data, only render actual paths (items with both sender and receiver coords)
+    const pathData = filteredData.filter(spot => spot.isPath || (!spot.isAggregated && spot.receiverLat && spot.receiverLon));
+    
     // Debug: Log grid squares when filter is enabled
     if (filterByGrid && gridFilter && filteredData.length > 0) {
       const grids = new Set();
@@ -922,7 +991,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       });
       console.log(`[WSPR Grid] No matches for ${gridFilter}. Available grids in data:`, Array.from(availableGrids).join(', '));
     }
-    const limitedData = filteredData.slice(0, MAX_PATHS); // Limit paths based on memory mode
+    const limitedData = pathData.slice(0, MAX_PATHS); // Limit paths based on memory mode
     
     // Find best DX paths (longest distance, good SNR)
     const bestPaths = limitedData
@@ -987,6 +1056,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           <div style="font-size: 13px; font-weight: bold; color: ${getSNRColor(spot.snr)}; margin-bottom: 8px; text-align: center;">
             ${spot.sender} ⇢ ${spot.receiver}
           </div>
+          ${spot.isAggregated ? `
+          <div style="font-size: 11px; text-align: center; margin-bottom: 8px; color: #00ccff;">
+            ${spot.pathCount || 1} propagation paths
+          </div>
+          <table style="font-size: 11px; width: 100%; line-height: 1.6;">
+            <tr><td style="opacity: 0.7;">Band:</td><td><b>${spot.band || 'Multi'}</b></td></tr>
+            <tr><td style="opacity: 0.7;">Avg SNR:</td><td style="color: ${getSNRColor(spot.snr)}; font-weight: bold;">${spot.snr !== null ? spot.snr + ' dB' : 'N/A'}</td></tr>
+            <tr><td style="opacity: 0.7;">Path Count:</td><td><b>${spot.pathCount || 1}</b></td></tr>
+          </table>
+          ` : `
           <div style="font-size: 10px; opacity: 0.7; text-align: center; margin-bottom: 8px;">
             ${ageStr}
           </div>
@@ -1002,6 +1081,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             <tr><td style="opacity: 0.7;">Az TX:</td><td><b>${txAzStr}</b></td></tr>
             <tr><td style="opacity: 0.7;">Az RX:</td><td><b>${rxAzStr}</b></td></tr>
           </table>
+          `}
         </div>
       `);
 
@@ -1301,26 +1381,56 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     
     console.log(`[WSPR Heatmap] Filtering: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", input=${wsprData.length}, output=${filteredData.length}`);
     
-    filteredData.forEach(spot => {
-      if (!spot.senderLat || !spot.senderLon || !spot.receiverLat || !spot.receiverLon) return;
-      
-      const sLat = parseFloat(spot.senderLat);
-      const sLon = parseFloat(spot.senderLon);
-      const rLat = parseFloat(spot.receiverLat);
-      const rLon = parseFloat(spot.receiverLon);
-      
-      if (!isFinite(sLat) || !isFinite(sLon) || !isFinite(rLat) || !isFinite(rLon)) return;
-      
-      // Count activity at each location
-      const txKey = `${sLat.toFixed(1)},${sLon.toFixed(1)}`;
-      const rxKey = `${rLat.toFixed(1)},${rLon.toFixed(1)}`;
-      
-      stationCounts[txKey] = (stationCounts[txKey] || 0) + 1;
-      stationCounts[rxKey] = (stationCounts[rxKey] || 0) + 1;
-      
-      heatPoints.push({ lat: sLat, lon: sLon, key: txKey });
-      heatPoints.push({ lat: rLat, lon: rLon, key: rxKey });
-    });
+    // For aggregated data, grids already have activity counts
+    const hasAggregatedData = filteredData.some(spot => spot.isAggregated && spot.totalActivity);
+    
+    if (hasAggregatedData) {
+      // Use pre-aggregated grid data
+      filteredData.forEach(spot => {
+        // Only process grid spots (not paths)
+        if (!spot.isPath && spot.senderLat && spot.senderLon && spot.totalActivity) {
+          const sLat = parseFloat(spot.senderLat);
+          const sLon = parseFloat(spot.senderLon);
+          
+          if (!isFinite(sLat) || !isFinite(sLon)) return;
+          
+          const key = spot.senderGrid || `${sLat.toFixed(1)},${sLon.toFixed(1)}`;
+          stationCounts[key] = spot.totalActivity;
+          heatPoints.push({ 
+            lat: sLat, 
+            lon: sLon, 
+            key: key, 
+            grid: spot.senderGrid,
+            stationCount: spot.stationCount,
+            txCount: spot.txCount,
+            rxCount: spot.rxCount
+          });
+        }
+      });
+      console.log(`[WSPR Heatmap] Using aggregated data: ${heatPoints.length} grid squares`);
+    } else {
+      // Legacy: count activity from individual spots
+      filteredData.forEach(spot => {
+        if (!spot.senderLat || !spot.senderLon || !spot.receiverLat || !spot.receiverLon) return;
+        
+        const sLat = parseFloat(spot.senderLat);
+        const sLon = parseFloat(spot.senderLon);
+        const rLat = parseFloat(spot.receiverLat);
+        const rLon = parseFloat(spot.receiverLon);
+        
+        if (!isFinite(sLat) || !isFinite(sLon) || !isFinite(rLat) || !isFinite(rLon)) return;
+        
+        // Count activity at each location
+        const txKey = `${sLat.toFixed(1)},${sLon.toFixed(1)}`;
+        const rxKey = `${rLat.toFixed(1)},${rLon.toFixed(1)}`;
+        
+        stationCounts[txKey] = (stationCounts[txKey] || 0) + 1;
+        stationCounts[rxKey] = (stationCounts[rxKey] || 0) + 1;
+        
+        heatPoints.push({ lat: sLat, lon: sLon, key: txKey });
+        heatPoints.push({ lat: rLat, lon: rLon, key: rxKey });
+      });
+    }
     
     // Create gradient circles for heatmap
     const heatCircles = [];
@@ -1328,7 +1438,15 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     
     heatPoints.forEach(point => {
       if (!uniquePoints[point.key]) {
-        uniquePoints[point.key] = { lat: point.lat, lon: point.lon, count: stationCounts[point.key] };
+        uniquePoints[point.key] = { 
+          lat: point.lat, 
+          lon: point.lon, 
+          count: stationCounts[point.key],
+          grid: point.grid,
+          stationCount: point.stationCount,
+          txCount: point.txCount,
+          rxCount: point.rxCount
+        };
       }
     });
     
@@ -1367,14 +1485,23 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         
         // Only add popup to the first (largest) circle
         if (i === 0) {
-          circle.bindPopup(`
+          const popupContent = point.grid ? `
+            <div style="font-family: 'JetBrains Mono', monospace;">
+              <b>🔥 Grid: ${point.grid}</b><br>
+              Total Activity: ${point.count}<br>
+              ${point.stationCount ? `Stations: ${point.stationCount}<br>` : ''}
+              ${point.txCount ? `TX: ${point.txCount} | RX: ${point.rxCount || 0}<br>` : ''}
+              Lat: ${point.lat.toFixed(2)} | Lon: ${point.lon.toFixed(2)}
+            </div>
+          ` : `
             <div style="font-family: 'JetBrains Mono', monospace;">
               <b>🔥 Activity Hot Spot</b><br>
               Stations: ${point.count}<br>
               Lat: ${point.lat.toFixed(2)}<br>
               Lon: ${point.lon.toFixed(2)}
             </div>
-          `);
+          `;
+          circle.bindPopup(popupContent);
         }
         
         circle.addTo(map);
