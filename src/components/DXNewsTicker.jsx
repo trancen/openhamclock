@@ -68,7 +68,7 @@ export const DXNewsTicker = ({ sidebar = false }) => {
         position: 'absolute',
         bottom: '8px',
         left: '8px',
-        right: '50%',
+        right: '8px',
         height: '28px',
         background: 'rgba(0, 0, 0, 0.85)',
         border: '1px solid #444',

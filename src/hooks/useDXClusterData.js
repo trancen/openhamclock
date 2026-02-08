@@ -4,9 +4,10 @@
  * Replaces separate useDXCluster and useDXPaths hooks
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getBandFromFreq, detectMode, getCallsignInfo } from '../utils/callsign.js';
 
-export const useDXClusterData = (filters = {}) => {
+import {applyDXFilters} from "../utils/dxClusterFilters";
+
+export const useDXClusterData = (filters = {}, config = {}) => {
   const [allData, setAllData] = useState([]);
   const [spots, setSpots] = useState([]);     // For list display
   const [paths, setPaths] = useState([]);     // For map display
@@ -14,83 +15,46 @@ export const useDXClusterData = (filters = {}) => {
   const lastFetchRef = useRef(0);
   
   const spotRetentionMs = (filters?.spotRetentionMinutes || 30) * 60 * 1000;
-  const pollInterval = 30000;
+  const pollInterval = config.lowMemoryMode ? 120000 : 60000; // 120s in low memory, 60s otherwise - reduced to save bandwidth
 
-  // Apply filters to data
+  // Build query params for custom cluster settings
+  const buildQueryParams = useCallback(() => {
+    const params = new URLSearchParams();
+    
+    // Add source
+    const source = config.dxClusterSource || 'dxspider-proxy';
+    params.append('source', source);
+    
+    // Add custom cluster settings if using custom source
+    if (source === 'custom' && config.customDxCluster) {
+      if (config.customDxCluster.host) {
+        params.append('host', config.customDxCluster.host);
+      }
+      if (config.customDxCluster.port) {
+        params.append('port', config.customDxCluster.port);
+      }
+    }
+    
+    // Always send callsign for login (with SSID)
+    if (config.callsign && config.callsign !== 'N0CALL') {
+      params.append('callsign', config.callsign);
+    }
+    
+    return params.toString();
+  }, [config.dxClusterSource, config.customDxCluster, config.callsign]);
+
+  // Apply filters using the consolidated filter function from callsign.js
   const applyFilters = useCallback((data, filters) => {
     if (!filters || Object.keys(filters).length === 0) return data;
-    
-    return data.filter(item => {
-      // Get spotter info for origin-based filtering
-      const spotterInfo = getCallsignInfo(item.spotter);
-      const call = item.dxCall || item.call;
-      
-      // Watchlist only mode
-      if (filters.watchlistOnly && filters.watchlist?.length > 0) {
-        const matchesWatchlist = filters.watchlist.some(w => 
-          call?.toUpperCase().includes(w.toUpperCase())
-        );
-        if (!matchesWatchlist) return false;
-      }
-      
-      // Exclude list
-      if (filters.excludeList?.length > 0) {
-        const isExcluded = filters.excludeList.some(exc =>
-          call?.toUpperCase().startsWith(exc.toUpperCase())
-        );
-        if (isExcluded) return false;
-      }
-      
-      // CQ Zone filter (by spotter's zone)
-      if (filters.cqZones?.length > 0) {
-        if (!spotterInfo.cqZone || !filters.cqZones.includes(spotterInfo.cqZone)) {
-          return false;
-        }
-      }
-      
-      // ITU Zone filter
-      if (filters.ituZones?.length > 0) {
-        if (!spotterInfo.ituZone || !filters.ituZones.includes(spotterInfo.ituZone)) {
-          return false;
-        }
-      }
-      
-      // Continent filter (by spotter's continent)
-      if (filters.continents?.length > 0) {
-        if (!spotterInfo.continent || !filters.continents.includes(spotterInfo.continent)) {
-          return false;
-        }
-      }
-      
-      // Band filter
-      if (filters.bands?.length > 0) {
-        const band = getBandFromFreq(parseFloat(item.freq) * 1000);
-        if (!filters.bands.includes(band)) return false;
-      }
-      
-      // Mode filter
-      if (filters.modes?.length > 0) {
-        const mode = detectMode(item.comment);
-        if (!mode || !filters.modes.includes(mode)) return false;
-      }
-      
-      // Callsign search filter
-      if (filters.callsign && filters.callsign.trim()) {
-        const search = filters.callsign.trim().toUpperCase();
-        const matchesCall = call?.toUpperCase().includes(search);
-        const matchesSpotter = item.spotter?.toUpperCase().includes(search);
-        if (!matchesCall && !matchesSpotter) return false;
-      }
-      
-      return true;
-    });
+    return data.filter(item => applyDXFilters(item, filters));
   }, []);
 
   // Fetch data from unified paths endpoint (has all the data we need)
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/dxcluster/paths');
+        const queryParams = buildQueryParams();
+        const response = await fetch(`/api/dxcluster/paths?${queryParams}`);
         if (response.ok) {
           const newData = await response.json();
           const now = Date.now();
@@ -129,7 +93,7 @@ export const useDXClusterData = (filters = {}) => {
     fetchData();
     const interval = setInterval(fetchData, pollInterval);
     return () => clearInterval(interval);
-  }, [spotRetentionMs]);
+  }, [spotRetentionMs, buildQueryParams]);
 
   // Clean up data when retention time changes
   useEffect(() => {
@@ -143,8 +107,13 @@ export const useDXClusterData = (filters = {}) => {
   useEffect(() => {
     const filtered = applyFilters(allData, filters);
     
+    // Low memory mode limits
+    const lowMemoryMode = config.lowMemoryMode || false;
+    const MAX_SPOTS = lowMemoryMode ? 50 : 500;
+    const MAX_PATHS = lowMemoryMode ? 25 : 200;
+    
     // Format for list display (matches old useDXCluster format)
-    const spotList = filtered.map(item => ({
+    const spotList = filtered.slice(0, MAX_SPOTS).map(item => ({
       call: item.dxCall,
       freq: item.freq,
       comment: item.comment || '',
@@ -159,11 +128,11 @@ export const useDXClusterData = (filters = {}) => {
     const pathList = filtered.filter(item => 
       item.spotterLat != null && item.spotterLon != null &&
       item.dxLat != null && item.dxLon != null
-    );
+    ).slice(0, MAX_PATHS);
     
     setSpots(spotList);
     setPaths(pathList);
-  }, [allData, filters, applyFilters]);
+  }, [allData, filters, applyFilters, config.lowMemoryMode]);
 
   return { 
     spots,           // For DXClusterPanel list

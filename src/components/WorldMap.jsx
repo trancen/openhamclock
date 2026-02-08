@@ -2,7 +2,7 @@
  * WorldMap Component
  * Leaflet map with DE/DX markers, terminator, DX paths, POTA, satellites, PSKReporter
  */
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { MAP_STYLES } from '../utils/config.js';
 import { 
   calculateGridSquare, 
@@ -10,18 +10,20 @@ import {
   getMoonPosition, 
   getGreatCirclePoints 
 } from '../utils/geo.js';
-import { filterDXPaths, getBandColor } from '../utils/callsign.js';
+import { getBandColor } from '../utils/callsign.js';
 
 import { getAllLayers } from '../plugins/layerRegistry.js';
 import { IconSatellite, IconTag, IconSun, IconMoon } from './Icons.jsx';
 import PluginLayer from './PluginLayer.jsx';
 import { DXNewsTicker } from './DXNewsTicker.jsx';
+import {filterDXPaths} from "../utils";
 
 
 export const WorldMap = ({ 
   deLocation, 
   dxLocation, 
-  onDXChange, 
+  onDXChange,
+  dxLocked,
   potaSpots, 
   mySpots, 
   dxPaths, 
@@ -39,7 +41,9 @@ export const WorldMap = ({
   onToggleSatellites, 
   hoveredSpot,
   callsign = 'N0CALL',
-  hideOverlays
+  hideOverlays,
+  lowMemoryMode = false,
+  units = 'metric'
 }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -59,10 +63,25 @@ export const WorldMap = ({
   const pskMarkersRef = useRef([]);
   const wsjtxMarkersRef = useRef([]);
   const countriesLayerRef = useRef(null);
+  const dxLockedRef = useRef(dxLocked);
+
+  // Calculate grid locator from DE location for plugins
+  const deLocator = useMemo(() => {
+    if (!deLocation?.lat || !deLocation?.lon) return '';
+    return calculateGridSquare(deLocation.lat, deLocation.lon);
+  }, [deLocation?.lat, deLocation?.lon]);
+
+  // Keep dxLockedRef in sync with prop
+  useEffect(() => {
+    dxLockedRef.current = dxLocked;
+  }, [dxLocked]);
 
   // Plugin system refs and state
   const pluginLayersRef = useRef({});
   const [pluginLayerStates, setPluginLayerStates] = useState({});
+  
+  // Memoize available layers to prevent excessive calls to getAllLayers()
+  const availableLayers = useMemo(() => getAllLayers(), []);
   
   // Load map style from localStorage
   const getStoredMapSettings = () => {
@@ -74,6 +93,15 @@ export const WorldMap = ({
   const storedSettings = getStoredMapSettings();
   
   const [mapStyle, setMapStyle] = useState(storedSettings.mapStyle || 'dark');
+  // GIBS MODIS CODE
+  const [gibsOffset, setGibsOffset] = useState(0); 
+  
+  const getGibsUrl = (days) => {
+    const date = new Date(Date.now() - (days * 24 + 12) * 60 * 60 * 1000);
+    const dateStr = date.toISOString().split('T')[0];
+    return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`;
+  };
+  // End GIBS MODIS CODE
   const [mapView, setMapView] = useState({
     center: storedSettings.center || [20, 0],
     zoom: storedSettings.zoom || 2.5
@@ -148,10 +176,14 @@ export const WorldMap = ({
       }
     }, 60000);
 
-    // Click handler for setting DX
+    // Click handler for setting DX (only if not locked)
     map.on('click', (e) => {
-      if (onDXChange) {
-        onDXChange({ lat: e.latlng.lat, lon: e.latlng.lng });
+      if (onDXChange && !dxLockedRef.current) {
+        // Normalize longitude to -180 to 180 range (Leaflet can return values outside this range when map wraps)
+        let lon = e.latlng.lng;
+        while (lon > 180) lon -= 360;
+        while (lon < -180) lon += 360;
+        onDXChange({ lat: e.latlng.lat, lon });
       }
     });
     
@@ -159,7 +191,11 @@ export const WorldMap = ({
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
-      setMapView({ center: [center.lat, center.lng], zoom });
+      // Normalize longitude to -180 to 180 range
+      let lng = center.lng;
+      while (lng > 180) lng -= 360;
+      while (lng < -180) lng += 360;
+      setMapView({ center: [center.lat, lng], zoom });
     });
 
     mapInstanceRef.current = map;
@@ -185,18 +221,31 @@ export const WorldMap = ({
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
     
     mapInstanceRef.current.removeLayer(tileLayerRef.current);
-    tileLayerRef.current = L.tileLayer(MAP_STYLES[mapStyle].url, {
+	// Determine the URL: Use the dynamic GIBS generator if 'MODIS' is selected
+    let url = MAP_STYLES[mapStyle].url;
+    if (mapStyle === 'MODIS') {
+      url = getGibsUrl(gibsOffset);
+    }
+
+    tileLayerRef.current = L.tileLayer(url, {
       attribution: MAP_STYLES[mapStyle].attribution,
       noWrap: false,
       crossOrigin: 'anonymous',
+      // NASA GIBS tiles are best displayed within these bounds due to cropping of diseminated imagery
       bounds: [[-85, -180], [85, 180]]
     }).addTo(mapInstanceRef.current);
-    
-    // Ensure terminator is on top
+
+    // Ensure terminator and other overlays stay on top of the new tile layer
     if (terminatorRef.current) {
       terminatorRef.current.bringToFront();
     }
-  }, [mapStyle]);
+    
+    // If you have a countries overlay, ensure it stays visible
+    if (countriesLayerRef.current) {
+      countriesLayerRef.current.bringToFront();
+    }
+  }, [mapStyle, gibsOffset]); // Added gibsOffset so the map refreshes when you move the slider
+    // End code dynamic GIBS generator if 'MODIS' is selecte
 
   // Countries overlay for "Countries" map style
   useEffect(() => {
@@ -533,7 +582,6 @@ export const WorldMap = ({
     if (!mapInstanceRef.current) return;
 
     try {
-      const availableLayers = getAllLayers();
       const settings = getStoredMapSettings();
       const savedLayers = settings.layers || {};
 
@@ -604,7 +652,7 @@ export const WorldMap = ({
     } catch (err) {
       console.error('Plugin system error:', err);
     }
-  }, [pluginLayerStates]);
+  }, [availableLayers]); // Only re-run when layers change, not on every state update
 
   // Update PSKReporter markers
   useEffect(() => {
@@ -761,19 +809,48 @@ export const WorldMap = ({
   return (
     <div style={{ position: 'relative', height: '100%', minHeight: '200px' }}>
       <div ref={mapRef} style={{ height: '100%', width: '100%', borderRadius: '8px', background: mapStyle === 'countries' ? '#4a90d9' : undefined }} />
-      
-      {/* Render all plugin layers */}
-      {mapInstanceRef.current && getAllLayers().map(layerDef => (
-        <PluginLayer
-          key={layerDef.id}
-          plugin={layerDef}
-          enabled={pluginLayerStates[layerDef.id]?.enabled || false}
-          opacity={pluginLayerStates[layerDef.id]?.opacity || layerDef.defaultOpacity}
-          map={mapInstanceRef.current}
-          callsign={callsign}
-        />
-      ))}
-      
+
+		{/* Render all plugin layers */}
+		{mapInstanceRef.current && getAllLayers().map(layerDef => (
+		  <PluginLayer
+		    key={layerDef.id}
+		    plugin={layerDef}
+		    // Use the exact metadata names as fallbacks
+		    enabled={pluginLayerStates[layerDef.id]?.enabled ?? layerDef.defaultEnabled}
+		    opacity={pluginLayerStates[layerDef.id]?.opacity ?? layerDef.defaultOpacity}
+		    map={mapInstanceRef.current}
+		  />
+		))}
+      //  MODIS SLIDER CODE HERE 
+      {mapStyle === 'MODIS' && (
+        <div style={{
+          position: 'absolute',
+          top: '50px', 
+          right: '10px',
+          background: 'rgba(0, 0, 0, 0.8)',
+          border: '1px solid #444',
+          padding: '8px',
+          borderRadius: '4px',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '5px'
+        }}>
+          <div style={{ color: '#00ffcc', fontSize: '10px', fontFamily: 'JetBrains Mono' }}>
+            {gibsOffset === 0 ? 'LATEST' : `${gibsOffset} DAYS AGO`}
+          </div>
+          <input 
+            type="range" 
+            min="0" 
+            max="7" 
+            value={gibsOffset} 
+            onChange={(e) => setGibsOffset(parseInt(e.target.value))}
+            style={{ cursor: 'pointer', width: '100px' }}
+          />
+        </div>
+      )} 
+      // End MODIS SLIDER CODE
       {/* Map style dropdown */}
       <select
         value={mapStyle}
@@ -850,12 +927,13 @@ export const WorldMap = ({
       {/* DX News Ticker - left side of bottom bar */}
       {!hideOverlays && <DXNewsTicker />}
 
-      {/* Legend - right side */}
+      {/* Legend - centered above news ticker */}
       {!hideOverlays && (
       <div style={{
         position: 'absolute',
-        bottom: '8px',
-        right: '8px',
+        bottom: '44px',
+        left: '50%',
+        transform: 'translateX(-50%)',
         background: 'rgba(0, 0, 0, 0.85)',
         border: '1px solid #444',
         borderRadius: '6px',
@@ -866,8 +944,7 @@ export const WorldMap = ({
         alignItems: 'center',
         fontSize: '11px',
         fontFamily: 'JetBrains Mono, monospace',
-        flexWrap: 'nowrap',
-        maxWidth: '50%'
+        flexWrap: 'nowrap'
       }}>
         {showDXPaths && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

@@ -68,6 +68,53 @@ const HOST = process.env.HOST || '0.0.0.0';
 // CONFIGURATION FROM ENVIRONMENT
 // ============================================
 
+function maidenheadToLatLon(grid) {
+  if (!grid) return null;
+  const g = String(grid).trim();
+  if (g.length < 4) return null;
+
+  const A = 'A'.charCodeAt(0);
+  const a = 'a'.charCodeAt(0);
+
+  const c0 = g.charCodeAt(0);
+  const c1 = g.charCodeAt(1);
+  const c2 = g.charCodeAt(2);
+  const c3 = g.charCodeAt(3);
+
+  // Field (A-R)
+  const lonField = (c0 >= a ? c0 - a : c0 - A);
+  const latField = (c1 >= a ? c1 - a : c1 - A);
+
+  // Square (0-9)
+  const lonSquare = parseInt(g[2], 10);
+  const latSquare = parseInt(g[3], 10);
+  if (!Number.isFinite(lonSquare) || !Number.isFinite(latSquare)) return null;
+
+  // Start at SW corner of the 4-char square
+  let lon = -180 + lonField * 20 + lonSquare * 2;
+  let lat =  -90 + latField * 10 + latSquare * 1;
+
+  // Subsquare (a-x), optional
+  if (g.length >= 6) {
+    const s0 = g.charCodeAt(4);
+    const s1 = g.charCodeAt(5);
+    const lonSub = (s0 >= a ? s0 - a : s0 - A);
+    const latSub = (s1 >= a ? s1 - a : s1 - A);
+    // each subsquare: 5' lon = 1/12 deg, 2.5' lat = 1/24 deg
+    lon += lonSub * (1/12);
+    lat += latSub * (1/24);
+    // center of subsquare
+    lon += (1/12) / 2;
+    lat += (1/24) / 2;
+  } else {
+    // center of 4-char square: 1 deg lon, 0.5 deg lat
+    lon += 1.0;
+    lat += 0.5;
+  }
+
+  return { lat, lon };
+}
+
 // Convert Maidenhead grid locator to lat/lon
 function gridToLatLon(grid) {
   if (!grid || grid.length < 4) return null;
@@ -267,6 +314,117 @@ function logErrorOnce(category, message) {
 }
 
 // ============================================
+// ENDPOINT MONITORING SYSTEM
+// ============================================
+// Tracks request count, response sizes, and timing per endpoint
+// Helps identify bandwidth-heavy endpoints for optimization
+
+// Helper to format bytes for display
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+const endpointStats = {
+  endpoints: new Map(), // endpoint path -> stats
+  startTime: Date.now(),
+  
+  // Reset stats (call daily or on demand)
+  reset() {
+    this.endpoints.clear();
+    this.startTime = Date.now();
+  },
+  
+  // Record a request
+  record(path, responseSize, duration, statusCode) {
+    // Normalize path (remove params like callsign values)
+    const normalizedPath = path
+      .replace(/\/[A-Z0-9]{3,10}(-[A-Z0-9]+)?$/i, '/:param') // callsigns
+      .replace(/\/\d+$/g, '/:id'); // numeric IDs
+    
+    if (!this.endpoints.has(normalizedPath)) {
+      this.endpoints.set(normalizedPath, {
+        path: normalizedPath,
+        requests: 0,
+        totalBytes: 0,
+        totalDuration: 0,
+        errors: 0,
+        lastRequest: null
+      });
+    }
+    
+    const stats = this.endpoints.get(normalizedPath);
+    stats.requests++;
+    stats.totalBytes += responseSize || 0;
+    stats.totalDuration += duration || 0;
+    stats.lastRequest = Date.now();
+    if (statusCode >= 400) stats.errors++;
+  },
+  
+  // Get sorted stats for display
+  getStats() {
+    const uptimeHours = (Date.now() - this.startTime) / (1000 * 60 * 60);
+    const stats = Array.from(this.endpoints.values())
+      .map(s => ({
+        ...s,
+        avgBytes: s.requests > 0 ? Math.round(s.totalBytes / s.requests) : 0,
+        avgDuration: s.requests > 0 ? Math.round(s.totalDuration / s.requests) : 0,
+        requestsPerHour: uptimeHours > 0 ? (s.requests / uptimeHours).toFixed(1) : s.requests,
+        bytesPerHour: uptimeHours > 0 ? Math.round(s.totalBytes / uptimeHours) : s.totalBytes,
+        errorRate: s.requests > 0 ? ((s.errors / s.requests) * 100).toFixed(1) : 0
+      }))
+      .sort((a, b) => b.totalBytes - a.totalBytes); // Sort by bandwidth usage
+    
+    return {
+      uptimeHours: uptimeHours.toFixed(2),
+      totalRequests: stats.reduce((sum, s) => sum + s.requests, 0),
+      totalBytes: stats.reduce((sum, s) => sum + s.totalBytes, 0),
+      endpoints: stats
+    };
+  }
+};
+
+// Middleware to track endpoint usage
+app.use('/api', (req, res, next) => {
+  // Skip health endpoint to avoid recursive tracking
+  if (req.path === '/health') return next();
+  
+  const startTime = Date.now();
+  let responseSize = 0;
+  
+  // Intercept response to measure size
+  const originalSend = res.send;
+  const originalJson = res.json;
+  
+  res.send = function(body) {
+    if (body) {
+      responseSize = typeof body === 'string' ? Buffer.byteLength(body) : 
+                     Buffer.isBuffer(body) ? body.length : 
+                     JSON.stringify(body).length;
+    }
+    return originalSend.call(this, body);
+  };
+  
+  res.json = function(body) {
+    if (body) {
+      responseSize = Buffer.byteLength(JSON.stringify(body));
+    }
+    return originalJson.call(this, body);
+  };
+  
+  // Record stats when response finishes
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    endpointStats.record(req.path, responseSize, duration, res.statusCode);
+  });
+  
+  next();
+});
+
+// ============================================
 // VISITOR TRACKING (PERSISTENT)
 // ============================================
 // Persistent visitor tracking that survives server restarts and deployments
@@ -275,37 +433,10 @@ function logErrorOnce(category, message) {
 
 // Determine best location for stats file with write permission check
 function getStatsFilePath() {
-  console.log('[Stats] === Storage Detection ===');
-  console.log('[Stats] Process UID:', process.getuid?.() ?? 'N/A (Windows)');
-  console.log('[Stats] Process GID:', process.getgid?.() ?? 'N/A (Windows)');
-  console.log('[Stats] __dirname:', __dirname);
-  console.log('[Stats] STATS_FILE env:', process.env.STATS_FILE || '(not set)');
-  
   // If explicitly set via env var, use that
   if (process.env.STATS_FILE) {
-    console.log(`[Stats] Using STATS_FILE env var: ${process.env.STATS_FILE}`);
+    console.log(`[Stats] Using STATS_FILE env: ${process.env.STATS_FILE}`);
     return process.env.STATS_FILE;
-  }
-  
-  // Check /data directory status
-  console.log('[Stats] Checking /data directory:');
-  try {
-    const exists = fs.existsSync('/data');
-    console.log('[Stats]   exists:', exists);
-    if (exists) {
-      const stat = fs.statSync('/data');
-      console.log('[Stats]   isDirectory:', stat.isDirectory());
-      console.log('[Stats]   mode:', '0' + (stat.mode & 0o777).toString(8));
-      console.log('[Stats]   uid:', stat.uid, '/ gid:', stat.gid);
-      try {
-        const contents = fs.readdirSync('/data');
-        console.log('[Stats]   contents:', contents.length === 0 ? '(empty)' : contents.slice(0, 5).join(', '));
-      } catch (e) {
-        console.log('[Stats]   cannot list contents:', e.code);
-      }
-    }
-  } catch (e) {
-    console.log('[Stats]   error checking /data:', e.code, e.message);
   }
   
   // List of paths to try in order of preference
@@ -316,31 +447,28 @@ function getStatsFilePath() {
   ];
   
   for (const statsPath of pathsToTry) {
-    console.log(`[Stats] Trying: ${statsPath}`);
     try {
       const dir = path.dirname(statsPath);
       
       // Create directory if it doesn't exist
       if (!fs.existsSync(dir)) {
-        console.log(`[Stats]   mkdir: ${dir}`);
         fs.mkdirSync(dir, { recursive: true });
       }
       
       // Test write permission
       const testFile = path.join(dir, '.write-test-' + Date.now());
-      console.log(`[Stats]   write test: ${testFile}`);
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
       
-      console.log(`[Stats] ✓ SUCCESS: ${statsPath}`);
+      console.log(`[Stats] ✓ Using: ${statsPath}`);
       return statsPath;
     } catch (err) {
-      console.log(`[Stats]   ✗ FAILED: ${err.code} - ${err.message}`);
+      console.log(`[Stats] ✗ ${statsPath}: ${err.code || err.message}`);
     }
   }
   
   // No writable path found
-  console.log('[Stats] ⚠ No writable storage found - stats will be memory-only');
+  console.log('[Stats] ⚠ No writable storage - stats will be memory-only');
   return null;
 }
 
@@ -443,6 +571,12 @@ const visitorStats = loadVisitorStats();
 // Convert today's IPs to a Set for fast lookup
 const todayIPSet = new Set(visitorStats.uniqueIPsToday);
 const allTimeIPSet = new Set(visitorStats.allTimeUniqueIPs);
+
+// Save immediately on startup to confirm persistence is working
+if (STATS_FILE) {
+  saveVisitorStats();
+  console.log('[Stats] Initial save complete - persistence confirmed');
+}
 
 // Periodic save
 setInterval(saveVisitorStats, STATS_SAVE_INTERVAL);
@@ -1101,7 +1235,7 @@ app.get('/api/noaa/xray', async (req, res) => {
 });
 
 // NOAA OVATION Aurora Forecast
-const AURORA_CACHE_TTL = 10 * 60 * 1000; // 10 minutes (NOAA updates every ~30 min)
+const AURORA_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (matches NOAA update frequency)
 app.get('/api/noaa/aurora', async (req, res) => {
   try {
     if (noaaCache.aurora.data && (Date.now() - noaaCache.aurora.timestamp) < AURORA_CACHE_TTL) {
@@ -1191,7 +1325,7 @@ app.get('/api/dxnews', async (req, res) => {
 // POTA Spots
 // POTA cache (1 minute)
 let potaCache = { data: null, timestamp: 0 };
-const POTA_CACHE_TTL = 60 * 1000; // 1 minute
+const POTA_CACHE_TTL = 90 * 1000; // 90 seconds (longer than 60s frontend poll to maximize cache hits)
 
 app.get('/api/pota/spots', async (req, res) => {
   try {
@@ -1297,6 +1431,147 @@ const DXSPIDER_PROXY_URL = process.env.DXSPIDER_PROXY_URL || 'https://dxspider-p
 let dxSpiderCache = { spots: [], timestamp: 0 };
 const DXSPIDER_CACHE_TTL = 90000; // 90 seconds cache - reduces reconnection frequency
 
+// DX Spider nodes - dxspider.co.uk primary per G6NHU
+// SSID -56 for OpenHamClock (HamClock uses -55)
+const DXSPIDER_NODES = [
+  { host: 'dxspider.co.uk', port: 7300 },
+  { host: 'dxc.nc7j.com', port: 7373 },
+  { host: 'dxc.ai9t.com', port: 7373 },
+  { host: 'dxc.w6cua.org', port: 7300 }
+];
+const DXSPIDER_SSID = '-56'; // OpenHamClock SSID
+
+// DX Spider telnet connection helper - used by both /api/dxcluster/spots and /api/dxcluster/paths
+function tryDXSpiderNode(node, userCallsign = null) {
+  return new Promise((resolve) => {
+    const spots = [];
+    let buffer = '';
+    let loginSent = false;
+    let commandSent = false;
+    let resolved = false;
+    
+    // Use user's callsign with SSID if provided, otherwise GUEST
+    const loginCallsign = userCallsign ? `${userCallsign.toUpperCase()}${DXSPIDER_SSID}` : 'GUEST';
+    
+    const client = new net.Socket();
+    client.setTimeout(12000);
+    
+    const cleanup = () => {
+      if (!resolved) {
+        resolved = true;
+        try { client.destroy(); } catch(e) {}
+      }
+    };
+    
+    // Try connecting to DX Spider node
+    client.connect(node.port, node.host, () => {
+      logDebug(`[DX Cluster] DX Spider: connected to ${node.host}:${node.port} as ${loginCallsign}`);
+    });
+    
+    client.on('data', (data) => {
+      buffer += data.toString();
+      
+      // Wait for login prompt
+      if (!loginSent && (buffer.includes('login:') || buffer.includes('Please enter your call') || buffer.includes('enter your callsign'))) {
+        loginSent = true;
+        client.write(`${loginCallsign}\r\n`);
+        return;
+      }
+      
+      // Wait for prompt after login, then send command
+      if (loginSent && !commandSent && (buffer.includes('Hello') || buffer.includes('de ') || buffer.includes('>') || buffer.includes('GUEST') || buffer.includes(loginCallsign.split('-')[0]))) {
+        commandSent = true;
+        setTimeout(() => {
+          if (!resolved) {
+            client.write('sh/dx 25\r\n');
+          }
+        }, 1000);
+        return;
+      }
+      
+      // Parse DX spots from the output
+      const lines = buffer.split('\n');
+      for (const line of lines) {
+        if (line.includes('DX de ')) {
+          const match = line.match(/DX de ([A-Z0-9\/\-]+):\s+(\d+\.?\d*)\s+([A-Z0-9\/\-]+)\s+(.+?)\s+(\d{4})Z/i);
+          if (match) {
+            const spotter = match[1].replace(':', '');
+            const freqKhz = parseFloat(match[2]);
+            const dxCall = match[3];
+            const comment = match[4].trim();
+            const timeStr = match[5];
+            
+            if (!isNaN(freqKhz) && freqKhz > 0 && dxCall) {
+              const freqMhz = (freqKhz / 1000).toFixed(3);
+              const time = timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4) + 'z';
+              
+              // Avoid duplicates
+              if (!spots.find(s => s.call === dxCall && s.freq === freqMhz)) {
+                spots.push({
+                  freq: freqMhz,
+                  call: dxCall,
+                  comment: comment,
+                  time: time,
+                  spotter: spotter,
+                  source: 'DX Spider'
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // If we have enough spots, close connection
+      if (spots.length >= 20) {
+        client.write('bye\r\n');
+        setTimeout(cleanup, 500);
+      }
+    });
+    
+    client.on('timeout', () => {
+      cleanup();
+    });
+    
+    client.on('error', (err) => {
+      // Only log unexpected errors, not connection issues (they're common)
+      if (!err.message.includes('ECONNRESET') && !err.message.includes('ETIMEDOUT') && !err.message.includes('ENOTFOUND') && !err.message.includes('ECONNREFUSED')) {
+        logErrorOnce('DX Cluster', `DX Spider ${node.host}: ${err.message}`);
+      }
+      cleanup();
+    });
+    
+    client.on('close', () => {
+      if (!resolved) {
+        resolved = true;
+        if (spots.length > 0) {
+          logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
+          dxSpiderCache = { spots: spots, timestamp: Date.now() };
+          resolve(spots);
+        } else {
+          resolve(null);
+        }
+      }
+    });
+    
+    // Fallback timeout - close after 15 seconds regardless
+    setTimeout(() => {
+      if (!resolved) {
+        if (spots.length > 0) {
+          resolved = true;
+          logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
+          dxSpiderCache = { spots: spots, timestamp: Date.now() };
+          resolve(spots);
+        }
+        cleanup();
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      }
+    }, 15000);
+  });
+}
+
 app.get('/api/dxcluster/spots', async (req, res) => {
   const source = (req.query.source || CONFIG.dxClusterSource || 'auto').toLowerCase();
   
@@ -1388,17 +1663,7 @@ app.get('/api/dxcluster/spots', async (req, res) => {
   }
   
   // Helper function for DX Spider (telnet-based, works locally/Pi)
-  // Multiple nodes for failover
-  // DX Spider nodes - dxspider.co.uk primary per G6NHU
-  // SSID -56 for OpenHamClock (HamClock uses -55)
-  const DXSPIDER_NODES = [
-    { host: 'dxspider.co.uk', port: 7300 },
-    { host: 'dxc.nc7j.com', port: 7373 },
-    { host: 'dxc.ai9t.com', port: 7373 },
-    { host: 'dxc.w6cua.org', port: 7300 }
-  ];
-  const DXSPIDER_SSID = '-56'; // OpenHamClock SSID
-  
+  // Multiple nodes for failover - uses module-level constants and tryDXSpiderNode
   async function fetchDXSpider() {
     // Check cache first (use longer cache to reduce connection attempts)
     if (Date.now() - dxSpiderCache.timestamp < DXSPIDER_CACHE_TTL && dxSpiderCache.spots.length > 0) {
@@ -1416,133 +1681,6 @@ app.get('/api/dxcluster/spots', async (req, res) => {
     
     logDebug('[DX Cluster] DX Spider: all nodes failed');
     return null;
-  }
-  
-  function tryDXSpiderNode(node) {
-    return new Promise((resolve) => {
-      const spots = [];
-      let buffer = '';
-      let loginSent = false;
-      let commandSent = false;
-      let resolved = false;
-      
-      const client = new net.Socket();
-      client.setTimeout(12000);
-      
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          try { client.destroy(); } catch(e) {}
-        }
-      };
-      
-      // Try connecting to DX Spider node
-      client.connect(node.port, node.host, () => {
-        logDebug(`[DX Cluster] DX Spider: connected to ${node.host}:${node.port}`);
-      });
-      
-      client.on('data', (data) => {
-        buffer += data.toString();
-        
-        // Wait for login prompt
-        if (!loginSent && (buffer.includes('login:') || buffer.includes('Please enter your call') || buffer.includes('enter your callsign'))) {
-          loginSent = true;
-          client.write('GUEST\r\n');
-          return;
-        }
-        
-        // Wait for prompt after login, then send command
-        if (loginSent && !commandSent && (buffer.includes('Hello') || buffer.includes('de ') || buffer.includes('>') || buffer.includes('GUEST'))) {
-          commandSent = true;
-          setTimeout(() => {
-            if (!resolved) {
-              client.write('sh/dx 25\r\n');
-            }
-          }, 1000);
-          return;
-        }
-        
-        // Parse DX spots from the output
-        const lines = buffer.split('\n');
-        for (const line of lines) {
-          if (line.includes('DX de ')) {
-            const match = line.match(/DX de ([A-Z0-9\/\-]+):\s+(\d+\.?\d*)\s+([A-Z0-9\/\-]+)\s+(.+?)\s+(\d{4})Z/i);
-            if (match) {
-              const spotter = match[1].replace(':', '');
-              const freqKhz = parseFloat(match[2]);
-              const dxCall = match[3];
-              const comment = match[4].trim();
-              const timeStr = match[5];
-              
-              if (!isNaN(freqKhz) && freqKhz > 0 && dxCall) {
-                const freqMhz = (freqKhz / 1000).toFixed(3);
-                const time = timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4) + 'z';
-                
-                // Avoid duplicates
-                if (!spots.find(s => s.call === dxCall && s.freq === freqMhz)) {
-                  spots.push({
-                    freq: freqMhz,
-                    call: dxCall,
-                    comment: comment,
-                    time: time,
-                    spotter: spotter,
-                    source: 'DX Spider'
-                  });
-                }
-              }
-            }
-          }
-        }
-        
-        // If we have enough spots, close connection
-        if (spots.length >= 20) {
-          client.write('bye\r\n');
-          setTimeout(cleanup, 500);
-        }
-      });
-      
-      client.on('timeout', () => {
-        cleanup();
-      });
-      
-      client.on('error', (err) => {
-        // Only log unexpected errors, not connection issues (they're common)
-        if (!err.message.includes('ECONNRESET') && !err.message.includes('ETIMEDOUT') && !err.message.includes('ENOTFOUND') && !err.message.includes('ECONNREFUSED')) {
-          logErrorOnce('DX Cluster', `DX Spider ${node.host}: ${err.message}`);
-        }
-        cleanup();
-      });
-      
-      client.on('close', () => {
-        if (!resolved) {
-          resolved = true;
-          if (spots.length > 0) {
-            logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
-            dxSpiderCache = { spots: spots, timestamp: Date.now() };
-            resolve(spots);
-          } else {
-            resolve(null);
-          }
-        }
-      });
-      
-      // Fallback timeout - close after 15 seconds regardless
-      setTimeout(() => {
-        if (!resolved) {
-          if (spots.length > 0) {
-            resolved = true;
-            logDebug('[DX Cluster] DX Spider:', spots.length, 'spots from', node.host);
-            dxSpiderCache = { spots: spots, timestamp: Date.now() };
-            resolve(spots);
-          }
-          cleanup();
-          if (!resolved) {
-            resolved = true;
-            resolve(null);
-          }
-        }
-      }, 15000);
-    });
   }
   
   // Fetch based on selected source
@@ -1595,12 +1733,21 @@ app.get('/api/dxcluster/sources', (req, res) => {
 
 // Cache for DX spot paths to avoid excessive lookups
 let dxSpotPathsCache = { paths: [], allPaths: [], timestamp: 0 };
-const DXPATHS_CACHE_TTL = 5000; // 5 seconds cache between fetches
+const DXPATHS_CACHE_TTL = 25000; // 25 seconds cache (just under 30s poll interval to maximize cache hits)
 const DXPATHS_RETENTION = 30 * 60 * 1000; // 30 minute spot retention
 
 app.get('/api/dxcluster/paths', async (req, res) => {
-  // Check cache first
-  if (Date.now() - dxSpotPathsCache.timestamp < DXPATHS_CACHE_TTL && dxSpotPathsCache.paths.length > 0) {
+  // Parse query parameters for custom cluster settings
+  const source = req.query.source || 'auto';
+  const customHost = req.query.host;
+  const customPort = parseInt(req.query.port) || 7300;
+  const userCallsign = req.query.callsign;
+  
+  // Generate cache key based on source (custom sources shouldn't share cache)
+  const cacheKey = source === 'custom' ? `custom-${customHost}-${customPort}` : 'default';
+  
+  // Check cache first (but not for custom sources - they might have different data)
+  if (source !== 'custom' && Date.now() - dxSpotPathsCache.timestamp < DXPATHS_CACHE_TTL && dxSpotPathsCache.paths.length > 0) {
     logDebug('[DX Paths] Returning', dxSpotPathsCache.paths.length, 'cached paths');
     return res.json(dxSpotPathsCache.paths);
   }
@@ -1614,31 +1761,56 @@ app.get('/api/dxcluster/paths', async (req, res) => {
     let newSpots = [];
     let usedSource = 'none';
     
-    try {
-      const proxyResponse = await fetch(`${DXSPIDER_PROXY_URL}/api/spots?limit=100`, {
-        headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-        signal: controller.signal
-      });
+    // Handle custom telnet source
+    if (source === 'custom' && customHost) {
+      logDebug(`[DX Paths] Trying custom telnet: ${customHost}:${customPort} as ${userCallsign || 'GUEST'}`);
+      const customNode = { host: customHost, port: customPort };
+      const customSpots = await tryDXSpiderNode(customNode, userCallsign);
       
-      if (proxyResponse.ok) {
-        const proxyData = await proxyResponse.json();
-        if (proxyData.spots && proxyData.spots.length > 0) {
-          usedSource = 'proxy';
-          newSpots = proxyData.spots.map(s => ({
-            spotter: s.spotter,
-            spotterGrid: s.spotterGrid || null,
-            dxCall: s.call,
-            dxGrid: s.dxGrid || null,
-            freq: s.freq,
-            comment: s.comment || '',
-            time: s.time || '',
-            id: `${s.call}-${s.freqKhz || s.freq}-${s.spotter}`
-          }));
-          logDebug('[DX Paths] Got', newSpots.length, 'spots from proxy');
-        }
+      if (customSpots && customSpots.length > 0) {
+        usedSource = 'custom';
+        newSpots = customSpots.map(s => ({
+          spotter: s.spotter,
+          spotterGrid: null,
+          dxCall: s.call,
+          dxGrid: null,
+          freq: s.freq,
+          comment: s.comment || '',
+          time: s.time || '',
+          id: `${s.call}-${s.freq}-${s.spotter}`
+        }));
+        logDebug('[DX Paths] Got', newSpots.length, 'spots from custom telnet');
       }
-    } catch (proxyErr) {
-      logDebug('[DX Paths] Proxy failed, trying HamQTH');
+    }
+    
+    // Try proxy if not using custom or custom failed
+    if (newSpots.length === 0 && source !== 'custom') {
+      try {
+        const proxyResponse = await fetch(`${DXSPIDER_PROXY_URL}/api/spots?limit=100`, {
+          headers: { 'User-Agent': 'OpenHamClock/3.14.11' },
+          signal: controller.signal
+        });
+        
+        if (proxyResponse.ok) {
+          const proxyData = await proxyResponse.json();
+          if (proxyData.spots && proxyData.spots.length > 0) {
+            usedSource = 'proxy';
+            newSpots = proxyData.spots.map(s => ({
+              spotter: s.spotter,
+              spotterGrid: s.spotterGrid || null,
+              dxCall: s.call,
+              dxGrid: s.dxGrid || null,
+              freq: s.freq,
+              comment: s.comment || '',
+              time: s.time || '',
+              id: `${s.call}-${s.freqKhz || s.freq}-${s.spotter}`
+            }));
+            logDebug('[DX Paths] Got', newSpots.length, 'spots from proxy');
+          }
+        }
+      } catch (proxyErr) {
+        logDebug('[DX Paths] Proxy failed, trying HamQTH');
+      }
     }
     
     // Fallback to HamQTH if proxy failed
@@ -1855,9 +2027,22 @@ app.get('/api/dxcluster/paths', async (req, res) => {
 // CALLSIGN LOOKUP API (for getting location from callsign)
 // ============================================
 
+// Cache for callsign lookups - callsigns don't change location often
+const callsignLookupCache = new Map(); // key = callsign, value = { data, timestamp }
+const CALLSIGN_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
 // Simple callsign to grid/location lookup using HamQTH
 app.get('/api/callsign/:call', async (req, res) => {
   const callsign = req.params.call.toUpperCase();
+  const now = Date.now();
+  
+  // Check cache first
+  const cached = callsignLookupCache.get(callsign);
+  if (cached && (now - cached.timestamp) < CALLSIGN_CACHE_TTL) {
+    logDebug('[Callsign Lookup] Cache hit for:', callsign);
+    return res.json(cached.data);
+  }
+  
   logDebug('[Callsign Lookup] Looking up:', callsign);
   
   try {
@@ -1883,6 +2068,8 @@ app.get('/api/callsign/:call', async (req, res) => {
           ituZone: ituMatch ? ituMatch[1] : ''
         };
         logDebug('[Callsign Lookup] Found:', result);
+        // Cache the result
+        callsignLookupCache.set(callsign, { data: result, timestamp: now });
         return res.json(result);
       }
     }
@@ -1891,6 +2078,8 @@ app.get('/api/callsign/:call', async (req, res) => {
     const estimated = estimateLocationFromPrefix(callsign);
     if (estimated) {
       logDebug('[Callsign Lookup] Estimated from prefix:', estimated);
+      // Cache estimated results too
+      callsignLookupCache.set(callsign, { data: estimated, timestamp: now });
       return res.json(estimated);
     }
     
@@ -2671,8 +2860,21 @@ function getCountryFromPrefix(prefix) {
 // MY SPOTS API - Get spots involving a specific callsign
 // ============================================
 
+// Cache for my spots data
+let mySpotsCache = new Map(); // key = callsign, value = { data, timestamp }
+const MYSPOTS_CACHE_TTL = 45000; // 45 seconds (just under 60s frontend poll to maximize cache hits)
+
 app.get('/api/myspots/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();
+  const now = Date.now();
+  
+  // Check cache first
+  const cached = mySpotsCache.get(callsign);
+  if (cached && (now - cached.timestamp) < MYSPOTS_CACHE_TTL) {
+    logDebug('[My Spots] Returning cached data for:', callsign);
+    return res.json(cached.data);
+  }
+  
   logDebug('[My Spots] Searching for callsign:', callsign);
   
   const mySpots = [];
@@ -2751,6 +2953,9 @@ app.get('/api/myspots/:callsign', async (req, res) => {
         country: loc?.country
       };
     }).filter(s => s.lat && s.lon); // Only return spots with valid locations
+    
+    // Cache the result
+    mySpotsCache.set(callsign, { data: spotsWithLocations, timestamp: Date.now() });
     
     res.json(spotsWithLocations);
   } catch (error) {
@@ -3210,12 +3415,23 @@ function maintainRBNConnection(port = 7000) {
 // Start persistent connection on server startup
 maintainRBNConnection(7000);
 
+// Cache for RBN API responses
+let rbnApiCache = { data: null, timestamp: 0, key: '' };
+const RBN_API_CACHE_TTL = 30000; // 30 seconds - spots change constantly but not every request
+
 // Endpoint to get recent RBN spots (no filtering, just return all recent spots)
 app.get('/api/rbn/spots', async (req, res) => {
   const minutes = parseInt(req.query.minutes) || 30;
-  const limit = parseInt(req.query.limit) || 500;
+  const limit = parseInt(req.query.limit) || 200; // Reduced from 500 to save bandwidth
   
+  const cacheKey = `${minutes}:${limit}`;
   const now = Date.now();
+  
+  // Return cached response if fresh
+  if (rbnApiCache.data && rbnApiCache.key === cacheKey && (now - rbnApiCache.timestamp) < RBN_API_CACHE_TTL) {
+    return res.json(rbnApiCache.data);
+  }
+  
   const cutoff = now - (minutes * 60 * 1000);
   
   // Filter by time window
@@ -3275,13 +3491,18 @@ app.get('/api/rbn/spots', async (req, res) => {
   
   console.log(`[RBN] Returning ${enrichedSpots.length} enriched spots (last ${minutes} min)`);
   
-  res.json({
+  const response = {
     count: enrichedSpots.length,
     spots: enrichedSpots,
     minutes: minutes,
     timestamp: new Date().toISOString(),
     source: 'rbn-telnet-stream'
-  });
+  };
+  
+  // Cache the response
+  rbnApiCache = { data: response, timestamp: Date.now(), key: cacheKey };
+  
+  res.json(response);
 });
 
 // Endpoint to lookup skimmer location (cached permanently)
@@ -3349,15 +3570,150 @@ app.get('/api/rbn', async (req, res) => {
 // WSPR heatmap endpoint - gets global propagation data
 // Uses PSK Reporter to fetch WSPR mode spots from the last N minutes
 let wsprCache = { data: null, timestamp: 0 };
-const WSPR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const WSPR_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache - be kind to PSKReporter
+
+// Aggregate WSPR spots by 4-character grid square for bandwidth efficiency
+// Reduces payload from ~2MB to ~50KB while preserving heatmap visualization
+function aggregateWSPRByGrid(spots) {
+  const grids = new Map();
+  const paths = new Map();
+  
+  for (const spot of spots) {
+    // Get 4-char grids (field + square, e.g., "EM48")
+    const senderGrid4 = spot.senderGrid?.substring(0, 4)?.toUpperCase();
+    const receiverGrid4 = spot.receiverGrid?.substring(0, 4)?.toUpperCase();
+    
+    // Aggregate sender grid stats
+    if (senderGrid4 && spot.senderLat && spot.senderLon) {
+      if (!grids.has(senderGrid4)) {
+        grids.set(senderGrid4, {
+          grid: senderGrid4,
+          lat: spot.senderLat,
+          lon: spot.senderLon,
+          txCount: 0,
+          rxCount: 0,
+          snrSum: 0,
+          snrCount: 0,
+          bands: {},
+          maxDistance: 0,
+          stations: new Set()
+        });
+      }
+      const g = grids.get(senderGrid4);
+      g.txCount++;
+      if (spot.snr !== null && spot.snr !== undefined) {
+        g.snrSum += spot.snr;
+        g.snrCount++;
+      }
+      g.bands[spot.band] = (g.bands[spot.band] || 0) + 1;
+      if (spot.distance > g.maxDistance) g.maxDistance = spot.distance;
+      if (spot.sender) g.stations.add(spot.sender);
+    }
+    
+    // Aggregate receiver grid stats
+    if (receiverGrid4 && spot.receiverLat && spot.receiverLon) {
+      if (!grids.has(receiverGrid4)) {
+        grids.set(receiverGrid4, {
+          grid: receiverGrid4,
+          lat: spot.receiverLat,
+          lon: spot.receiverLon,
+          txCount: 0,
+          rxCount: 0,
+          snrSum: 0,
+          snrCount: 0,
+          bands: {},
+          maxDistance: 0,
+          stations: new Set()
+        });
+      }
+      const g = grids.get(receiverGrid4);
+      g.rxCount++;
+      if (spot.receiver) g.stations.add(spot.receiver);
+    }
+    
+    // Track paths between grid squares
+    if (senderGrid4 && receiverGrid4 && senderGrid4 !== receiverGrid4) {
+      const pathKey = `${senderGrid4}-${receiverGrid4}`;
+      if (!paths.has(pathKey)) {
+        paths.set(pathKey, { 
+          from: senderGrid4, 
+          to: receiverGrid4, 
+          fromLat: spot.senderLat,
+          fromLon: spot.senderLon,
+          toLat: spot.receiverLat,
+          toLon: spot.receiverLon,
+          count: 0,
+          snrSum: 0,
+          snrCount: 0,
+          bands: {}
+        });
+      }
+      const p = paths.get(pathKey);
+      p.count++;
+      if (spot.snr !== null && spot.snr !== undefined) {
+        p.snrSum += spot.snr;
+        p.snrCount++;
+      }
+      p.bands[spot.band] = (p.bands[spot.band] || 0) + 1;
+    }
+  }
+  
+  // Convert to arrays and compute averages
+  const gridArray = Array.from(grids.values()).map(g => ({
+    grid: g.grid,
+    lat: g.lat,
+    lon: g.lon,
+    txCount: g.txCount,
+    rxCount: g.rxCount,
+    totalActivity: g.txCount + g.rxCount,
+    avgSnr: g.snrCount > 0 ? Math.round(g.snrSum / g.snrCount) : null,
+    bands: g.bands,
+    maxDistance: g.maxDistance,
+    stationCount: g.stations.size
+  })).sort((a, b) => b.totalActivity - a.totalActivity);
+  
+  // Top 200 paths by activity (limit for bandwidth)
+  const pathArray = Array.from(paths.values())
+    .map(p => ({
+      from: p.from,
+      to: p.to,
+      fromLat: p.fromLat,
+      fromLon: p.fromLon,
+      toLat: p.toLat,
+      toLon: p.toLon,
+      count: p.count,
+      avgSnr: p.snrCount > 0 ? Math.round(p.snrSum / p.snrCount) : null,
+      bands: p.bands
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 200);
+  
+  // Band activity summary
+  const bandActivity = {};
+  for (const spot of spots) {
+    if (spot.band) {
+      bandActivity[spot.band] = (bandActivity[spot.band] || 0) + 1;
+    }
+  }
+  
+  return { 
+    grids: gridArray, 
+    paths: pathArray, 
+    bandActivity,
+    totalSpots: spots.length,
+    uniqueGrids: gridArray.length,
+    uniquePaths: paths.size
+  };
+}
 
 app.get('/api/wspr/heatmap', async (req, res) => {
   const minutes = parseInt(req.query.minutes) || 30; // Default 30 minutes
   const band = req.query.band || 'all'; // all, 20m, 40m, etc.
+  const raw = req.query.raw === 'true'; // Return raw spots instead of aggregated
   const now = Date.now();
   
   // Return cached data if fresh
-  const cacheKey = `${minutes}:${band}`;
+  const cacheKey = `${minutes}:${band}:${raw ? 'raw' : 'agg'}`;
   if (wsprCache.data && 
       wsprCache.data.cacheKey === cacheKey && 
       (now - wsprCache.timestamp) < WSPR_CACHE_TTL) {
@@ -3375,7 +3731,7 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'OpenHamClock/3.13.1 (Amateur Radio Dashboard)',
+        'User-Agent': 'OpenHamClock/3.14.24 (Amateur Radio Dashboard)',
         'Accept': '*/*'
       },
       signal: controller.signal
@@ -3407,6 +3763,11 @@ app.get('/api/wspr/heatmap', async (req, res) => {
       const mode = getAttr('mode');
       const flowStartSecs = getAttr('flowStartSeconds');
       const sNR = getAttr('sNR');
+      const power = getAttr('senderPower');
+      const distance = getAttr('senderDistance');
+      const senderAz = getAttr('senderAzimuth');
+      const receiverAz = getAttr('receiverAzimuth');
+      const drift = getAttr('drift');
       
       if (receiverCallsign && senderCallsign && senderLocator && receiverLocator) {
         const freq = frequency ? parseInt(frequency) : null;
@@ -3419,6 +3780,11 @@ app.get('/api/wspr/heatmap', async (req, res) => {
         const receiverLoc = gridToLatLonSimple(receiverLocator);
         
         if (senderLoc && receiverLoc) {
+          const powerWatts = power ? parseFloat(power) : null;
+          const powerDbm = powerWatts ? (10 * Math.log10(powerWatts * 1000)).toFixed(0) : null;
+          const dist = distance ? parseInt(distance) : null;
+          const kPerW = (dist && powerWatts && powerWatts > 0) ? Math.round(dist / powerWatts) : null;
+          
           spots.push({
             sender: senderCallsign,
             senderGrid: senderLocator,
@@ -3429,9 +3795,16 @@ app.get('/api/wspr/heatmap', async (req, res) => {
             receiverLat: receiverLoc.lat,
             receiverLon: receiverLoc.lon,
             freq: freq,
-            freqMHz: freq ? (freq / 1000000).toFixed(3) : null,
+            freqMHz: freq ? (freq / 1000000).toFixed(6) : null,
             band: spotBand,
             snr: sNR ? parseInt(sNR) : null,
+            power: powerWatts,
+            powerDbm: powerDbm,
+            distance: dist,
+            senderAz: senderAz ? parseInt(senderAz) : null,
+            receiverAz: receiverAz ? parseInt(receiverAz) : null,
+            drift: drift ? parseInt(drift) : null,
+            kPerW: kPerW,
             timestamp: flowStartSecs ? parseInt(flowStartSecs) * 1000 : Date.now(),
             age: flowStartSecs ? Math.floor((Date.now() / 1000 - parseInt(flowStartSecs)) / 60) : 0
           });
@@ -3442,14 +3815,33 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     // Sort by timestamp (newest first)
     spots.sort((a, b) => b.timestamp - a.timestamp);
     
-    const result = {
-      count: spots.length,
-      spots: spots,
-      minutes: minutes,
-      band: band,
-      timestamp: new Date().toISOString(),
-      source: 'pskreporter'
-    };
+    let result;
+    
+    if (raw) {
+      // Return raw spots (legacy format, higher bandwidth)
+      result = {
+        count: spots.length,
+        spots: spots,
+        minutes: minutes,
+        band: band,
+        timestamp: new Date().toISOString(),
+        source: 'pskreporter',
+        format: 'raw'
+      };
+      console.log(`[WSPR Heatmap] Returning ${spots.length} raw spots (${minutes}min, band: ${band})`);
+    } else {
+      // Return aggregated data (default, ~97% smaller)
+      const aggregated = aggregateWSPRByGrid(spots);
+      result = {
+        ...aggregated,
+        minutes: minutes,
+        band: band,
+        timestamp: new Date().toISOString(),
+        source: 'pskreporter',
+        format: 'aggregated'
+      };
+      console.log(`[WSPR Heatmap] Aggregated ${spots.length} spots → ${aggregated.uniqueGrids} grids, ${aggregated.paths.length} paths (${minutes}min, band: ${band})`);
+    }
     
     // Cache it
     wsprCache = { 
@@ -3457,7 +3849,6 @@ app.get('/api/wspr/heatmap', async (req, res) => {
       timestamp: now 
     };
     
-    console.log(`[WSPR Heatmap] Found ${spots.length} WSPR spots (${minutes}min, band: ${band})`);
     res.json(result);
     
   } catch (error) {
@@ -3470,10 +3861,12 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     
     // Return empty result
     res.json({ 
-      count: 0, 
-      spots: [],
+      grids: [],
+      paths: [],
+      totalSpots: 0,
       minutes,
       band,
+      format: 'aggregated',
       error: error.message 
     });
   }
@@ -3485,7 +3878,7 @@ app.get('/api/wspr/heatmap', async (req, res) => {
 // ============================================
 
 // Comprehensive ham radio satellites - NORAD IDs
-// Updated list of active amateur radio satellites
+// Updated list of active amateur radio satellites and selected weather satellites
 const HAM_SATELLITES = {
   // High Priority - Popular FM satellites
   'ISS': { norad: 25544, name: 'ISS (ZARYA)', color: '#00ffff', priority: 1, mode: 'FM/APRS/SSTV' },
@@ -3493,6 +3886,15 @@ const HAM_SATELLITES = {
   'AO-91': { norad: 43017, name: 'AO-91 (Fox-1B)', color: '#ff6600', priority: 1, mode: 'FM' },
   'AO-92': { norad: 43137, name: 'AO-92 (Fox-1D)', color: '#ff9900', priority: 1, mode: 'FM/L-band' },
   'PO-101': { norad: 43678, name: 'PO-101 (Diwata-2)', color: '#ff3399', priority: 1, mode: 'FM' },
+  
+  // Weather Satellites - GOES & METEOR
+  //'GOES-18': { norad: 51850, name: 'GOES-18', color: '#66ff66', priority: 1, mode: 'GRB/HRIT/LRIT' },
+  //'GOES-19': { norad: 60133, name: 'GOES-19', color: '#33cc33', priority: 1, mode: 'GRB/HRIT/LRIT' },
+  'METEOR-M2-3': { norad: 57166, name: 'METEOR M2-3', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
+  'METEOR-M2-4': { norad: 59051, name: 'METEOR M2-4', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
+  'SUOMI-NPP': { norad: 37849, name: 'SUOMI NPP', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
+  'NOAA-20': { norad: 43013, name: 'NOAA-20 (JPSS-1)', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
+  'NOAA-21': { norad: 54234, name: 'NOAA-21 (JPSS-2)', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
   
   // Linear Transponder Satellites
   'RS-44': { norad: 44909, name: 'RS-44 (DOSAAF)', color: '#ff0066', priority: 1, mode: 'Linear' },
@@ -3554,104 +3956,100 @@ const TLE_CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 app.get('/api/satellites/tle', async (req, res) => {
   try {
     const now = Date.now();
-    
-    // Return cached data if fresh
+    // Return cached data if fresh (6-hour window)
     if (tleCache.data && (now - tleCache.timestamp) < TLE_CACHE_DURATION) {
       return res.json(tleCache.data);
     }
+
+    logDebug('[Satellites] Fetching fresh TLE data from multiple groups...');
+    const tleData = {}; // Declare this exactly once to avoid SyntaxErrors
     
-    logDebug('[Satellites] Fetching fresh TLE data...');
-    
-    // Fetch fresh TLE data from CelesTrak
-    const tleData = {};
-    
-    // Fetch amateur radio satellites TLE
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
-    
-    const response = await fetch(
-      'https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle',
-      {
-        headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-        signal: controller.signal
-      }
-    );
-    clearTimeout(timeout);
-    
-    if (response.ok) {
-      const text = await response.text();
-      const lines = text.trim().split('\n');
-      
-      // Parse TLE data (3 lines per satellite: name, line1, line2)
-      for (let i = 0; i < lines.length - 2; i += 3) {
-        const name = lines[i].trim();
-        const line1 = lines[i + 1]?.trim();
-        const line2 = lines[i + 2]?.trim();
-        
-        if (line1 && line2 && line1.startsWith('1 ') && line2.startsWith('2 ')) {
-          // Extract NORAD ID from line 1
-          const noradId = parseInt(line1.substring(2, 7));
+
+    // Fetch from multiple CelesTrak groups for broader satellite coverage
+    const groups = ['amateur', 'weather', 'goes']; 
+
+    for (const group of groups) {
+      try {
+        const response = await fetch(
+          `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`,
+          { headers: { 'User-Agent': 'OpenHamClock/3.13.1' }, signal: controller.signal }
+        );
+
+        if (response.ok) {
+          const text = await response.text();
+          const lines = text.trim().split('\n');
           
-          // Check if this is a satellite we care about
-          for (const [key, sat] of Object.entries(HAM_SATELLITES)) {
-            if (sat.norad === noradId) {
-              tleData[key] = {
-                ...sat,
-                tle1: line1,
-                tle2: line2
-              };
+          // Parse TLE data (3 lines per satellite: name, line1, line2)
+          for (let i = 0; i < lines.length - 2; i += 3) {
+            const name = lines[i].trim();
+            const line1 = lines[i + 1]?.trim();
+            const line2 = lines[i + 2]?.trim();
+            
+            if (line1 && line2 && line1.startsWith('1 ') && line2.startsWith('2 ')) {
+              // Extract NORAD ID from line 1
+              const noradId = parseInt(line1.substring(2, 7));
+              
+              // First check if this is a satellite we have metadata for
+              let satInfo = null;
+              let satKey = null;
+              for (const [key, sat] of Object.entries(HAM_SATELLITES)) {
+                if (sat.norad === noradId) {
+                  satKey = key;
+                  satInfo = sat;
+                  break;
+                }
+              }
+              
+              // If found in our list, use our metadata
+              if (satInfo) {
+                tleData[satKey] = {
+                  ...satInfo,
+                  tle1: line1,
+                  tle2: line2
+                };
+              } else if (group === 'amateur') {
+                // For amateur group, include ALL satellites with basic info
+                // Use the name from TLE as the key (sanitized)
+                const cleanName = name.replace(/[^A-Z0-9\-]/g, '_').substring(0, 30);
+                tleData[cleanName] = {
+                  norad: noradId,
+                  name: name,
+                  color: '#6699ff', // Default blue color
+                  priority: 4,
+                  mode: 'Amateur',
+                  tle1: line1,
+                  tle2: line2
+                };
+              }
             }
           }
         }
+      } catch (e) {
+        logDebug(`[Satellites] Failed to fetch group: ${group}`);
       }
     }
-    
-    // Also try to get ISS specifically (it's in the stations group)
+    clearTimeout(timeout);
+
+    // Fallback for ISS if it wasn't found in the groups above
     if (!tleData['ISS']) {
       try {
-        const issController = new AbortController();
-        const issTimeout = setTimeout(() => issController.abort(), 10000);
-        
-        const issResponse = await fetch(
-          'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle',
-          { 
-            headers: { 'User-Agent': 'OpenHamClock/3.13.1' },
-            signal: issController.signal
-          }
-        );
-        clearTimeout(issTimeout);
-        
-        if (issResponse.ok) {
-          const issText = await issResponse.text();
+        const issRes = await fetch('https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=tle');
+        if (issRes.ok) {
+          const issText = await issRes.text();
           const issLines = issText.trim().split('\n');
           if (issLines.length >= 3) {
-            tleData['ISS'] = {
-              ...HAM_SATELLITES['ISS'],
-              tle1: issLines[1].trim(),
-              tle2: issLines[2].trim()
-            };
-            logDebug('[Satellites] Found ISS TLE');
+            tleData['ISS'] = { ...HAM_SATELLITES['ISS'], tle1: issLines[1].trim(), tle2: issLines[2].trim() };
           }
         }
-      } catch (e) {
-        if (e.name !== 'AbortError') {
-          logErrorOnce('Satellites', `ISS TLE fetch: ${e.message}`);
-        }
-      }
+      } catch (e) { logDebug('[Satellites] ISS fallback failed'); }
     }
-    
-    // Cache the result
+
     tleCache = { data: tleData, timestamp: now };
-    
-    logDebug('[Satellites] Loaded TLE for', Object.keys(tleData).length, 'satellites');
     res.json(tleData);
-    
   } catch (error) {
-    // Don't spam logs for timeouts (AbortError) or network issues
-    if (error.name !== 'AbortError') {
-      logErrorOnce('Satellites', `TLE fetch error: ${error.message}`);
-    }
-    // Return cached data even if stale, or empty object
+    // Return stale cache or empty if everything fails
     res.json(tleCache.data || {});
   }
 });
@@ -4851,6 +5249,35 @@ function generateStatusDashboard() {
   const growthIcon = growth > 0 ? '📈' : growth < 0 ? '📉' : '➡️';
   const growthColor = growth > 0 ? '#00ff88' : growth < 0 ? '#ff4466' : '#888';
   
+  // Get API traffic stats
+  const apiStats = endpointStats.getStats();
+  const estimatedMonthlyGB = apiStats.uptimeHours > 0 
+    ? ((apiStats.totalBytes / parseFloat(apiStats.uptimeHours)) * 24 * 30 / (1024 * 1024 * 1024)).toFixed(2)
+    : '0.00';
+  
+  // Generate API traffic table rows (top 15 by bandwidth)
+  const apiTableRows = apiStats.endpoints.slice(0, 15).map((ep, i) => {
+    const bytesFormatted = formatBytes(ep.totalBytes);
+    const avgBytesFormatted = formatBytes(ep.avgBytes);
+    const bandwidthBar = Math.min((ep.totalBytes / (apiStats.totalBytes || 1)) * 100, 100);
+    return `
+      <tr>
+        <td style="color: #888">${i + 1}</td>
+        <td><code style="color: #00ccff">${ep.path}</code></td>
+        <td style="text-align: right">${ep.requests.toLocaleString()}</td>
+        <td style="text-align: right">${ep.requestsPerHour}/hr</td>
+        <td style="text-align: right; color: #ffb347">${bytesFormatted}</td>
+        <td style="text-align: right">${avgBytesFormatted}</td>
+        <td style="text-align: right">${ep.avgDuration}ms</td>
+        <td style="width: 100px">
+          <div style="background: rgba(255,179,71,0.2); border-radius: 4px; height: 8px; width: 100%">
+            <div style="background: linear-gradient(90deg, #ffb347, #ff6b35); height: 100%; width: ${bandwidthBar}%; border-radius: 4px"></div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5063,11 +5490,76 @@ function generateStatusDashboard() {
       background: rgba(255, 255, 255, 0.1);
       color: #e2e8f0;
     }
+    .api-section {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+      overflow-x: auto;
+    }
+    .api-title {
+      font-size: 1rem;
+      color: #e2e8f0;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .api-summary {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .api-stat {
+      background: rgba(255, 179, 71, 0.1);
+      border: 1px solid rgba(255, 179, 71, 0.3);
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+    .api-stat-value {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2rem;
+      color: #ffb347;
+    }
+    .api-stat-label {
+      font-size: 0.7rem;
+      color: #888;
+      text-transform: uppercase;
+    }
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .api-table th {
+      text-align: left;
+      padding: 8px 12px;
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .api-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .api-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .api-table code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+    }
     @media (max-width: 600px) {
       .logo { font-size: 1.8rem; }
       .stat-value { font-size: 1.5rem; }
       .chart { height: 120px; gap: 4px; }
       .bar-value { font-size: 0.6rem; top: -18px; }
+      .api-table { font-size: 0.7rem; }
+      .api-summary { gap: 12px; }
     }
   </style>
 </head>
@@ -5138,7 +5630,7 @@ function generateStatusDashboard() {
       </div>
       <div class="info-row">
         <span class="info-label">Persistence</span>
-        <span class="info-value" style="color: ${visitorStats.lastSaved ? '#00ff88' : '#ff4466'}">${visitorStats.lastSaved ? '✓ Working' : '✗ Memory Only'}</span>
+        <span class="info-value" style="color: ${STATS_FILE ? '#00ff88' : '#ff4466'}">${STATS_FILE ? '✓ Working' : '✗ Memory Only'}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Stats Location</span>
@@ -5148,6 +5640,52 @@ function generateStatusDashboard() {
         <span class="info-label">Last Saved</span>
         <span class="info-value">${visitorStats.lastSaved ? new Date(visitorStats.lastSaved).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Not yet'}</span>
       </div>
+    </div>
+    
+    <div class="api-section">
+      <div class="api-title">
+        <span>📊 API Traffic Monitor</span>
+        <span style="color: #888; font-size: 0.75rem">Since last restart (${apiStats.uptimeHours}h ago)</span>
+      </div>
+      
+      <div class="api-summary">
+        <div class="api-stat">
+          <div class="api-stat-value">${apiStats.totalRequests.toLocaleString()}</div>
+          <div class="api-stat-label">Total Requests</div>
+        </div>
+        <div class="api-stat">
+          <div class="api-stat-value">${formatBytes(apiStats.totalBytes)}</div>
+          <div class="api-stat-label">Total Egress</div>
+        </div>
+        <div class="api-stat">
+          <div class="api-stat-value" style="color: ${parseFloat(estimatedMonthlyGB) > 100 ? '#ff4466' : '#00ff88'}">${estimatedMonthlyGB} GB</div>
+          <div class="api-stat-label">Est. Monthly</div>
+        </div>
+        <div class="api-stat">
+          <div class="api-stat-value">${apiStats.endpoints.length}</div>
+          <div class="api-stat-label">Active Endpoints</div>
+        </div>
+      </div>
+      
+      ${apiStats.endpoints.length > 0 ? `
+      <table class="api-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Endpoint</th>
+            <th style="text-align: right">Requests</th>
+            <th style="text-align: right">Rate</th>
+            <th style="text-align: right">Total</th>
+            <th style="text-align: right">Avg Size</th>
+            <th style="text-align: right">Avg Time</th>
+            <th>Bandwidth</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${apiTableRows}
+        </tbody>
+      </table>
+      ` : '<div style="color: #666; text-align: center; padding: 20px">No API requests recorded yet</div>'}
     </div>
     
     <div class="footer">
@@ -5177,6 +5715,9 @@ app.get('/api/health', (req, res) => {
       ? Math.round(visitorStats.history.reduce((sum, d) => sum + d.uniqueVisitors, 0) / visitorStats.history.length)
       : visitorStats.uniqueIPsToday.length;
     
+    // Get endpoint monitoring stats
+    const apiStats = endpointStats.getStats();
+    
     res.json({
       status: 'ok',
       version: APP_VERSION,
@@ -5202,6 +5743,15 @@ app.get('/api/health', (req, res) => {
         },
         dailyAverage: avg,
         history: visitorStats.history.slice(-30) // Last 30 days
+      },
+      apiTraffic: {
+        monitoringStarted: new Date(endpointStats.startTime).toISOString(),
+        uptimeHours: apiStats.uptimeHours,
+        totalRequests: apiStats.totalRequests,
+        totalBytes: apiStats.totalBytes,
+        totalBytesFormatted: formatBytes(apiStats.totalBytes),
+        estimatedMonthlyGB: ((apiStats.totalBytes / parseFloat(apiStats.uptimeHours)) * 24 * 30 / (1024 * 1024 * 1024)).toFixed(2),
+        endpoints: apiStats.endpoints.slice(0, 20) // Top 20 by bandwidth
       }
     });
   } else {
@@ -5805,6 +6355,107 @@ function handleWSJTXMessage(msg, state) {
     }
   }
 }
+
+// ---- N3FJP Logged QSO relay (in-memory) ----
+const N3FJP_QSO_RETENTION_MINUTES = parseInt(process.env.N3FJP_QSO_RETENTION_MINUTES || "15", 10);
+let n3fjpQsos = [];
+
+function pruneN3fjpQsos() {
+  const cutoff = Date.now() - (N3FJP_QSO_RETENTION_MINUTES * 60 * 1000);
+  n3fjpQsos = n3fjpQsos.filter(q => {
+    const t = Date.parse(q.ts_utc || q.ts || "");
+    return !Number.isNaN(t) && t >= cutoff;
+  });
+}
+
+// Simple in-memory cache so we don't hammer callsign lookup on every QSO
+const n3fjpCallCache = new Map(); // key=callsign, val={ts, result}
+const N3FJP_CALL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+async function lookupCallLatLon(callsign) {
+  const call = (callsign || "").toUpperCase().trim();
+  if (!call) return null;
+
+  const cached = n3fjpCallCache.get(call);
+  if (cached && (Date.now() - cached.ts) < N3FJP_CALL_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  try {
+    // Reuse your existing endpoint (keeps all HamQTH/grid logic in one place)
+    const resp = await fetch(`http://localhost:${PORT}/api/callsign/${encodeURIComponent(call)}`);
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    if (typeof data.lat === "number" && typeof data.lon === "number") {
+      n3fjpCallCache.set(call, { ts: Date.now(), result: data });
+      return data;
+    }
+  } catch (e) {
+    // swallow: mapping should never crash the server
+  }
+  return null;
+}
+
+// POST one QSO from a bridge (your Python script)
+app.post("/api/n3fjp/qso", async (req, res) => {
+  const qso = req.body || {};
+  if (!qso.dx_call) return res.status(400).json({ ok: false, error: "dx_call required" });
+
+  if (!qso.ts_utc) qso.ts_utc = new Date().toISOString();
+  if (!qso.source) qso.source = "n3fjp_to_timemapper_udp";
+
+  // Always ACK immediately so the bridge never times out
+  res.json({ ok: true });
+
+  // Do enrichment + storage after ACK
+  setImmediate(async () => {
+    try {
+      //
+      // Enrich DX location: GRID → (preferred) → HamQTH fallback
+      //
+      let locSource = "";
+
+      // 1) Prefer exact operating grid (N3FJP “Grid Rec” field)
+      if (qso.dx_grid) {
+        const loc = maidenheadToLatLon(qso.dx_grid);
+        if (loc) {
+          qso.lat = loc.lat;
+          qso.lon = loc.lon;
+          qso.loc_source = "grid";
+          locSource = "grid";
+        }
+      }
+
+      // 2) If no grid provided, fall back to HamQTH/home QTH lookup
+      if (!locSource) {
+        const dx = await lookupCallLatLon(qso.dx_call);
+        if (dx) {
+          qso.lat = dx.lat;
+          qso.lon = dx.lon;
+          qso.dx_country = dx.country || "";
+          qso.dx_cqZone = dx.cqZone || "";
+          qso.dx_ituZone = dx.ituZone || "";
+          qso.loc_source = "hamqth";
+        }
+      }
+
+      n3fjpQsos.unshift(qso);
+      pruneN3fjpQsos();
+
+      // cap memory
+      if (n3fjpQsos.length > 200) n3fjpQsos.length = 200;
+    } catch (e) {
+      console.error("[/api/n3fjp/qso] post-ack processing failed:", e);
+    }
+  });
+});
+
+// GET recent QSOs (pruned to retention window)
+app.get("/api/n3fjp/qsos", (req, res) => {
+  pruneN3fjpQsos();
+  res.json({ ok: true, retention_minutes: N3FJP_QSO_RETENTION_MINUTES, qsos: n3fjpQsos });
+});
 
 // Start UDP listener
 let wsjtxSocket = null;

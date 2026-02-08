@@ -370,17 +370,22 @@ function freqToBand(freq) {
   return 'Other';
 }
 
-export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign }) {
+export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign, lowMemoryMode = false }) {
   const [spots, setSpots] = useState([]);
   const [selectedBand, setSelectedBand] = useState('all');
-  const [timeWindow, setTimeWindow] = useState(5); // minutes (0.1 = 6 seconds, 15 = 15 minutes)
+  const [timeWindow, setTimeWindow] = useState(lowMemoryMode ? 2 : 5); // minutes - shorter in low memory
   const [minSNR, setMinSNR] = useState(-10);
   const [showPaths, setShowPaths] = useState(true);
   const [stats, setStats] = useState({ total: 0, skimmers: 0, avgSNR: 0 });
   
+  // Low memory mode limits
+  const MAX_SPOTS = lowMemoryMode ? 25 : 200;
+  const UPDATE_INTERVAL = lowMemoryMode ? 60000 : 60000; // 60s for all - be kind to servers and bandwidth
+  
   const layersRef = useRef([]);
   const controlRef = useRef(null);
   const updateIntervalRef = useRef(null);
+  const spotsHistoryRef = useRef([]); // Keep a rolling history of spots
 
   // Fetch RBN spots
   const fetchRBNSpots = async () => {
@@ -413,6 +418,46 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         
         console.log(`[RBN] Found ${mySpots.length} spots for ${callsign}`);
         
+        // Strip callsign suffixes (e.g., DL8LAS-1 → DL8LAS, K1TXT/B → K1TXT)
+        mySpots.forEach(spot => {
+          if (spot.callsign) {
+            // Remove anything after / or -
+            const baseCall = spot.callsign.split(/[\/\-]/)[0];
+            if (baseCall !== spot.callsign) {
+              console.log(`[RBN] Stripped callsign: ${spot.callsign} → ${baseCall}`);
+              spot.callsign = baseCall;
+            }
+          }
+        });
+        
+        // Add new spots to history
+        const now = Date.now();
+        const maxHistoryMs = 15 * 60 * 1000; // 15 minutes max history
+        
+        // Merge new spots with history, avoiding duplicates
+        const existingSpotKeys = new Set(
+          spotsHistoryRef.current.map(s => `${s.callsign}-${s.frequency}-${s.timestamp}`)
+        );
+        const newUniqueSpots = mySpots.filter(spot => {
+          const key = `${spot.callsign}-${spot.frequency}-${spot.timestamp}`;
+          return !existingSpotKeys.has(key);
+        });
+        
+        console.log(`[RBN] Adding ${newUniqueSpots.length} new unique spots to history`);
+        spotsHistoryRef.current = [...spotsHistoryRef.current, ...newUniqueSpots];
+        
+        // Remove spots older than 15 minutes from history
+        spotsHistoryRef.current = spotsHistoryRef.current.filter(spot => {
+          const spotTimestamp = new Date(spot.timestamp).getTime();
+          const ageMs = now - spotTimestamp;
+          return ageMs <= maxHistoryMs;
+        });
+        
+        console.log(`[RBN] History now contains ${spotsHistoryRef.current.length} spots (max 15min)`);
+        
+        // Use history for display
+        const allSpots = spotsHistoryRef.current;
+        
         // Log details of found spots
         if (mySpots.length > 0) {
           console.log(`[RBN] Spot details for ${callsign}:`);
@@ -422,7 +467,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         }
         
         // Apply band and SNR filters
-        const filteredSpots = mySpots.filter(spot => {
+        const filteredSpots = allSpots.filter(spot => {
           const meetsFilter = selectedBand === 'all' || spot.band === selectedBand;
           const meetsSNR = (spot.snr || 0) >= minSNR;
           return meetsFilter && meetsSNR;
@@ -430,12 +475,12 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
         
         console.log(`[RBN] After filters (band: ${selectedBand}, minSNR: ${minSNR}): ${filteredSpots.length} spots`);
         
-        // Lookup locations for each unique skimmer
+        // Lookup locations for spots that don't have them yet
         const spotsWithLocations = await Promise.all(
           filteredSpots.map(async (spot) => {
             try {
-              // Check if we already have grid in the spot
-              if (!spot.grid) {
+              // Check if we already have grid and location
+              if (!spot.grid || !spot.skimmerLat || !spot.skimmerLon) {
                 console.log(`[RBN] Looking up location for ${spot.callsign}...`);
                 // Lookup skimmer location (cached on server)
                 const locationResponse = await fetch(`/api/rbn/location/${spot.callsign}`);
@@ -470,6 +515,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
             spotsWithoutGrid.map(s => s.callsign).join(', '));
         }
         
+        // Update history with location data
+        spotsWithLocations.forEach(spot => {
+          if (spot.grid && spot.skimmerLat && spot.skimmerLon) {
+            const idx = spotsHistoryRef.current.findIndex(s => 
+              s.callsign === spot.callsign && s.frequency === spot.frequency && s.timestamp === spot.timestamp
+            );
+            if (idx >= 0) {
+              spotsHistoryRef.current[idx] = spot;
+            }
+          }
+        });
+        
         setSpots(spotsWithLocations);
         
         // Calculate statistics
@@ -496,7 +553,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
   useEffect(() => {
     if (enabled && callsign && callsign !== 'N0CALL') {
       fetchRBNSpots();
-      updateIntervalRef.current = setInterval(fetchRBNSpots, 10000); // Update every 10 seconds for real-time
+      updateIntervalRef.current = setInterval(fetchRBNSpots, UPDATE_INTERVAL);
     }
     
     return () => {
@@ -647,7 +704,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
 
       div.innerHTML = `
         <div style="margin-bottom: 8px;">
-          <b>📡 RBN: ${callsign}</b>
+          <b>📡 RBN: <span id="rbn-callsign-display">${callsign}</span></b>
         </div>
         <div id="rbn-stats-display" style="margin-bottom: 8px; color: var(--text-secondary);">
           Spots: <b>0</b> | Skimmers: <b>0</b><br>
@@ -778,6 +835,22 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign 
       }
     };
   }, [map, enabled, callsign]); // Only recreate when map, enabled, or callsign changes
+
+  // Separate effect to update callsign display when it changes
+  useEffect(() => {
+    if (!enabled || !controlRef.current) return;
+    
+    const container = controlRef.current.getContainer();
+    if (!container) return;
+    
+    // Find callsign display element (before or after minimize toggle wraps content)
+    const callsignDisplay = container.querySelector('#rbn-callsign-display') || 
+                           container.querySelector('.rbn-panel-content #rbn-callsign-display');
+    
+    if (callsignDisplay) {
+      callsignDisplay.textContent = callsign || 'N0CALL';
+    }
+  }, [enabled, callsign]);
 
   // Separate effect to update stats display without recreating the entire control
   useEffect(() => {

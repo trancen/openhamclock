@@ -22,11 +22,15 @@ export const metadata = {
   version: '1.2.0'
 };
 
-export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
+export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemoryMode = false }) {
   const [markersRef, setMarkersRef] = useState([]);
   const [earthquakeData, setEarthquakeData] = useState([]);
   const previousQuakeIds = useRef(new Set());
   const isFirstLoad = useRef(true);
+  
+  // Low memory mode limits
+  const MAX_QUAKES = lowMemoryMode ? 20 : 100;
+  const REFRESH_INTERVAL = lowMemoryMode ? 600000 : 300000; // 10 min vs 5 min
 
   // Fetch earthquake data
   useEffect(() => {
@@ -41,19 +45,19 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         );
         const data = await response.json();
         console.log('Earthquakes fetched:', data.features?.length || 0, 'quakes');
-        setEarthquakeData(data.features || []);
+        // Limit earthquakes in low memory mode
+        const quakes = (data.features || []).slice(0, MAX_QUAKES);
+        setEarthquakeData(quakes);
       } catch (err) {
         console.error('Earthquake data fetch error:', err);
       }
     };
 
     fetchEarthquakes();
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchEarthquakes, 300000);
-    //const interval = setInterval(fetchEarthquakes, 60000);
+    const interval = setInterval(fetchEarthquakes, REFRESH_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [enabled]);
+  }, [enabled, MAX_QUAKES, REFRESH_INTERVAL]);
 
   // Add/remove markers with animation for new quakes
   useEffect(() => {

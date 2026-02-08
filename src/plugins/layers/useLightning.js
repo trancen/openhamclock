@@ -232,7 +232,7 @@ function addMinimizeToggle(element, storageKey) {
   });
 }
 
-export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
+export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemoryMode = false, units = 'metric' }) {
   const [strikeMarkers, setStrikeMarkers] = useState([]);
   const [lightningData, setLightningData] = useState([]);
   const [statsControl, setStatsControl] = useState(null);
@@ -243,6 +243,12 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
   const reconnectTimerRef = useRef(null);
   const strikesBufferRef = useRef([]);
   const previousStrikeIds = useRef(new Set());
+  const currentServerIndexRef = useRef(0); // Track which server we're using
+  const connectionAttemptsRef = useRef(0); // Track connection attempts
+  
+  // Low memory mode limits
+  const MAX_STRIKES = lowMemoryMode ? 100 : 500;
+  const STRIKE_RETENTION_MS = lowMemoryMode ? 60000 : 300000; // 1 min vs 5 min
 
   // Fetch WebSocket key from Blitzortung (fallback to 111)
   useEffect(() => {
@@ -252,19 +258,31 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     }
   }, [enabled, wsKey]);
 
-  // Connect to Blitzortung WebSocket
+  // Connect to Blitzortung WebSocket with fallback servers
   useEffect(() => {
     if (!enabled || !wsKey) return;
 
+    // Available Blitzortung WebSocket servers (tested and verified online)
+    // ws3, ws4, ws5, ws6, ws9, ws10 have certificate issues as of 2026-02
+    const servers = [
+      'wss://ws8.blitzortung.org',  // Primary (most reliable)
+      'wss://ws7.blitzortung.org',  // Backup 1
+      'wss://ws2.blitzortung.org',  // Backup 2
+      'wss://ws1.blitzortung.org'   // Backup 3
+    ];
+
     const connectWebSocket = () => {
       try {
-        console.log('[Lightning] Connecting to Blitzortung WebSocket...');
-        const ws = new WebSocket('wss://ws8.blitzortung.org');
+        const serverUrl = servers[currentServerIndexRef.current];
+        console.log(`[Lightning] Connecting to ${serverUrl} (attempt ${connectionAttemptsRef.current + 1})...`);
+        
+        const ws = new WebSocket(serverUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('[Lightning] WebSocket connected, sending key:', wsKey);
+          console.log(`[Lightning] Connected to ${serverUrl}, sending key:`, wsKey);
           ws.send(JSON.stringify({ a: wsKey }));
+          connectionAttemptsRef.current = 0; // Reset attempts on success
         };
 
         ws.onmessage = (event) => {
@@ -291,11 +309,11 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
               // Add to buffer
               strikesBufferRef.current.push(strike);
               
-              // Keep only last 30 minutes of strikes
-              const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-              strikesBufferRef.current = strikesBufferRef.current.filter(
-                s => s.timestamp > thirtyMinutesAgo
-              );
+              // Keep only strikes within retention window
+              const cutoffTime = Date.now() - STRIKE_RETENTION_MS;
+              strikesBufferRef.current = strikesBufferRef.current
+                .filter(s => s.timestamp > cutoffTime)
+                .slice(-MAX_STRIKES); // Keep only most recent MAX_STRIKES
 
               // Update state every second to batch updates
               if (!reconnectTimerRef.current) {
@@ -311,20 +329,49 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
         };
 
         ws.onerror = (error) => {
-          console.error('[Lightning] WebSocket error:', error);
+          console.error(`[Lightning] WebSocket error on ${servers[currentServerIndexRef.current]}:`, error);
+          connectionAttemptsRef.current++;
+          
+          // Try next server if this one fails
+          if (connectionAttemptsRef.current >= 3) {
+            console.log(`[Lightning] Failed to connect after 3 attempts, trying next server...`);
+            currentServerIndexRef.current = (currentServerIndexRef.current + 1) % servers.length;
+            connectionAttemptsRef.current = 0;
+          }
         };
 
         ws.onclose = () => {
-          console.log('[Lightning] WebSocket closed, reconnecting in 5s...');
+          const serverUrl = servers[currentServerIndexRef.current];
+          console.log(`[Lightning] WebSocket closed for ${serverUrl}`);
           wsRef.current = null;
           
-          // Reconnect after 5 seconds
+          // Increment connection attempts
+          connectionAttemptsRef.current++;
+          
+          // Try next server if too many failed attempts on current server
+          if (connectionAttemptsRef.current >= 3) {
+            console.log(`[Lightning] Too many failures on ${serverUrl}, rotating to next server...`);
+            currentServerIndexRef.current = (currentServerIndexRef.current + 1) % servers.length;
+            connectionAttemptsRef.current = 0;
+          }
+          
+          // Reconnect after 5 seconds if still enabled
           if (enabled) {
+            console.log(`[Lightning] Reconnecting to ${servers[currentServerIndexRef.current]} in 5s...`);
             setTimeout(connectWebSocket, 5000);
           }
         };
       } catch (err) {
-        console.error('[Lightning] Error connecting to WebSocket:', err);
+        console.error(`[Lightning] Error connecting to ${servers[currentServerIndexRef.current]}:`, err);
+        connectionAttemptsRef.current++;
+        
+        // Try next server on connection error
+        if (connectionAttemptsRef.current >= 3) {
+          console.log(`[Lightning] Too many connection errors, trying next server...`);
+          currentServerIndexRef.current = (currentServerIndexRef.current + 1) % servers.length;
+          connectionAttemptsRef.current = 0;
+        }
+        
         // Retry after 10 seconds
         if (enabled) {
           setTimeout(connectWebSocket, 10000);
@@ -722,7 +769,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     const nearbyNewStrikes = lightningData.filter(strike => {
       if (strike.timestamp < ONE_MINUTE_AGO) return false;
       
-      const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, 'km');
+      const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, units === 'imperial' ? 'mi' : 'km');
       return distance <= ALERT_RADIUS_KM;
     });
     
@@ -816,7 +863,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
           max-width: 280px;
         `;
         div.innerHTML = `
-          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">📍 Nearby Strikes (30km)</div>
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">📍 Nearby Strikes (${units === 'imperial' ? '19mi' : '30km'})</div>
           <div style="opacity: 0.7; font-size: 10px;">No recent strikes</div>
         `;
         
@@ -928,10 +975,10 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     const PROXIMITY_RADIUS_KM = 30;
     const now = Date.now();
 
-    // Find all strikes within 30km
+    // Find all strikes within 30km/19mi
     const nearbyStrikes = lightningData
       .map(strike => {
-        const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, 'km');
+        const distance = calculateDistance(stationLat, stationLon, strike.lat, strike.lon, units === 'imperial' ? 'mi' : 'km');
         return { ...strike, distance };
       })
       .filter(strike => strike.distance <= PROXIMITY_RADIUS_KM)
@@ -942,7 +989,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
     if (nearbyStrikes.length === 0) {
       contentHTML = `
         <div style="opacity: 0.7; font-size: 10px; text-align: center; padding: 10px 0;">
-          ✅ No strikes within 30km<br>
+          ✅ No strikes within ${units === 'imperial' ? '19mi' : '30km'}<br>
           <span style="font-size: 9px; color: var(--text-muted);">All clear</span>
         </div>
       `;
@@ -958,7 +1005,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
             ⚡ ${nearbyStrikes.length} strike${nearbyStrikes.length > 1 ? 's' : ''} detected
           </div>
           <div style="font-size: 10px;">
-            <strong>Closest:</strong> ${closestStrike.distance.toFixed(1)} km<br>
+            <strong>Closest:</strong> ${closestStrike.distance.toFixed(1)} ${units === 'imperial' ? 'mi' : 'km'}<br>
             <strong>Time:</strong> ${ageStr}<br>
             <strong>Polarity:</strong> ${closestStrike.polarity === 'positive' ? '+' : '-'} ${Math.round(closestStrike.intensity)} kA
           </div>
@@ -971,7 +1018,7 @@ export function useLayer({ enabled = false, opacity = 0.9, map = null }) {
               const timeStr = age < 60 ? `${age}s` : `${Math.floor(age / 60)}m`;
               return `
                 <div style="padding: 2px 0; border-bottom: 1px dotted var(--border-color);">
-                  ${idx + 1}. ${strike.distance.toFixed(1)} km • ${timeStr} • ${strike.polarity === 'positive' ? '+' : '-'}${Math.round(strike.intensity)} kA
+                  ${idx + 1}. ${strike.distance.toFixed(1)} ${units === 'imperial' ? 'mi' : 'km'} • ${timeStr} • ${strike.polarity === 'positive' ? '+' : '-'}${Math.round(strike.intensity)} kA
                 </div>
               `;
             }).join('')}

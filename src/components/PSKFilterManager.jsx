@@ -67,24 +67,26 @@ export const PSKFilterManager = ({ filters, onFilterChange, isOpen, onClose }) =
 
   const tabStyle = (active) => ({
     padding: '8px 16px',
-    background: active ? 'var(--bg-tertiary)' : 'transparent',
+    background: active ? 'var(--accent-amber)' : 'transparent',
     border: 'none',
-    borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-    color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
+    borderBottom: active ? '2px solid var(--accent-amber)' : '2px solid transparent',
+    color: active ? '#000' : 'var(--text-muted)',
     fontSize: '13px',
     cursor: 'pointer',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    fontWeight: active ? '600' : '400'
   });
 
   const chipStyle = (selected) => ({
     padding: '6px 12px',
-    background: selected ? 'rgba(0, 221, 255, 0.2)' : 'var(--bg-tertiary)',
-    border: `1px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
+    background: selected ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+    border: `1px solid ${selected ? 'var(--accent-amber)' : 'var(--border-color)'}`,
     borderRadius: '4px',
-    color: selected ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+    color: selected ? '#000' : 'var(--text-secondary)',
     fontSize: '12px',
     cursor: 'pointer',
-    fontFamily: 'JetBrains Mono, monospace'
+    fontFamily: 'JetBrains Mono, monospace',
+    fontWeight: selected ? '600' : '400'
   });
 
   const renderBandsTab = () => (

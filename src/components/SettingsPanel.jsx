@@ -7,7 +7,7 @@ import { calculateGridSquare } from '../utils/geo.js';
 import { useTranslation, Trans } from 'react-i18next';
 import { LANGUAGES } from '../lang/i18n.js';
 
-export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }) => {
+export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, satellites, satelliteFilters, onSatelliteFiltersChange }) => {
   const [callsign, setCallsign] = useState(config?.callsign || '');
   const [headerSize, setheaderSize] = useState(config?.headerSize || 1.0);
   const [gridSquare, setGridSquare] = useState('');
@@ -15,8 +15,12 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
   const [lon, setLon] = useState(config?.location?.lon || 0);
   const [theme, setTheme] = useState(config?.theme || 'dark');
   const [layout, setLayout] = useState(config?.layout || 'modern');
+  const [units, setUnits] = useState(config?.units || 'metric');
   const [timezone, setTimezone] = useState(config?.timezone || '');
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
+  const [customDxCluster, setCustomDxCluster] = useState(config?.customDxCluster || { enabled: false, host: '', port: 7300 });
+  const [lowMemoryMode, setLowMemoryMode] = useState(config?.lowMemoryMode || false);
+  const [satelliteSearch, setSatelliteSearch] = useState('');
   const { t, i18n } = useTranslation();
 
   // Layer controls
@@ -31,8 +35,11 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
       setLon(config.location?.lon || 0);
       setTheme(config.theme || 'dark');
       setLayout(config.layout || 'modern');
+      setUnits(config.units || 'metric');
       setTimezone(config.timezone || '');
       setDxClusterSource(config.dxClusterSource || 'dxspider-proxy');
+      setCustomDxCluster(config.customDxCluster || { enabled: false, host: '', port: 7300 });
+      setLowMemoryMode(config.lowMemoryMode || false);
       if (config.location?.lat && config.location?.lon) {
         setGridSquare(calculateGridSquare(config.location.lat, config.location.lon));
       }
@@ -153,8 +160,11 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
       location: { lat: parseFloat(lat), lon: parseFloat(lon) },
       theme,
       layout,
+      units,
       timezone,
-      dxClusterSource
+      dxClusterSource,
+      customDxCluster,
+      lowMemoryMode
     });
     onClose();
   };
@@ -179,7 +189,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
     classic: t('station.settings.layout.classic.describe'),
     tablet: t('station.settings.layout.tablet.describe'),
     compact: t('station.settings.layout.compact.describe'),
-    dockable: 'Resizable, draggable panels with tabs'
+    dockable: t('station.settings.layout.dockable.describe')
   };
 
   return (
@@ -238,7 +248,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               fontFamily: 'JetBrains Mono, monospace'
             }}
           >
-            ⌇ Station
+            {t('station.settings.tab1.title')}
           </button>
           <button
             onClick={() => setActiveTab('layers')}
@@ -255,7 +265,24 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               fontFamily: 'JetBrains Mono, monospace'
             }}
           >
-            ⊞ {t('station.settings.layers.title')}
+            {t('station.settings.tab2.title')}
+          </button>
+          <button
+            onClick={() => setActiveTab('satellites')}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: activeTab === 'satellites' ? 'var(--accent-amber)' : 'transparent',
+              border: 'none',
+              borderRadius: '6px 6px 0 0',
+              color: activeTab === 'satellites' ? '#000' : 'var(--text-secondary)',
+              fontSize: '13px',
+              cursor: 'pointer',
+              fontWeight: activeTab === 'satellites' ? '700' : '400',
+              fontFamily: 'JetBrains Mono, monospace'
+            }}
+          >
+            {t('station.settings.tab3.title')}
           </button>
         </div>
 
@@ -346,7 +373,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                 type="text"
                 value={gridSquare}
                 onChange={(e) => handleGridChange(e.target.value)}
-                placeholder="FN20nc"
+                placeholder={t('station.settings.locator.placeholder')}
                 maxLength={6}
                 style={{
                   width: '100%',
@@ -458,6 +485,37 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               </div>
             </div>
 
+            {/* Units */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Units
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {['imperial', 'metric'].map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnits(u)}
+                    style={{
+                      padding: '12px',
+                      background: units === u ? 'var(--accent-cyan)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${units === u ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
+                      borderRadius: '6px',
+                      color: units === u ? '#000' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: units === u ? '700' : '400',
+                      textTransform: 'capitalize'
+                    }}
+                  >
+                    {u === 'imperial' ? '🇺🇸' : '🌍'} {u}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {units === 'imperial' ? '°F, miles (mi)' : '°C, kilometers (km)'}
+              </div>
+            </div>
+
             {/* Layout */}
             <div style={{ marginBottom: '8px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -479,7 +537,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                       fontWeight: layout === l ? '600' : '400'
                     }}
                   >
-                    {l === 'modern' ? '🖥️' : l === 'classic' ? '📺' : l === 'tablet' ? '📱' : l === 'compact' ? '📊' : '⊞'} {l === 'dockable' ? 'Dockable' : t('station.settings.layout.' + l)}
+                    {l === 'modern' ? '🖥️' : l === 'classic' ? '📺' : l === 'tablet' ? '📱' : l === 'compact' ? '📊' : '⊞'} {l === 'dockable' ? t('station.settings.layout.dockable') : t('station.settings.layout.' + l)}
                   </button>
                 ))}
               </div>
@@ -489,7 +547,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
               {layout === 'dockable' && onResetLayout && (
                 <button
                   onClick={() => {
-                    if (confirm('Reset panel layout to default?')) {
+                    if (confirm(t('station.settings.layout.reset.confirm'))) {
                       onResetLayout();
                     }
                   }}
@@ -511,7 +569,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                     <path d="M3 3v5h5" />
                   </svg>
-                  Reset Panel Layout
+                  {t('station.settings.layout.reset.button')}
                 </button>
               )}
             </div>
@@ -519,7 +577,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
             {/* DX Cluster Source */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                🕐 Timezone
+                {t('station.settings.timezone')}
               </label>
               <select
                 value={timezone}
@@ -536,8 +594,8 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                   cursor: 'pointer'
                 }}
               >
-                <option value="">Auto (browser default)</option>
-                <optgroup label="North America">
+                <option value="">{t('station.settings.timezone.auto')}</option>
+                <optgroup label={t('station.settings.timezone.group.northAmerica')}>
                   <option value="America/New_York">Eastern (New York)</option>
                   <option value="America/Chicago">Central (Chicago)</option>
                   <option value="America/Denver">Mountain (Denver)</option>
@@ -554,7 +612,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                   <option value="America/Vancouver">BC (Vancouver)</option>
                   <option value="America/Mexico_City">Mexico City</option>
                 </optgroup>
-                <optgroup label="Europe">
+                <optgroup label={t('station.settings.timezone.group.europe')}>
                   <option value="Europe/London">UK (London)</option>
                   <option value="Europe/Dublin">Ireland (Dublin)</option>
                   <option value="Europe/Paris">Central Europe (Paris)</option>
@@ -572,7 +630,7 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                   <option value="Europe/Zurich">Switzerland (Zurich)</option>
                   <option value="Europe/Lisbon">Portugal (Lisbon)</option>
                 </optgroup>
-                <optgroup label="Asia & Pacific">
+                <optgroup label={t('station.settings.timezone.group.asiaPacific')}>
                   <option value="Asia/Tokyo">Japan (Tokyo)</option>
                   <option value="Asia/Seoul">Korea (Seoul)</option>
                   <option value="Asia/Shanghai">China (Shanghai)</option>
@@ -586,13 +644,14 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                   <option value="Asia/Bangkok">Thailand (Bangkok)</option>
                   <option value="Asia/Jakarta">Indonesia (Jakarta)</option>
                   <option value="Asia/Manila">Philippines (Manila)</option>
-                  <option value="Australia/Sydney">Australia Eastern (Sydney)</option>
+                  <option value="Australia/Brisbane">Australia Eastern (Brisbane)</option>
+                  <option value="Australia/Sydney">Australia Eastern (Sydney, Canberra, Melbourne, Hobart)</option>
                   <option value="Australia/Adelaide">Australia Central (Adelaide)</option>
                   <option value="Australia/Perth">Australia Western (Perth)</option>
                   <option value="Pacific/Auckland">New Zealand (Auckland)</option>
                   <option value="Pacific/Fiji">Fiji</option>
                 </optgroup>
-                <optgroup label="South America">
+                <optgroup label={t('station.settings.timezone.group.southAmerica')}>
                   <option value="America/Sao_Paulo">Brazil (São Paulo)</option>
                   <option value="America/Argentina/Buenos_Aires">Argentina (Buenos Aires)</option>
                   <option value="America/Santiago">Chile (Santiago)</option>
@@ -600,14 +659,14 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                   <option value="America/Lima">Peru (Lima)</option>
                   <option value="America/Caracas">Venezuela (Caracas)</option>
                 </optgroup>
-                <optgroup label="Africa">
+                <optgroup label={t('station.settings.timezone.group.africa')}>
                   <option value="Africa/Cairo">Egypt (Cairo)</option>
                   <option value="Africa/Johannesburg">South Africa (Johannesburg)</option>
                   <option value="Africa/Lagos">Nigeria (Lagos)</option>
                   <option value="Africa/Nairobi">Kenya (Nairobi)</option>
                   <option value="Africa/Casablanca">Morocco (Casablanca)</option>
                 </optgroup>
-                <optgroup label="Other">
+                <optgroup label={t('station.settings.timezone.group.other')}>
                   <option value="UTC">UTC</option>
                   <option value="Atlantic/Reykjavik">Iceland (Reykjavik)</option>
                   <option value="Atlantic/Azores">Azores</option>
@@ -616,13 +675,56 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                 </optgroup>
               </select>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Set this if your local time shows incorrectly (e.g. same as UTC).
-                Privacy browsers like Librewolf may spoof your timezone.
-                {timezone ? '' : ' Currently using browser default.'}
+                {t('station.settings.timezone.describe')}
+                {timezone ? '' : t('station.settings.timezone.currentDefault')}
               </div>
             </div>
 
-            {/* DX Cluster Source - original */}
+            {/* Low Memory Mode */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                🧠 Performance Mode
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setLowMemoryMode(false)}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    background: !lowMemoryMode ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${!lowMemoryMode ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: !lowMemoryMode ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: !lowMemoryMode ? '600' : '400'
+                  }}
+                >
+                  🚀 Full
+                </button>
+                <button
+                  onClick={() => setLowMemoryMode(true)}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    background: lowMemoryMode ? 'var(--accent-green)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${lowMemoryMode ? 'var(--accent-green)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: lowMemoryMode ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: lowMemoryMode ? '600' : '400'
+                  }}
+                >
+                  🪶 Low Memory
+                </button>
+              </div>
+              <div style={{ fontSize: '11px', color: lowMemoryMode ? 'var(--accent-green)' : 'var(--text-muted)', marginTop: '6px' }}>
+                {lowMemoryMode 
+                  ? '✓ Low Memory Mode: Reduced animations, fewer map markers, smaller spot limits. Recommended for systems with <8GB RAM.'
+                  : 'Full Mode: All features enabled. Requires 8GB+ RAM for best performance.'}
+              </div>
+            </div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 {t('station.settings.dx.title')}
@@ -646,11 +748,82 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                 <option value="hamqth">{t('station.settings.dx.option2')}</option>
                 <option value="dxwatch">{t('station.settings.dx.option3')}</option>
                 <option value="auto">{t('station.settings.dx.option4')}</option>
+                <option value="custom">{t('station.settings.dx.custom.option')}</option>
               </select>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
                 {t('station.settings.dx.describe')}
               </div>
             </div>
+
+            {/* Custom DX Cluster Settings */}
+            {dxClusterSource === 'custom' && (
+              <div style={{ 
+                marginBottom: '20px', 
+                padding: '16px', 
+                background: 'var(--bg-tertiary)', 
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <label style={{ display: 'block', marginBottom: '12px', color: 'var(--accent-cyan)', fontSize: '12px', fontWeight: '600' }}>
+                  {t('station.settings.dx.custom.title')}
+                </label>
+                
+                {/* Host */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-muted)', fontSize: '11px' }}>
+                    {t('station.settings.dx.custom.host')}
+                  </label>
+                  <input
+                    type="text"
+                    value={customDxCluster.host}
+                    onChange={(e) => setCustomDxCluster({ ...customDxCluster, host: e.target.value })}
+                    placeholder={t('station.settings.dx.custom.host.placeholder')}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      fontFamily: 'JetBrains Mono, monospace'
+                    }}
+                  />
+                </div>
+
+                {/* Port */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', color: 'var(--text-muted)', fontSize: '11px' }}>
+                    {t('station.settings.dx.custom.port')}
+                  </label>
+                  <input
+                    type="number"
+                    value={customDxCluster.port}
+                    onChange={(e) => setCustomDxCluster({ ...customDxCluster, port: parseInt(e.target.value) || 7300 })}
+                    placeholder={t('station.settings.dx.custom.port.placeholder')}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      fontFamily: 'JetBrains Mono, monospace'
+                    }}
+                  />
+                </div>
+
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+                  {t('station.settings.dx.custom.callsign', { callsign: callsign || 'N0CALL' })}
+                  {' '}
+                  {t('station.settings.dx.custom.commonPorts')}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--accent-amber)', marginTop: '8px' }}>
+                  {t('station.settings.dx.custom.warning')}
+                </div>
+              </div>
+            )}
 
             {/* Language */}
             <div style={{ marginBottom: '20px' }}>
@@ -788,6 +961,167 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout }
                 {t('station.settings.layers.noLayers')}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Satellites Tab */}
+        {activeTab === 'satellites' && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '16px',
+              paddingBottom: '12px',
+              borderBottom: '1px solid var(--border-color)'
+            }}>
+              <button
+                onClick={() => {
+                  const allSats = (satellites || []).map(s => s.name);
+                  onSatelliteFiltersChange(allSats);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #00ffff',
+                  borderRadius: '4px',
+                  color: '#00ffff',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono'
+                }}
+              >{t('station.settings.satellites.selectAll')}</button>
+              <button
+                onClick={() => onSatelliteFiltersChange([])}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #ff6666',
+                  borderRadius: '4px',
+                  color: '#ff6666',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'JetBrains Mono'
+                }}
+              >{t('station.settings.satellites.clear')}</button>
+            </div>
+            
+            <div style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              marginBottom: '12px'
+            }}>
+              {satelliteFilters.length === 0 
+                ? t('station.settings.satellites.showAll')
+                : t('station.settings.satellites.selectedCount', { count: satelliteFilters.length })}
+            </div>
+            
+            {/* Search Box */}
+            <div style={{
+              position: 'relative',
+              marginBottom: '12px'
+            }}>
+              <input
+                type="text"
+                value={satelliteSearch}
+                onChange={(e) => setSatelliteSearch(e.target.value)}
+                placeholder="🔍 Search satellites..."
+                style={{
+                  width: '100%',
+                  padding: '8px 32px 8px 12px',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+              {satelliteSearch && (
+                <button
+                  onClick={() => setSatelliteSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ff6666',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    padding: '4px 8px'
+                  }}
+                >×</button>
+              )}
+            </div>
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '8px',
+              maxHeight: '400px',
+              overflowY: 'auto'
+            }}>
+              {(satellites || [])
+                .filter(sat => 
+                  !satelliteSearch || 
+                  sat.name.toLowerCase().includes(satelliteSearch.toLowerCase())
+                )
+                .map(sat => {
+                const isSelected = satelliteFilters.includes(sat.name);
+                return (
+                  <button
+                    key={sat.name}
+                    onClick={() => {
+                      if (isSelected) {
+                        onSatelliteFiltersChange(satelliteFilters.filter(n => n !== sat.name));
+                      } else {
+                        onSatelliteFiltersChange([...satelliteFilters, sat.name]);
+                      }
+                    }}
+                    style={{
+                      background: isSelected ? 'rgba(0, 255, 255, 0.15)' : 'var(--bg-tertiary)',
+                      border: `1px solid ${isSelected ? '#00ffff' : 'var(--border-color)'}`,
+                      borderRadius: '6px',
+                      padding: '10px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: 'var(--text-primary)',
+                      fontFamily: 'JetBrains Mono',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span style={{
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '3px',
+                      border: `2px solid ${isSelected ? '#00ffff' : '#666'}`,
+                      background: isSelected ? '#00ffff' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      flexShrink: 0
+                    }}>
+                      {isSelected && '✓'}
+                    </span>
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <div style={{ 
+                        color: isSelected ? '#00ffff' : 'var(--text-primary)',
+                        fontWeight: '600',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>{sat.name}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

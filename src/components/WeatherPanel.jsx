@@ -4,10 +4,12 @@
  * for a given location. Uses Open-Meteo API via the useWeather hook.
  */
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWeather } from '../hooks';
 import { usePanelResize } from '../contexts';
 
 export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) => {
+  const { t } = useTranslation();
   const [weatherExpanded, setWeatherExpanded] = useState(() => {
     try { return localStorage.getItem('openhamclock_weatherExpanded') === 'true'; } catch { return false; }
   });
@@ -108,7 +110,7 @@ export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) =
               fontWeight: '600',
               flexShrink: 0,
             }}
-            title={`Switch to °${tempUnit === 'F' ? 'C' : 'F'}`}
+            title={t('weather.switchUnit', { unit: tempUnit === 'F' ? 'C' : 'F' })}
           >
             °{tempUnit === 'F' ? 'C' : 'F'}
           </button>
@@ -121,7 +123,7 @@ export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) =
           {/* Feels like + hi/lo */}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '8px', fontFamily: 'JetBrains Mono, monospace' }}>
             {w.feelsLike !== w.temp && (
-              <span style={{ color: 'var(--text-muted)' }}>Feels like {w.feelsLike}{deg}</span>
+              <span style={{ color: 'var(--text-muted)' }}>{t('weather.feelsLike', { temp: `${w.feelsLike}${deg}` })}</span>
             )}
             {w.todayHigh != null && (
               <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>
@@ -141,42 +143,42 @@ export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) =
             fontFamily: 'JetBrains Mono, monospace',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>💨 Wind</span>
+              <span style={{ color: 'var(--text-muted)' }}>{t('weather.wind')}</span>
               <span style={{ color: 'var(--text-secondary)' }}>{w.windDir} {w.windSpeed} {wind}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>💧 Humidity</span>
+              <span style={{ color: 'var(--text-muted)' }}>{t('weather.humidity')}</span>
               <span style={{ color: 'var(--text-secondary)' }}>{w.humidity}%</span>
             </div>
             {w.windGusts > w.windSpeed + 5 && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>🌬️ Gusts</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('weather.gusts')}</span>
                 <span style={{ color: 'var(--text-secondary)' }}>{w.windGusts} {wind}</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>🌡️ Dew Pt</span>
+              <span style={{ color: 'var(--text-muted)' }}>{t('weather.dewPoint')}</span>
               <span style={{ color: 'var(--text-secondary)' }}>{w.dewPoint}{deg}</span>
             </div>
             {w.pressure && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>🔵 Pressure</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{w.pressure} hPa</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('weather.pressure')}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{w.pressure} {t('weather.hpa')}</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>☁️ Clouds</span>
+              <span style={{ color: 'var(--text-muted)' }}>{t('weather.clouds')}</span>
               <span style={{ color: 'var(--text-secondary)' }}>{w.cloudCover}%</span>
             </div>
             {w.visibility && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>👁️ Vis</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('weather.visibility')}</span>
                 <span style={{ color: 'var(--text-secondary)' }}>{w.visibility} {vis}</span>
               </div>
             )}
             {w.uvIndex > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>☀️ UV</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('weather.uv')}</span>
                 <span style={{ color: w.uvIndex >= 8 ? '#ef4444' : w.uvIndex >= 6 ? '#f97316' : w.uvIndex >= 3 ? '#eab308' : 'var(--text-secondary)' }}>
                   {w.uvIndex.toFixed(1)}
                 </span>
@@ -191,7 +193,7 @@ export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) =
               paddingTop: '8px',
               borderTop: '1px solid var(--border-color)',
             }}>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '600' }}>FORECAST</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '600' }}>{t('weather.forecast')}</div>
               <div style={{ display: 'flex', gap: '4px' }}>
                 {w.daily.map((day, i) => (
                   <div key={i} style={{
@@ -202,7 +204,7 @@ export const WeatherPanel = ({ location, tempUnit, onTempUnitChange, nodeId }) =
                     borderRadius: '4px',
                     fontSize: '10px',
                   }}>
-                    <div style={{ color: 'var(--text-muted)', fontWeight: '600', marginBottom: '2px' }}>{i === 0 ? 'Today' : day.date}</div>
+                    <div style={{ color: 'var(--text-muted)', fontWeight: '600', marginBottom: '2px' }}>{i === 0 ? t('weather.today') : day.date}</div>
                     <div style={{ fontSize: '16px', lineHeight: 1.2 }}>{day.icon}</div>
                     <div style={{ fontFamily: 'JetBrains Mono, monospace', marginTop: '2px' }}>
                       <span style={{ color: 'var(--accent-amber)' }}>{day.high}°</span>
