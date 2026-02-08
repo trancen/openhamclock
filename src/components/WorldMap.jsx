@@ -42,8 +42,7 @@ export const WorldMap = ({
   hoveredSpot,
   callsign = 'N0CALL',
   hideOverlays,
-  lowMemoryMode = false,
-  units = 'metric'
+  lowMemoryMode = false
 }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);

@@ -232,7 +232,7 @@ function addMinimizeToggle(element, storageKey) {
   });
 }
 
-export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemoryMode = false, units = 'metric' }) {
+export function useLayer({ enabled = false, opacity = 0.9, map = null, lowMemoryMode = false }) {
   const [strikeMarkers, setStrikeMarkers] = useState([]);
   const [lightningData, setLightningData] = useState([]);
   const [statsControl, setStatsControl] = useState(null);
