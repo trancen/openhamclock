@@ -41,8 +41,10 @@ export const DEFAULT_LAYOUT = {
             weight: 50,
             id: 'left-bottom-tabset',
             children: [
+              { type: 'tab', name: 'Ambient', component: 'ambient', id: 'ambient-tab' },
               { type: 'tab', name: 'Solar', component: 'solar', id: 'solar-tab' },
               { type: 'tab', name: 'Propagation', component: 'propagation', id: 'propagation-tab' }
+              { type: 'tab', name: 'Band Health', component: 'band-health', id: 'band-health-tab' }
             ]
           }
         ]
@@ -88,8 +90,10 @@ export const DEFAULT_LAYOUT = {
 export const PANEL_DEFINITIONS = {
   'de-location': { name: 'DE Location', icon: '📍', description: 'Your station location and weather' },
   'dx-location': { name: 'DX Target', icon: '🎯', description: 'Target location for DXing' },
+  'ambient': { name: 'Ambient Weather', icon: '🌦️', description: 'AmbientWeather.net station data' },
   'solar': { name: 'Solar', icon: '☀️', description: 'Sunspot numbers and solar flux' },
   'propagation': { name: 'Propagation', icon: '📡', description: 'Band conditions and forecasts' },
+  'band-health': { name: 'HF Band Health', icon: '📶', description: 'Observed band usability from DX cluster spots' },
   'dx-cluster': { name: 'DX Cluster', icon: '📻', description: 'Live DX spots from cluster' },
   'psk-reporter': { name: 'PSK Reporter', icon: '📡', description: 'Digital mode spots and WSJT-X' },
   'dxpeditions': { name: 'DXpeditions', icon: '🏝️', description: 'Upcoming DXpeditions' },
