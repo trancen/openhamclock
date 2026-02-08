@@ -273,6 +273,7 @@ export default function ClassicLayout(props) {
             showPSKReporter={mapLayers.showPSKReporter}
             wsjtxSpots={wsjtxMapSpots}
             showWSJTX={mapLayers.showWSJTX}
+            showDxNews={config.showDxNews}
             onToggleSatellites={toggleSatellites}
             hoveredSpot={hoveredSpot}
             callsign={config.callsign}
@@ -506,6 +507,7 @@ export default function ClassicLayout(props) {
             showPSKReporter={mapLayers.showPSKReporter}
             wsjtxSpots={wsjtxMapSpots}
             showWSJTX={mapLayers.showWSJTX}
+            showDxNews={config.showDxNews}
             onToggleSatellites={toggleSatellites}
             hoveredSpot={hoveredSpot}
             hideOverlays={true}
@@ -647,16 +649,18 @@ export default function ClassicLayout(props) {
           </div>
 
           {/* DX News - sidebar footer */}
-          <div style={{
-            flexShrink: 0,
-            borderTop: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
-            height: '28px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <DXNewsTicker sidebar={true} />
-          </div>
+          {config.showDxNews && (
+            <div style={{
+              flexShrink: 0,
+              borderTop: '1px solid var(--border-color)',
+              background: 'var(--bg-panel)',
+              height: '28px',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <DXNewsTicker sidebar={true} />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -867,6 +871,7 @@ export default function ClassicLayout(props) {
             showPSKReporter={mapLayers.showPSKReporter}
             wsjtxSpots={wsjtxMapSpots}
             showWSJTX={mapLayers.showWSJTX}
+            showDxNews={config.showDxNews}
             onToggleSatellites={toggleSatellites}
             hoveredSpot={hoveredSpot}
             hideOverlays={true}
@@ -978,16 +983,18 @@ export default function ClassicLayout(props) {
           </div>
 
           {/* DX News - sidebar footer */}
-          <div style={{
-            flexShrink: 0,
-            borderTop: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
-            height: '28px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <DXNewsTicker sidebar={true} />
-          </div>
+          {config.showDxNews && (
+            <div style={{
+              flexShrink: 0,
+              borderTop: '1px solid var(--border-color)',
+              background: 'var(--bg-panel)',
+              height: '28px',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <DXNewsTicker sidebar={true} />
+            </div>
+          )}
         </div>
       </div>
     </div>

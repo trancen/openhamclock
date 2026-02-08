@@ -39,6 +39,7 @@ export const WorldMap = ({
   showSatellites, 
   showPSKReporter,
   showWSJTX,
+  showDxNews = true,
   onToggleSatellites, 
   hoveredSpot,
   callsign = 'N0CALL',
@@ -930,7 +931,7 @@ export const WorldMap = ({
       )}
       
       {/* DX News Ticker - left side of bottom bar */}
-      {!hideOverlays && <DXNewsTicker />}
+      {!hideOverlays && showDxNews && <DXNewsTicker />}
 
       {/* Legend - centered above news ticker */}
       {!hideOverlays && (

@@ -238,6 +238,7 @@ export const DockableApp = ({
         showPSKReporter={mapLayers.showPSKReporter}
         wsjtxSpots={wsjtxMapSpots}
         showWSJTX={mapLayers.showWSJTX}
+        showDxNews={config.showDxNews}
         onToggleSatellites={toggleSatellites}
         hoveredSpot={hoveredSpot}
         leftSidebarVisible={true}
