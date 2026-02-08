@@ -13,6 +13,7 @@ export const Header = ({
   localWeather,
   spaceWeather,
   solarIndices,
+  bandConditions,
   use12Hour,
   onTimeFormatToggle,
   onSettingsClick,
@@ -129,6 +130,27 @@ export const Header = ({
           <span style={{ color: 'var(--text-muted)' }}>SSN </span>
           <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || spaceWeather?.data?.sunspotNumber || '--'}</span>
         </div>
+        {bandConditions?.extras?.aIndex && (
+          <div>
+            <span style={{ color: 'var(--text-muted)' }}>A </span>
+            <span style={{ color: parseInt(bandConditions.extras.aIndex) >= 20 ? 'var(--accent-red)' : parseInt(bandConditions.extras.aIndex) >= 10 ? 'var(--accent-amber)' : 'var(--accent-green)', fontWeight: '700' }}>
+              {bandConditions.extras.aIndex}
+            </span>
+          </div>
+        )}
+        {bandConditions?.extras?.geomagField && (
+          <div>
+            <span style={{ 
+              fontSize: '10px',
+              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' : 
+                     bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' : 
+                     'var(--accent-amber)',
+              fontWeight: '600'
+            }}>
+              {bandConditions.extras.geomagField}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Settings & Fullscreen Buttons */}

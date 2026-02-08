@@ -263,6 +263,8 @@ app.use('/api', (req, res, next) => {
     cacheDuration = 300; // 5 minutes (space weather updates every 5 min)
   } else if (path.includes('/propagation')) {
     cacheDuration = 600; // 10 minutes
+  } else if (path.includes('/n0nbh') || path.includes('/hamqsl')) {
+    cacheDuration = 3600; // 1 hour (N0NBH updates every 3 hours)
   } else if (path.includes('/pota') || path.includes('/sota')) {
     cacheDuration = 120; // 2 minutes
   } else if (path.includes('/pskreporter')) {
@@ -1388,33 +1390,106 @@ app.get('/api/sota/spots', async (req, res) => {
   }
 });
 
-// HamQSL cache (5 minutes)
-let hamqslCache = { data: null, timestamp: 0 };
-const HAMQSL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// N0NBH / HamQSL cache (1 hour - N0NBH data updates every 3 hours, they ask for no more than 15-min refreshes)
+let n0nbhCache = { data: null, timestamp: 0 };
+const N0NBH_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-// HamQSL Band Conditions
-app.get('/api/hamqsl/conditions', async (req, res) => {
+// Parse N0NBH solarxml.php XML into clean JSON
+function parseN0NBHxml(xml) {
+  const get = (tag) => {
+    const m = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+    return m ? m[1].trim() : null;
+  };
+  
+  // Parse HF band conditions
+  const bandConditions = [];
+  const bandRegex = /<band name="([^"]+)" time="([^"]+)">([^<]+)<\/band>/g;
+  let match;
+  while ((match = bandRegex.exec(xml)) !== null) {
+    // Only grab from calculatedconditions (not VHF)
+    if (match[1].includes('m-') || match[1].includes('m ')) {
+      bandConditions.push({
+        name: match[1],
+        time: match[2],
+        condition: match[3]
+      });
+    }
+  }
+  
+  // Parse VHF conditions
+  const vhfConditions = [];
+  const vhfRegex = /<phenomenon name="([^"]+)" location="([^"]+)">([^<]+)<\/phenomenon>/g;
+  while ((match = vhfRegex.exec(xml)) !== null) {
+    vhfConditions.push({
+      name: match[1],
+      location: match[2],
+      condition: match[3]
+    });
+  }
+  
+  return {
+    source: 'N0NBH',
+    updated: get('updated'),
+    solarData: {
+      solarFlux: get('solarflux'),
+      aIndex: get('aindex'),
+      kIndex: get('kindex'),
+      kIndexNt: get('kindexnt'),
+      xray: get('xray'),
+      sunspots: get('sunspots'),
+      heliumLine: get('heliumline'),
+      protonFlux: get('protonflux'),
+      electronFlux: get('electonflux'), // N0NBH has the typo in their XML
+      aurora: get('aurora'),
+      normalization: get('normalization'),
+      latDegree: get('latdegree'),
+      solarWind: get('solarwind'),
+      magneticField: get('magneticfield'),
+      fof2: get('fof2'),
+      mufFactor: get('muffactor'),
+      muf: get('muf')
+    },
+    geomagField: get('geomagfield'),
+    signalNoise: get('signalnoise'),
+    bandConditions,
+    vhfConditions
+  };
+}
+
+// N0NBH Parsed Band Conditions + Solar Data
+app.get('/api/n0nbh', async (req, res) => {
   try {
-    // Return cached data if fresh
-    if (hamqslCache.data && (Date.now() - hamqslCache.timestamp) < HAMQSL_CACHE_TTL) {
-      res.set('Content-Type', 'application/xml');
-      return res.send(hamqslCache.data);
+    if (n0nbhCache.data && (Date.now() - n0nbhCache.timestamp) < N0NBH_CACHE_TTL) {
+      return res.json(n0nbhCache.data);
     }
     
     const response = await fetch('https://www.hamqsl.com/solarxml.php');
+    const xml = await response.text();
+    const parsed = parseN0NBHxml(xml);
+    
+    n0nbhCache = { data: parsed, timestamp: Date.now() };
+    res.json(parsed);
+  } catch (error) {
+    logErrorOnce('N0NBH', error.message);
+    if (n0nbhCache.data) return res.json(n0nbhCache.data);
+    res.status(500).json({ error: 'Failed to fetch N0NBH data' });
+  }
+});
+
+// Legacy raw XML endpoint (kept for backward compat)
+app.get('/api/hamqsl/conditions', async (req, res) => {
+  try {
+    // Use N0NBH cache if fresh, otherwise fetch
+    if (n0nbhCache.data && (Date.now() - n0nbhCache.timestamp) < N0NBH_CACHE_TTL) {
+      // Re-fetch raw XML from cache won't work since we only store parsed,
+      // so just fetch fresh if needed
+    }
+    const response = await fetch('https://www.hamqsl.com/solarxml.php');
     const text = await response.text();
-    
-    // Cache the response
-    hamqslCache = { data: text, timestamp: Date.now() };
-    
     res.set('Content-Type', 'application/xml');
     res.send(text);
   } catch (error) {
     logErrorOnce('HamQSL', error.message);
-    if (hamqslCache.data) {
-      res.set('Content-Type', 'application/xml');
-      return res.send(hamqslCache.data);
-    }
     res.status(500).json({ error: 'Failed to fetch band conditions' });
   }
 });

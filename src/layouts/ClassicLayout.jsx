@@ -413,6 +413,25 @@ export default function ClassicLayout(props) {
             <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.ssnShort')} </span>
             <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || '--'}</span>
           </span>
+          {bandConditions?.extras?.aIndex && (
+            <span>
+              <span style={{ color: 'var(--text-muted)' }}>A </span>
+              <span style={{ color: parseInt(bandConditions.extras.aIndex) >= 20 ? 'var(--accent-red)' : parseInt(bandConditions.extras.aIndex) >= 10 ? 'var(--accent-amber)' : 'var(--accent-green)', fontWeight: '700' }}>
+                {bandConditions.extras.aIndex}
+              </span>
+            </span>
+          )}
+          {bandConditions?.extras?.geomagField && (
+            <span style={{ 
+              fontSize: '12px',
+              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' : 
+                     bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' : 
+                     'var(--accent-amber)',
+              fontWeight: '600'
+            }}>
+              {bandConditions.extras.geomagField}
+            </span>
+          )}
         </div>
 
         {/* Controls */}
@@ -738,7 +757,7 @@ export default function ClassicLayout(props) {
           </div>
         </div>
         {/* Row 2: Solar indices inline */}
-        <div style={{ display: 'flex', gap: '16px', fontSize: '15px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '16px', fontSize: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
           <span>
             <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.sfiShort')} </span>
             <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>{solarIndices?.data?.sfi?.current || spaceWeather?.data?.solarFlux || '--'}</span>
@@ -753,6 +772,25 @@ export default function ClassicLayout(props) {
             <span style={{ color: 'var(--text-muted)' }}>{t('app.solar.ssnShort')} </span>
             <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || '--'}</span>
           </span>
+          {bandConditions?.extras?.aIndex && (
+            <span>
+              <span style={{ color: 'var(--text-muted)' }}>A </span>
+              <span style={{ color: parseInt(bandConditions.extras.aIndex) >= 20 ? 'var(--accent-red)' : parseInt(bandConditions.extras.aIndex) >= 10 ? 'var(--accent-amber)' : 'var(--accent-green)', fontWeight: '700' }}>
+                {bandConditions.extras.aIndex}
+              </span>
+            </span>
+          )}
+          {bandConditions?.extras?.geomagField && (
+            <span style={{ 
+              fontSize: '12px',
+              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' : 
+                     bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' : 
+                     'var(--accent-amber)',
+              fontWeight: '600'
+            }}>
+              {bandConditions.extras.geomagField}
+            </span>
+          )}
           {propagation.data && (
             <>
               <span>

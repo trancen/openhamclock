@@ -104,6 +104,7 @@ export default function ModernLayout(props) {
         localWeather={localWeather}
         spaceWeather={spaceWeather}
         solarIndices={solarIndices}
+        bandConditions={bandConditions}
         use12Hour={use12Hour}
         onTimeFormatToggle={handleTimeFormatToggle}
         onSettingsClick={() => setShowSettings(true)}

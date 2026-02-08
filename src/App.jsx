@@ -126,7 +126,7 @@ const App = () => {
 
   // Data hooks
   const spaceWeather = useSpaceWeather();
-  const bandConditions = useBandConditions(spaceWeather.data);
+  const bandConditions = useBandConditions();
   const solarIndices = useSolarIndices();
   const potaSpots = usePOTASpots();
   const dxClusterData = useDXClusterData(dxFilters, config);
