@@ -14,6 +14,7 @@ import {
   ContestPanel,
   SolarPanel,
   PropagationPanel,
+  BandHealthPanel,
   DXpeditionPanel,
   PSKReporterPanel,
   WeatherPanel,
@@ -49,6 +50,7 @@ export const DockableApp = ({
 
   // Weather
   localWeather,
+  dxWeather,
   tempUnit,
   setTempUnit,
   showDxWeather,
@@ -166,8 +168,16 @@ export const DockableApp = ({
     'de-location': { name: 'DE Location', icon: '📍' },
     'dx-location': { name: 'DX Target', icon: '🎯' },
     'analog-clock': { name: 'Analog Clock', icon: '🕐' },
-    'solar': { name: 'Solar', icon: '☀️' },
-    'propagation': { name: 'Propagation', icon: '📡' },
+    'solar': { name: 'Solar (all views)', icon: '☀️' },
+    'solar-image': { name: 'Solar Image', icon: '☀️', group: 'Solar' },
+    'solar-indices': { name: 'Solar Indices', icon: '📊', group: 'Solar' },
+    'solar-xray': { name: 'X-Ray Flux', icon: '⚡', group: 'Solar' },
+    'lunar': { name: 'Lunar Phase', icon: '🌙', group: 'Solar' },
+    'propagation': { name: 'Propagation (all views)', icon: '📡' },
+    'propagation-chart': { name: 'VOACAP Chart', icon: '📈', group: 'Propagation' },
+    'propagation-bars': { name: 'VOACAP Bars', icon: '📊', group: 'Propagation' },
+    'band-conditions': { name: 'Band Conditions', icon: '📶', group: 'Propagation' },
+    'band-health': { name: 'Band Health', icon: '📶' },
     'dx-cluster': { name: 'DX Cluster', icon: '📻' },
     'psk-reporter': { name: 'PSK Reporter', icon: '📡' },
     'dxpeditions': { name: 'DXpeditions', icon: '🏝️' },
@@ -202,7 +212,7 @@ export const DockableApp = ({
       </div>
 
       <WeatherPanel
-        location={config.location}
+        weatherData={localWeather}
         tempUnit={tempUnit}
         onTempUnitChange={(unit) => { setTempUnit(unit); try { localStorage.setItem('openhamclock_tempUnit', unit); } catch {} }}
         nodeId={nodeId}
@@ -249,7 +259,7 @@ export const DockableApp = ({
       </div>
       {showDxWeather && (
         <WeatherPanel
-          location={dxLocation}
+          weatherData={dxWeather}
           tempUnit={tempUnit}
           onTempUnitChange={(unit) => { setTempUnit(unit); try { localStorage.setItem('openhamclock_tempUnit', unit); } catch {} }}
           nodeId={nodeId}
@@ -287,6 +297,7 @@ export const DockableApp = ({
         rightSidebarVisible={true}
         callsign={config.callsign}
         lowMemoryMode={config.lowMemoryMode}
+        units={config.units}
       />
     </div>
   );
@@ -317,9 +328,45 @@ export const DockableApp = ({
         content = <SolarPanel solarIndices={solarIndices} />;
         break;
 
-      case 'propagation':
-        content = <PropagationPanel propagation={propagation.data} loading={propagation.loading} bandConditions={bandConditions} />;
+      case 'solar-image':
+        content = <SolarPanel solarIndices={solarIndices} forcedMode="image" />;
         break;
+
+      case 'solar-indices':
+        content = <SolarPanel solarIndices={solarIndices} forcedMode="indices" />;
+        break;
+
+      case 'solar-xray':
+        content = <SolarPanel solarIndices={solarIndices} forcedMode="xray" />;
+        break;
+
+      case 'lunar':
+        content = <SolarPanel solarIndices={solarIndices} forcedMode="lunar" />;
+        break;
+
+      case 'propagation':
+        content = <PropagationPanel propagation={propagation.data} loading={propagation.loading} bandConditions={bandConditions} units={config.units} propConfig={config.propagation} />;
+        break;
+
+      case 'propagation-chart':
+        content = <PropagationPanel propagation={propagation.data} loading={propagation.loading} bandConditions={bandConditions} units={config.units} propConfig={config.propagation} forcedMode="chart" />;
+        break;
+
+      case 'propagation-bars':
+        content = <PropagationPanel propagation={propagation.data} loading={propagation.loading} bandConditions={bandConditions} units={config.units} propConfig={config.propagation} forcedMode="bars" />;
+        break;
+
+      case 'band-conditions':
+        content = <PropagationPanel propagation={propagation.data} loading={propagation.loading} bandConditions={bandConditions} units={config.units} propConfig={config.propagation} forcedMode="bands" />;
+        break;
+
+      case 'band-health':
+        return (
+          <BandHealthPanel
+            dxSpots={dxClusterData.spots}
+            clusterFilters={dxFilters}
+          />
+        );
 
       case 'dx-cluster':
         content = (
@@ -417,7 +464,7 @@ export const DockableApp = ({
     }
     return content;
   }, [
-    config, deGrid, dxGrid, dxLocation, deSunTimes, dxSunTimes, showDxWeather, tempUnit, solarIndices,
+    config, deGrid, dxGrid, dxLocation, deSunTimes, dxSunTimes, showDxWeather, tempUnit, localWeather, dxWeather, solarIndices,
     propagation, bandConditions, dxClusterData, dxFilters, hoveredSpot, mapLayers, potaSpots,
     mySpots, satellites, filteredPskSpots, wsjtxMapSpots, dxpeditions, contests,
     pskFilters, wsjtx, handleDXChange, setDxFilters, setShowDXFilters, setShowPSKFilters,
@@ -544,21 +591,56 @@ export const DockableApp = ({
           >
             <h3 style={{ margin: '0 0 16px', color: '#00ffcc', fontFamily: 'JetBrains Mono', fontSize: '14px' }}>Add Panel</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {getAvailablePanels().map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => handleAddPanel(p.id)}
-                  style={{
-                    background: 'rgba(0,0,0,0.3)', border: '1px solid #2d3748', borderRadius: '6px',
-                    padding: '10px', cursor: 'pointer', textAlign: 'left'
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#00ffcc'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#2d3748'; }}
-                >
-                  <span style={{ fontSize: '16px', marginRight: '8px' }}>{p.icon}</span>
-                  <span style={{ color: '#e2e8f0', fontFamily: 'JetBrains Mono', fontSize: '12px' }}>{p.name}</span>
-                </button>
-              ))}
+              {(() => {
+                const panels = getAvailablePanels();
+                const ungrouped = panels.filter(p => !p.group);
+                const groups = {};
+                panels.filter(p => p.group).forEach(p => {
+                  if (!groups[p.group]) groups[p.group] = [];
+                  groups[p.group].push(p);
+                });
+                return (
+                  <>
+                    {ungrouped.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => handleAddPanel(p.id)}
+                        style={{
+                          background: 'rgba(0,0,0,0.3)', border: '1px solid #2d3748', borderRadius: '6px',
+                          padding: '10px', cursor: 'pointer', textAlign: 'left'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#00ffcc'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#2d3748'; }}
+                      >
+                        <span style={{ fontSize: '16px', marginRight: '8px' }}>{p.icon}</span>
+                        <span style={{ color: '#e2e8f0', fontFamily: 'JetBrains Mono', fontSize: '12px' }}>{p.name}</span>
+                      </button>
+                    ))}
+                    {Object.entries(groups).map(([group, items]) => (
+                      <React.Fragment key={group}>
+                        <div style={{ gridColumn: '1 / -1', fontSize: '10px', color: '#718096', fontFamily: 'JetBrains Mono', marginTop: '6px', borderTop: '1px solid #2d3748', paddingTop: '8px' }}>
+                          {group} Sub-panels
+                        </div>
+                        {items.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => handleAddPanel(p.id)}
+                            style={{
+                              background: 'rgba(0,0,0,0.2)', border: '1px solid #2d3748', borderRadius: '6px',
+                              padding: '8px 10px', cursor: 'pointer', textAlign: 'left'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = '#00ffcc'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2d3748'; }}
+                          >
+                            <span style={{ fontSize: '14px', marginRight: '6px' }}>{p.icon}</span>
+                            <span style={{ color: '#cbd5e0', fontFamily: 'JetBrains Mono', fontSize: '11px' }}>{p.name}</span>
+                          </button>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
             {getAvailablePanels().length === 0 && (
               <div style={{ color: '#718096', textAlign: 'center', padding: '20px' }}>All panels visible</div>

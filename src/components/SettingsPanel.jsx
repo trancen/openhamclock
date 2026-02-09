@@ -30,12 +30,16 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
   const [dxClusterSource, setDxClusterSource] = useState(config?.dxClusterSource || 'dxspider-proxy');
   const [customDxCluster, setCustomDxCluster] = useState(config?.customDxCluster || { enabled: false, host: '', port: 7300 });
   const [lowMemoryMode, setLowMemoryMode] = useState(config?.lowMemoryMode || false);
+  const [units, setUnits] = useState(config?.units || 'imperial');
+  const [propMode, setPropMode] = useState(config?.propagation?.mode || 'SSB');
+  const [propPower, setPropPower] = useState(config?.propagation?.power || 100);
   const [satelliteSearch, setSatelliteSearch] = useState('');
   const { t, i18n } = useTranslation();
 
   // Layer controls
   const [layers, setLayers] = useState([]);
   const [activeTab, setActiveTab] = useState('station');
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
 
   // Profile management state
   const [profiles, setProfilesList] = useState({});
@@ -63,6 +67,9 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       setDxClusterSource(config.dxClusterSource || 'dxspider-proxy');
       setCustomDxCluster(config.customDxCluster || { enabled: false, host: '', port: 7300 });
       setLowMemoryMode(config.lowMemoryMode || false);
+      setUnits(config.units || 'imperial');
+      setPropMode(config.propagation?.mode || 'SSB');
+      setPropPower(config.propagation?.power || 100);
       if (config.location?.lat && config.location?.lon) {
         setGridSquare(calculateGridSquare(config.location.lat, config.location.lon));
       }
@@ -88,6 +95,31 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
         }
       }, 200);
       return () => clearInterval(interval);
+    }
+  }, [isOpen, activeTab]);
+
+  // Track CTRL key press for reset popup feature
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Control') {
+        setIsCtrlPressed(true);
+      }
+    };
+    
+    const handleKeyUp = (e) => {
+      if (e.key === 'Control') {
+        setIsCtrlPressed(false);
+      }
+    };
+    
+    if (isOpen && activeTab === 'layers') {
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
     }
   }, [isOpen, activeTab]);
 
@@ -178,6 +210,26 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
     }
   };
 
+  // Reset popup positions for a specific layer
+  const handleResetPopupPositions = (layerId) => {
+    // Define all known popup position keys for each plugin
+    const popupKeys = {
+      'lightning': ['lightning-stats-position', 'lightning-proximity-position', 'lightning-stats-minimized', 'lightning-proximity-minimized'],
+      'wspr': ['wspr-filter-position', 'wspr-stats-position', 'wspr-legend-position', 'wspr-chart-position', 'wspr-filter-minimized', 'wspr-stats-minimized', 'wspr-legend-minimized', 'wspr-chart-minimized'],
+      'rbn': ['rbn-panel-position', 'rbn-panel-minimized'],
+      'grayline': ['grayline-position', 'grayline-minimized']
+    };
+    
+    const keysToRemove = popupKeys[layerId] || [];
+    
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Show feedback
+    alert(`Popup positions reset for ${layerId}. Please refresh the page to see the changes.`);
+  };
+
   const handleSave = () => {
     onSave({
       ...config,
@@ -189,7 +241,9 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
       timezone,
       dxClusterSource,
       customDxCluster,
-      lowMemoryMode
+      lowMemoryMode,
+      units,
+      propagation: { mode: propMode, power: parseFloat(propPower) || 100 }
     });
     onClose();
   };
@@ -691,6 +745,172 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
               </div>
             </div>
 
+            {/* Distance Units */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                📏 Distance Units
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setUnits('imperial')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    background: units === 'imperial' ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${units === 'imperial' ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: units === 'imperial' ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: units === 'imperial' ? '600' : '400'
+                  }}
+                >
+                  🇺🇸 Imperial (mi)
+                </button>
+                <button
+                  onClick={() => setUnits('metric')}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    background: units === 'metric' ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                    border: `1px solid ${units === 'metric' ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                    borderRadius: '6px',
+                    color: units === 'metric' ? '#000' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontWeight: units === 'metric' ? '600' : '400'
+                  }}
+                >
+                  🌍 Metric (km)
+                </button>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {units === 'imperial'
+                  ? 'Distances shown in miles throughout the application.'
+                  : 'Distances shown in kilometers throughout the application.'}
+              </div>
+            </div>
+
+            {/* Propagation Settings */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                ⌇ Propagation Mode & Power
+              </label>
+              
+              {/* Mode */}
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Operating Mode</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                  {[
+                    { id: 'SSB', label: 'SSB', desc: 'Voice' },
+                    { id: 'CW', label: 'CW', desc: 'Morse' },
+                    { id: 'FT8', label: 'FT8', desc: 'Weak sig' },
+                    { id: 'FT4', label: 'FT4', desc: 'Weak sig' },
+                    { id: 'WSPR', label: 'WSPR', desc: 'Beacon' },
+                    { id: 'JS8', label: 'JS8', desc: 'Chat' },
+                    { id: 'RTTY', label: 'RTTY', desc: 'Teletype' },
+                    { id: 'PSK31', label: 'PSK31', desc: 'PSK' }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setPropMode(m.id)}
+                      style={{
+                        padding: '6px 4px',
+                        background: propMode === m.id ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                        border: `1px solid ${propMode === m.id ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                        borderRadius: '4px',
+                        color: propMode === m.id ? '#000' : 'var(--text-secondary)',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        fontWeight: propMode === m.id ? '700' : '400',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        lineHeight: 1.2,
+                        textAlign: 'center'
+                      }}
+                      title={m.desc}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Power */}
+              <div style={{ marginBottom: '6px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>TX Power</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 1.2fr', gap: '4px', alignItems: 'center' }}>
+                  {[
+                    { w: 5, label: '5W', tip: 'QRP' },
+                    { w: 25, label: '25W', tip: 'Low' },
+                    { w: 100, label: '100W', tip: 'Std' },
+                    { w: 1500, label: '1.5kW', tip: 'Max' }
+                  ].map(p => (
+                    <button
+                      key={p.w}
+                      onClick={() => setPropPower(p.w)}
+                      style={{
+                        padding: '6px 4px',
+                        background: propPower === p.w ? 'var(--accent-amber)' : 'var(--bg-tertiary)',
+                        border: `1px solid ${propPower === p.w ? 'var(--accent-amber)' : 'var(--border-color)'}`,
+                        borderRadius: '4px',
+                        color: propPower === p.w ? '#000' : 'var(--text-secondary)',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        fontWeight: propPower === p.w ? '700' : '400',
+                        fontFamily: 'JetBrains Mono, monospace'
+                      }}
+                      title={p.tip}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <input
+                      type="number"
+                      value={propPower}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if (v > 0 && v <= 2000) setPropPower(v);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '5px 4px',
+                        background: 'var(--bg-tertiary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '4px',
+                        color: 'var(--text-primary)',
+                        fontSize: '11px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        textAlign: 'center',
+                        boxSizing: 'border-box'
+                      }}
+                      min="0.1"
+                      max="2000"
+                      step="1"
+                    />
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>W</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {(() => {
+                  const modeAdv = { SSB: 0, CW: 10, RTTY: 8, PSK31: 10, FT8: 34, FT4: 30, WSPR: 41, JS8: 37 };
+                  const adv = modeAdv[propMode] || 0;
+                  const pwrDb = 10 * Math.log10((propPower || 100) / 100);
+                  const margin = adv + pwrDb;
+                  return `Signal margin: ${margin >= 0 ? '+' : ''}${margin.toFixed(1)} dB vs SSB@100W — ${
+                    margin >= 30 ? 'extreme weak-signal advantage' :
+                    margin >= 15 ? 'strong advantage — marginal bands may open' :
+                    margin >= 5 ? 'moderate advantage' :
+                    margin >= -5 ? 'baseline conditions' :
+                    margin >= -15 ? 'reduced margin — some bands may close' :
+                    'significant disadvantage — only strong openings'
+                  }`;
+                })()}
+              </div>
+            </div>
+
             {/* Low Memory Mode */}
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -1004,6 +1224,55 @@ export const SettingsPanel = ({ isOpen, onClose, config, onSave, onResetLayout, 
                           cursor: 'pointer'
                         }}
                       />
+                      
+                      {/* Hidden reset popup button - visible when CTRL is pressed */}
+                      {isCtrlPressed && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '8px',
+                          background: 'rgba(255, 182, 77, 0.1)',
+                          border: '1px solid var(--accent-amber)',
+                          borderRadius: '6px'
+                        }}>
+                          <div style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            marginBottom: '6px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            RESET POPUPS
+                          </div>
+                          <button
+                            onClick={() => handleResetPopupPositions(layer.id)}
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              background: 'var(--accent-amber)',
+                              border: 'none',
+                              borderRadius: '4px',
+                              color: '#000',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              fontFamily: 'JetBrains Mono, monospace',
+                              cursor: 'pointer',
+                              transition: 'opacity 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.opacity = '0.8'}
+                            onMouseLeave={(e) => e.target.style.opacity = '1'}
+                          >
+                            Reset Popup Positions
+                          </button>
+                          <div style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            marginTop: '4px',
+                            textAlign: 'center'
+                          }}>
+                            This will reset all popup positions for this plugin
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

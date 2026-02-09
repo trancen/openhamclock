@@ -40,6 +40,7 @@ export default function ClassicLayout(props) {
     potaSpots,
     mySpots,
     satellites,
+    filteredSatellites,
     mapLayers,
     dxFilters,
     filteredPskSpots,
@@ -250,7 +251,7 @@ export default function ClassicLayout(props) {
                   }
                 }}
               >
-                <span style={{ color: '#ffff00' }}>{parseFloat(spot.freq).toFixed(1)}</span>
+                <span style={{ color: '#ffff00' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
                 <span style={{ color: '#00ffff' }}>{spot.call}</span>
                 <span style={{ color: '#888' }}>{spot.time || '--'}</span>
               </div>
@@ -269,7 +270,7 @@ export default function ClassicLayout(props) {
             mySpots={mySpots.data}
             dxPaths={dxClusterData.paths}
             dxFilters={dxFilters}
-            satellites={satellites.data}
+            satellites={filteredSatellites}
             pskReporterSpots={filteredPskSpots}
             showDXPaths={mapLayers.showDXPaths}
             showDXLabels={mapLayers.showDXLabels}
@@ -284,6 +285,7 @@ export default function ClassicLayout(props) {
             hoveredSpot={hoveredSpot}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
+          units={config.units}
           />
 
           {/* Settings button overlay */}
@@ -505,7 +507,7 @@ export default function ClassicLayout(props) {
             mySpots={mySpots.data}
             dxPaths={dxClusterData.paths}
             dxFilters={dxFilters}
-            satellites={satellites.data}
+            satellites={filteredSatellites}
             pskReporterSpots={filteredPskSpots}
             showDXPaths={mapLayers.showDXPaths}
             showDXLabels={mapLayers.showDXLabels}
@@ -521,6 +523,7 @@ export default function ClassicLayout(props) {
             hideOverlays={true}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
+          units={config.units}
           />
           {/* DX Lock button overlay */}
           <button
@@ -655,7 +658,7 @@ export default function ClassicLayout(props) {
                     }
                   }}
                 >
-                  <span style={{ color: getBandColor(spot.freq), fontWeight: '700' }}>{parseFloat(spot.freq).toFixed(1)}</span>
+                  <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq)/1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
                   <span style={{ color: 'var(--accent-cyan)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{spot.call}</span>
                   <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '12px' }}>{spot.time || '--'}</span>
                 </div>
@@ -878,7 +881,7 @@ export default function ClassicLayout(props) {
             mySpots={mySpots.data}
             dxPaths={dxClusterData.paths}
             dxFilters={dxFilters}
-            satellites={satellites.data}
+            satellites={filteredSatellites}
             pskReporterSpots={filteredPskSpots}
             showDXPaths={mapLayers.showDXPaths}
             showDXLabels={mapLayers.showDXLabels}
@@ -894,6 +897,7 @@ export default function ClassicLayout(props) {
             hideOverlays={true}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
+          units={config.units}
           />
           <div style={{
             position: 'absolute',
@@ -999,7 +1003,7 @@ export default function ClassicLayout(props) {
                   }
                 }}
               >
-                <span style={{ color: getBandColor(spot.freq), fontWeight: '700' }}>{parseFloat(spot.freq).toFixed(1)}</span>
+                <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq)/1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
                 <span style={{ color: 'var(--accent-cyan)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{spot.call}</span>
                 <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '12px' }}>{spot.time || '--'}</span>
               </div>

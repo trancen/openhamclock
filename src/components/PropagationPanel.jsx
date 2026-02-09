@@ -3,16 +3,20 @@
  * Toggleable between heatmap chart, bar chart, and band conditions view
  */
 import React, { useState } from 'react';
+import { formatDistance } from '../utils/geo.js';
 
-export const PropagationPanel = ({ propagation, loading, bandConditions }) => {
+export const PropagationPanel = ({ propagation, loading, bandConditions, forcedMode, units = 'imperial', propConfig = {} }) => {
   // Load view mode preference from localStorage
-  const [viewMode, setViewMode] = useState(() => {
+  const [internalViewMode, setViewMode] = useState(() => {
     try {
       const saved = localStorage.getItem('openhamclock_voacapViewMode');
       if (saved === 'bars' || saved === 'bands') return saved;
       return 'chart';
     } catch (e) { return 'chart'; }
   });
+
+  // When forcedMode is set, lock to that mode (used by dockable sub-panels)
+  const viewMode = forcedMode || internalViewMode;
   
   // Color scheme: 'stoplight' (green=good, default) or 'heatmap' (red=good, VOACAP traditional)
   const [colorScheme, setColorScheme] = useState(() => {
@@ -114,17 +118,42 @@ export const PropagationPanel = ({ propagation, loading, bandConditions }) => {
   const viewModeLabels = { chart: '▤ chart', bars: '▦ bars', bands: '◫ bands' };
 
   return (
-    <div className="panel" style={{ cursor: 'pointer' }} onClick={cycleViewMode}>
+    <div className="panel" style={{ cursor: forcedMode ? 'default' : 'pointer' }} onClick={forcedMode ? undefined : cycleViewMode}>
       <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>
           {viewMode === 'bands' ? '◫ BAND CONDITIONS' : '⌇ VOACAP'}
           {hasRealData && viewMode !== 'bands' && <span style={{ color: '#00ff88', fontSize: '10px', marginLeft: '4px' }}>●</span>}
         </span>
-        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-          {viewModeLabels[viewMode]} • click to toggle
-        </span>
+        {!forcedMode && (
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+            {viewModeLabels[viewMode]} • click to toggle
+          </span>
+        )}
       </div>
       
+      {/* Mode & Power indicator */}
+      {(propConfig.mode || propConfig.power) && viewMode !== 'bands' && (
+        <div style={{ 
+          display: 'flex', justifyContent: 'center', gap: '8px', 
+          padding: '2px 0 4px', fontSize: '10px', color: 'var(--text-muted)',
+          borderBottom: '1px solid var(--border-color)', marginBottom: '4px'
+        }}>
+          <span style={{ color: 'var(--accent-amber)' }}>
+            {propConfig.mode || 'SSB'}
+          </span>
+          <span>•</span>
+          <span>{(propConfig.power || 100) >= 1000 ? `${((propConfig.power || 100)/1000).toFixed(1)}kW` : `${propConfig.power || 100}W`}</span>
+          {propagation?.signalMargin !== undefined && propagation.signalMargin !== 0 && (
+            <>
+              <span>•</span>
+              <span style={{ color: propagation.signalMargin > 0 ? '#00ff88' : '#ff6644' }}>
+                {propagation.signalMargin > 0 ? '+' : ''}{propagation.signalMargin}dB
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {viewMode === 'bands' ? (
         /* Band Conditions Grid View - N0NBH Data */
         <div style={{ padding: '4px' }}>
@@ -241,7 +270,7 @@ export const PropagationPanel = ({ propagation, loading, bandConditions }) => {
             </div>
             <span style={{ color: hasRealData ? '#00ff88' : 'var(--text-muted)', fontSize: '10px' }}>
               {hasRealData 
-                ? `⌇ Iono: ${ionospheric?.source || 'ionosonde'}${ionospheric?.distance ? ` (${ionospheric.distance}km from path)` : ''}`
+                ? `⌇ Iono: ${ionospheric?.source || 'ionosonde'}${ionospheric?.distance ? ` (${formatDistance(ionospheric.distance, units)} from path)` : ''}`
                 : '⚡ estimated'
               }
             </span>
@@ -356,7 +385,7 @@ export const PropagationPanel = ({ propagation, loading, bandConditions }) => {
                   </span>
                 </div>
                 <div style={{ color: 'var(--text-muted)' }}>
-                  {Math.round(distance || 0)}km • {ionospheric?.foF2 ? `foF2=${ionospheric.foF2}` : `SSN=${solarData?.ssn}`}
+                  {formatDistance(distance || 0, units)} • {ionospheric?.foF2 ? `foF2=${ionospheric.foF2}` : `SSN=${solarData?.ssn}`}
                 </div>
               </div>
             </div>

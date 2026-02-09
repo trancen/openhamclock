@@ -135,10 +135,11 @@ const App = () => {
   const dxClusterData = useDXClusterData(dxFilters, config);
   const dxpeditions = useDXpeditions();
   const contests = useContests();
-  const propagation = usePropagation(config.location, dxLocation);
+  const propagation = usePropagation(config.location, dxLocation, config.propagation);
   const mySpots = useMySpots(config.callsign);
   const satellites = useSatellites(config.location);
   const localWeather = useWeather(config.location, tempUnit);
+  const dxWeather = useWeather(dxLocation, tempUnit);
   const pskReporter = usePSKReporter(config.callsign, {
     minutes: config.lowMemoryMode ? 5 : 30,
     enabled: config.callsign !== 'N0CALL',
@@ -244,6 +245,7 @@ const App = () => {
     tempUnit,
     setTempUnit,
     localWeather,
+    dxWeather,
     spaceWeather,
     solarIndices,
     bandConditions,
@@ -254,6 +256,7 @@ const App = () => {
     dxpeditions,
     contests,
     satellites,
+    filteredSatellites,
     pskReporter,
     wsjtx,
     filteredPskSpots,

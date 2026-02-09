@@ -12,6 +12,8 @@ import * as GrayLinePlugin from './layers/useGrayLine.js';
 import * as LightningPlugin from './layers/useLightning.js';
 import * as RBNPlugin from './layers/useRBN.js';
 import * as ContestQsosPlugin from './layers/useContestQsos.js';
+import * as GreatCirclePlugin from './layers/useGreatCircle.js';
+import * as VOACAPHeatmapPlugin from './layers/useVOACAPHeatmap.js';
 
 const layerPlugins = [
   OWMCloudsPlugin,
@@ -24,6 +26,8 @@ const layerPlugins = [
   RBNPlugin,
   ContestQsosPlugin,
   N3FJPLoggedQSOsPlugin,
+  GreatCirclePlugin,
+  VOACAPHeatmapPlugin,
 ];
 
 // Memoize the layer list - it never changes at runtime

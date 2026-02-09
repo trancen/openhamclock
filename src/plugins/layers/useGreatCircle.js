@@ -87,12 +87,19 @@ export function useLayer({ enabled = false, opacity = 0.8, map = null }) {
     const sp = Math.round(calculateBearing(de.lat, de.lon, dx.lat, dx.lon));
     const lp = (sp + 180) % 360;
     const km = Math.round(calculateDistance(de.lat, de.lon, dx.lat, dx.lon));
+    const distStr = (() => {
+      try {
+        const cfg = JSON.parse(localStorage.getItem('openhamclock_config') || '{}');
+        if (cfg.units === 'metric') return `${km.toLocaleString()} km`;
+      } catch (e) {}
+      return `${Math.round(km * 0.621371).toLocaleString()} mi`;
+    })();
 
     const popupContent = `
       <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">
         <b>Great Circle Path</b><br>
         SP: ${sp}° &nbsp; LP: ${lp}°<br>
-        Distance: ${km.toLocaleString()} km
+        Distance: ${distStr}
       </div>
     `;
 

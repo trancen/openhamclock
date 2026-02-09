@@ -11,6 +11,7 @@ import {
   getGreatCirclePoints 
 } from '../utils/geo.js';
 import { getBandColor } from '../utils/callsign.js';
+import { createTerminator } from '../utils/terminator.js';
 
 import { getAllLayers } from '../plugins/layerRegistry.js';
 import useLocalInstall from '../hooks/app/useLocalInstall.js';
@@ -44,7 +45,8 @@ export const WorldMap = ({
   callsign = 'N0CALL',
   showDXNews = true,
   hideOverlays,
-  lowMemoryMode = false
+  lowMemoryMode = false,
+  units = 'imperial'
 }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -153,8 +155,8 @@ export const WorldMap = ({
       crossOrigin: 'anonymous'
     }).addTo(map);
 
-    // Day/night terminator
-    terminatorRef.current = L.terminator({
+    // Day/night terminator (custom implementation spans multiple world copies)
+    terminatorRef.current = createTerminator({
       resolution: 2,
       fillOpacity: 0.35,
       fillColor: '#000020',
@@ -586,10 +588,10 @@ export const WorldMap = ({
             <b>⛊ ${sat.name}</b><br>
             <table style="font-size: 11px;">
               <tr><td>Mode:</td><td><b>${sat.mode || 'Unknown'}</b></td></tr>
-              <tr><td>Alt:</td><td>${sat.alt} km</td></tr>
+              <tr><td>Alt:</td><td>${units === 'imperial' ? Math.round(sat.alt * 0.621371).toLocaleString() + ' mi' : Math.round(sat.alt).toLocaleString() + ' km'}</td></tr>
               <tr><td>Az:</td><td>${sat.azimuth}°</td></tr>
               <tr><td>El:</td><td>${sat.elevation}°</td></tr>
-              <tr><td>Range:</td><td>${sat.range} km</td></tr>
+              <tr><td>Range:</td><td>${units === 'imperial' ? Math.round(sat.range * 0.621371).toLocaleString() + ' mi' : Math.round(sat.range).toLocaleString() + ' km'}</td></tr>
               <tr><td>Status:</td><td>${sat.visible ? '<span style="color:green">✓ Visible</span>' : '<span style="color:gray">Below horizon</span>'}</td></tr>
             </table>
           `)
