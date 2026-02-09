@@ -198,15 +198,31 @@ export const useWeather = (location, tempUnit = 'F') => {
 
           console.warn(`[Weather] Rate limited, retry #${retryCountRef.current} in ${delay / 1000}s`);
           retryRef.current = setTimeout(() => fetchWeather(true), delay);
-          return; // Keep existing data if any
+          return;
+        }
+
+        if (response.status === 202) {
+          // Server queued the request — retry in 10s to pick up cached result
+          setError({ message: 'Weather loading...', retryIn: 10 });
+          setLoading(false);
+          retryRef.current = setTimeout(() => fetchWeather(true), 10000);
+          return;
         }
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
 
+        // Server may return _pending inside a 200 if it served queued status
+        if (result._pending) {
+          setError({ message: 'Weather loading...', retryIn: 10 });
+          setLoading(false);
+          retryRef.current = setTimeout(() => fetchWeather(true), 10000);
+          return;
+        }
+
         setRawData(result);
         setError(null);
-        retryCountRef.current = 0; // Reset on success
+        retryCountRef.current = 0;
       } catch (err) {
         console.error('[Weather] Fetch error:', err.message);
 
@@ -222,7 +238,9 @@ export const useWeather = (location, tempUnit = 'F') => {
       }
     };
 
-    // Debounce: wait 2 seconds after last location change before fetching
+    // Debounce: wait 30 seconds after last location change before fetching.
+    // This absorbs rapid DX target changes — 2000+ users changing DX constantly
+    // would otherwise hammer the weather endpoint with unique coordinates.
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (retryRef.current) clearTimeout(retryRef.current);
     retryCountRef.current = 0; // Reset retries on location change
@@ -230,7 +248,7 @@ export const useWeather = (location, tempUnit = 'F') => {
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       fetchWeather();
-    }, 2000);
+    }, 30000);
 
     const interval = setInterval(fetchWeather, POLL_INTERVAL);
     return () => {

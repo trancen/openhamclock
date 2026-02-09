@@ -3612,7 +3612,7 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
     
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'OpenHamClock/15.1.3 (Amateur Radio Dashboard)',
+        'User-Agent': 'OpenHamClock/15.1.4 (Amateur Radio Dashboard)',
         'Accept': '*/*'
       },
       signal: controller.signal
@@ -4541,7 +4541,7 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'OpenHamClock/15.1.3 (Amateur Radio Dashboard)',
+        'User-Agent': 'OpenHamClock/15.1.4 (Amateur Radio Dashboard)',
         'Accept': '*/*'
       },
       signal: controller.signal
@@ -6803,7 +6803,8 @@ function generateStatusDashboard() {
       </table>
       <p style="font-size: 11px; color: #888; margin-top: 8px">
         Weather cache: ${weatherCache.size} entries (2h TTL) · NWS grid cache: ${nwsPointsCache.size} grids (permanent) ·
-        Total in-flight deduped: ${upstream.inFlight.size}
+        Total in-flight deduped: ${upstream.inFlight.size} ·
+        Open-Meteo queue: ${openMeteoQueue.queue.length} pending / ${openMeteoQueue.processed} processed / ${openMeteoQueue.dropped} dropped
       </p>
 
       <h2>📡 PSKReporter MQTT Proxy</h2>
@@ -6926,6 +6927,13 @@ app.get('/api/health', (req, res) => {
           ttlMinutes: Math.round(WEATHER_CACHE_TTL / 60000),
           staleTtlHours: Math.round(WEATHER_STALE_TTL / 3600000)
         },
+        openMeteoQueue: {
+          pending: openMeteoQueue.queue.length,
+          processing: openMeteoQueue.processing,
+          processed: openMeteoQueue.processed,
+          dropped: openMeteoQueue.dropped,
+          maxPerSecond: openMeteoQueue.maxPerSecond
+        },
         totalInFlight: upstream.inFlight.size,
         pskMqttProxy: {
           connected: pskMqtt.connected,
@@ -7025,12 +7033,13 @@ app.get('/api/config', (req, res) => {
 // US coordinates: NWS api.weather.gov (free, unlimited, no API key)
 // International: Open-Meteo (free, 10K/day limit)
 // All responses normalized to Open-Meteo format for the client.
-// Coordinates rounded to 1 decimal (~11km grid) to maximize cache hits.
+// Coordinates rounded to whole degrees (~111km grid) to maximize cache hits.
+// Weather doesn't vary meaningfully within 111km — this is the key to surviving 2000+ users.
 const weatherCache = new Map();          // key: "weather:lat,lon" → { data, timestamp, source }
 const nwsPointsCache = new Map();        // key: "lat,lon" → { gridId, gridX, gridY, stationUrl } (never expires)
 const WEATHER_CACHE_TTL = 2 * 60 * 60 * 1000;  // 2 hours
 const WEATHER_STALE_TTL = 6 * 60 * 60 * 1000;  // Serve stale data up to 6 hours if upstream is down
-const NWS_USER_AGENT = 'OpenHamClock/15.1.3 (https://openhamclock.com, Amateur Radio Dashboard)';
+const NWS_USER_AGENT = 'OpenHamClock/15.1.4 (https://openhamclock.com, Amateur Radio Dashboard)';
 
 // Rough bounding box for US coverage (CONUS + Alaska + Hawaii + territories)
 function isUSCoordinates(lat, lon) {
@@ -7282,7 +7291,76 @@ async function fetchNWSWeather(lat, lon) {
 }
 
 // Fetch weather from Open-Meteo (international fallback)
-async function fetchOpenMeteoWeather(lat, lon) {
+// ---- Open-Meteo Throttled Queue ----
+// With 2000+ users, cache misses for different DX targets can burst hundreds of
+// unique requests at once. Open-Meteo free tier allows 600/min, 10K/day.
+// This queue processes requests at a steady drip rate to avoid hitting limits.
+const openMeteoQueue = {
+  queue: [],            // Array of { lat, lon, resolve, reject, enqueuedAt }
+  processing: false,
+  maxPerSecond: 4,      // 4 req/s = 240/min — safe margin under 600/min
+  maxQueueSize: 200,    // Drop requests if queue backs up too far
+  processed: 0,
+  dropped: 0,
+  lastProcessedAt: 0
+};
+
+function enqueueOpenMeteoRequest(lat, lon) {
+  return new Promise((resolve, reject) => {
+    if (openMeteoQueue.queue.length >= openMeteoQueue.maxQueueSize) {
+      openMeteoQueue.dropped++;
+      reject(new Error('Weather queue full — too many pending requests'));
+      return;
+    }
+    openMeteoQueue.queue.push({ lat, lon, resolve, reject, enqueuedAt: Date.now() });
+    processOpenMeteoQueue();
+  });
+}
+
+async function processOpenMeteoQueue() {
+  if (openMeteoQueue.processing || openMeteoQueue.queue.length === 0) return;
+  openMeteoQueue.processing = true;
+
+  while (openMeteoQueue.queue.length > 0) {
+    // Rate limit: wait until enough time has passed since last request
+    const now = Date.now();
+    const minInterval = 1000 / openMeteoQueue.maxPerSecond;
+    const elapsed = now - openMeteoQueue.lastProcessedAt;
+    if (elapsed < minInterval) {
+      await new Promise(r => setTimeout(r, minInterval - elapsed));
+    }
+
+    const item = openMeteoQueue.queue.shift();
+    if (!item) break;
+
+    // Drop items that have been waiting too long (60s)
+    if (Date.now() - item.enqueuedAt > 60000) {
+      openMeteoQueue.dropped++;
+      item.reject(new Error('Weather request expired in queue'));
+      continue;
+    }
+
+    openMeteoQueue.lastProcessedAt = Date.now();
+    try {
+      const result = await fetchOpenMeteoWeatherDirect(item.lat, item.lon);
+      openMeteoQueue.processed++;
+      item.resolve(result);
+    } catch (err) {
+      item.reject(err);
+      // If rate limited, pause the queue for backoff duration
+      if (err.message === 'Rate limited') {
+        const backoffMs = (upstream.backoffRemaining('openmeteo') || 30) * 1000;
+        console.log(`[Weather Queue] Open-Meteo rate limited, pausing queue for ${backoffMs / 1000}s`);
+        await new Promise(r => setTimeout(r, backoffMs));
+      }
+    }
+  }
+
+  openMeteoQueue.processing = false;
+}
+
+// The actual Open-Meteo fetch (called only from queue)
+async function fetchOpenMeteoWeatherDirect(lat, lon) {
   const params = [
     `latitude=${lat}`,
     `longitude=${lon}`,
@@ -7318,6 +7396,19 @@ async function fetchOpenMeteoWeather(lat, lon) {
   return data;
 }
 
+// Public wrapper — routes through throttle queue
+async function fetchOpenMeteoWeather(lat, lon) {
+  if (upstream.isBackedOff('openmeteo')) {
+    throw new Error('Open-Meteo is in backoff');
+  }
+  return enqueueOpenMeteoRequest(lat, lon);
+}
+
+// Per-IP weather request throttle: max 1 request per 30 seconds per client
+// Cache hits bypass this — only triggers on actual upstream fetches
+const weatherClientThrottle = new Map(); // ip → lastRequestTime
+const WEATHER_CLIENT_MIN_INTERVAL = 30 * 1000; // 30 seconds
+
 app.get('/api/weather', async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lon = parseFloat(req.query.lon);
@@ -7326,17 +7417,36 @@ app.get('/api/weather', async (req, res) => {
     return res.status(400).json({ error: 'lat and lon required' });
   }
 
-  // Round to 1 decimal place to bucket nearby locations (~11km grid)
-  const roundedLat = Math.round(lat * 10) / 10;
-  const roundedLon = Math.round(lon * 10) / 10;
+  // Round to whole degrees (~111km grid) — weather doesn't vary within this range
+  // With 2000+ users, this is critical: reduces unique cache keys from thousands to ~hundreds
+  const roundedLat = Math.round(lat);
+  const roundedLon = Math.round(lon);
   const cacheKey = `weather:${roundedLat},${roundedLon}`;
 
   const cached = weatherCache.get(cacheKey);
   const now = Date.now();
 
-  // 1. Fresh cache hit — serve immediately
+  // 1. Fresh cache hit — serve immediately (no throttle needed)
   if (cached && (now - cached.timestamp) < WEATHER_CACHE_TTL) {
     return res.json(cached.data);
+  }
+
+  // 2. Per-IP throttle — prevent individual clients from hammering
+  const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+  const lastReq = weatherClientThrottle.get(clientIP);
+  if (lastReq && (now - lastReq) < WEATHER_CLIENT_MIN_INTERVAL) {
+    // Throttled — serve stale if available, otherwise 429
+    if (cached) return res.json(cached.data);
+    return res.status(429).json({ error: 'Weather: too many requests, try again shortly' });
+  }
+  weatherClientThrottle.set(clientIP, now);
+
+  // Prune throttle map periodically
+  if (weatherClientThrottle.size > 5000) {
+    const cutoff = now - WEATHER_CLIENT_MIN_INTERVAL * 2;
+    for (const [ip, t] of weatherClientThrottle) {
+      if (t < cutoff) weatherClientThrottle.delete(ip);
+    }
   }
 
   // 2. Stale-while-revalidate check
@@ -7384,16 +7494,39 @@ app.get('/api/weather', async (req, res) => {
     return res.json(cached.data);
   }
 
-  // No stale data — must wait for upstream
+  // No stale data — if queue is backed up, return 202 and let background fill cache
+  // Client retry logic will pick up the data once queue processes and caches it
+  if (openMeteoQueue.queue.length > 10 && !isUS) {
+    // Fire-and-forget the fetch (it'll cache on completion)
+    doFetch().catch(() => {});
+    return res.status(202).json({
+      _pending: true,
+      _source: 'queued',
+      _queueDepth: openMeteoQueue.queue.length,
+      error: 'Weather data loading — will be available shortly'
+    });
+  }
+
+  // Queue is small or it's a US/NWS request — wait for result
   try {
-    const data = await doFetch();
+    // Add a 15-second timeout so clients don't hang forever
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Weather fetch timeout')), 15000)
+    );
+    const data = await Promise.race([doFetch(), timeoutPromise]);
     res.json(data);
   } catch (err) {
     logErrorOnce('Weather', `Proxy error: ${err.message}`);
     if (cached && (now - cached.timestamp) < WEATHER_STALE_TTL) {
       return res.json(cached.data);
     }
-    res.status(502).json({ error: 'Weather service unavailable' });
+    // Still enqueue for background cache fill
+    doFetch().catch(() => {});
+    res.status(202).json({
+      _pending: true,
+      _source: 'timeout',
+      error: 'Weather data loading — will be available shortly'
+    });
   }
 });
 
