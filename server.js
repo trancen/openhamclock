@@ -1001,7 +1001,16 @@ const distExists = fs.existsSync(path.join(distDir, 'index.html'));
 const staticOptions = {
   maxAge: '1d', // Cache static files for 1 day
   etag: true,
-  lastModified: true
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    // Never cache index.html - it references hashed assets, so stale copies
+    // cause browsers to load old JS bundles after an update
+    if (filePath.endsWith('index.html') || filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
 };
 
 // Long-term caching for hashed assets (Vite adds hash to filenames)
@@ -3342,7 +3351,7 @@ let psk503Backoff = 0; // Timestamp when we can try again after 503
 
 app.get('/api/pskreporter/http/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();
-  const minutes = parseInt(req.query.minutes) || 15;
+  const minutes = parseInt(req.query.minutes) || 30;
   const direction = req.query.direction || 'tx'; // tx or rx
   // flowStartSeconds must be NEGATIVE for "last N seconds"
   const flowStartSeconds = -Math.abs(minutes * 60);
@@ -3379,7 +3388,7 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
     
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'OpenHamClock/3.13.1 (Amateur Radio Dashboard)',
+        'User-Agent': 'OpenHamClock/15.0.1 (Amateur Radio Dashboard)',
         'Accept': '*/*'
       },
       signal: controller.signal
@@ -3452,7 +3461,7 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
       callsign,
       direction,
       count: reports.length,
-      reports: reports.slice(0, 100),
+      reports: reports.slice(0, 500),
       timestamp: new Date().toISOString(),
       source: 'http'
     };
@@ -3487,7 +3496,7 @@ app.get('/api/pskreporter/http/:callsign', async (req, res) => {
 // Combined endpoint that tries MQTT cache first, falls back to HTTP
 app.get('/api/pskreporter/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();
-  const minutes = parseInt(req.query.minutes) || 15;
+  const minutes = parseInt(req.query.minutes) || 30;
   
   // For now, redirect to HTTP endpoint since MQTT requires client-side connection
   // The frontend should connect directly to MQTT for real-time updates
@@ -7544,6 +7553,10 @@ app.get('*', (req, res) => {
   const publicIndex = path.join(__dirname, 'public', 'index.html');
   
   const indexPath = fs.existsSync(distIndex) ? distIndex : publicIndex;
+  // Never cache index.html - stale copies cause browsers to load old JS after updates
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(indexPath);
 });
 

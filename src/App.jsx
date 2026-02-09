@@ -140,9 +140,9 @@ const App = () => {
   const satellites = useSatellites(config.location);
   const localWeather = useWeather(config.location, tempUnit);
   const pskReporter = usePSKReporter(config.callsign, {
-    minutes: config.lowMemoryMode ? 5 : 15,
+    minutes: config.lowMemoryMode ? 5 : 30,
     enabled: config.callsign !== 'N0CALL',
-    maxSpots: config.lowMemoryMode ? 30 : 100
+    maxSpots: config.lowMemoryMode ? 50 : 500
   });
   const wsjtx = useWSJTX();
 

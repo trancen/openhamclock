@@ -16,6 +16,8 @@ export default function useMapLayers() {
   useEffect(() => {
     try {
       localStorage.setItem('openhamclock_mapLayers', JSON.stringify(mapLayers));
+      // Notify components that read directly from localStorage (e.g., DXNewsTicker)
+      window.dispatchEvent(new Event('mapLayersChanged'));
     } catch (e) {}
   }, [mapLayers]);
 
