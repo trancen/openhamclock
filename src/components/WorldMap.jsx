@@ -646,8 +646,30 @@ export const WorldMap = ({
         console.log('Loading saved layer states:', initialStates);
         setPluginLayerStates(initialStates);
       }
+    } catch (err) {
+      console.error('Plugin system error:', err);
+    }
+  }, [availableLayers]); // Only re-run when available layers change
 
-      // Expose controls for SettingsPanel
+  // Expose layer controls to SettingsPanel
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    try {
+      const settings = getStoredMapSettings();
+      const savedLayers = settings.layers || {};
+      const initialStates = {};
+      availableLayers.forEach(layerDef => {
+        if (savedLayers[layerDef.id]) {
+          initialStates[layerDef.id] = savedLayers[layerDef.id];
+        } else {
+          initialStates[layerDef.id] = {
+            enabled: layerDef.defaultEnabled,
+            opacity: layerDef.defaultOpacity
+          };
+        }
+      });
+
       window.hamclockLayerControls = {
         layers: availableLayers.map(l => ({
           ...l,
@@ -692,9 +714,9 @@ export const WorldMap = ({
         }
       };
     } catch (err) {
-      console.error('Plugin system error:', err);
+      console.error('Plugin system controls error:', err);
     }
-  }, [availableLayers]); // Only re-run when layers change, not on every state update
+  }, [availableLayers, pluginLayerStates]); // Re-run when layers or their states change
 
   // Update PSKReporter markers
   useEffect(() => {
