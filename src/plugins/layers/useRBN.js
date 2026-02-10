@@ -401,7 +401,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   
   // Low memory mode limits
   const MAX_SPOTS = lowMemoryMode ? 25 : 200;
-  const UPDATE_INTERVAL = lowMemoryMode ? 60000 : 60000; // 60s for all - be kind to servers and bandwidth
+  const UPDATE_INTERVAL = lowMemoryMode ? 60000 : 10000; // 10s normal, 60s low memory
   
   const layersRef = useRef([]);
   const controlRef = useRef(null);
