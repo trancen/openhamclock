@@ -98,8 +98,12 @@ export const WorldMap = ({
   const [pluginLayerStates, setPluginLayerStates] = useState({});
   const isLocalInstall = useLocalInstall();
   
+  // Memoize available layers to prevent excessive calls to getAllLayers()
   // Filter out localOnly layers on hosted version
-  const getAvailableLayers = () => getAllLayers().filter(l => !l.localOnly || isLocalInstall);
+  const availableLayers = useMemo(() => 
+    getAllLayers().filter(l => !l.localOnly || isLocalInstall),
+    [isLocalInstall]
+  );
   
   // Load map style from localStorage
   const getStoredMapSettings = () => {
@@ -620,7 +624,6 @@ export const WorldMap = ({
     if (!mapInstanceRef.current) return;
 
     try {
-      const availableLayers = getAvailableLayers();
       const settings = getStoredMapSettings();
       const savedLayers = settings.layers || {};
 
@@ -691,7 +694,7 @@ export const WorldMap = ({
     } catch (err) {
       console.error('Plugin system error:', err);
     }
-  }, [pluginLayerStates]);
+  }, [availableLayers]); // Only re-run when layers change, not on every state update
 
   // Update PSKReporter markers
   useEffect(() => {
@@ -853,7 +856,7 @@ export const WorldMap = ({
       <div ref={mapRef} style={{ height: '100%', width: '100%', borderRadius: '8px', background: mapStyle === 'countries' ? '#4a90d9' : undefined }} />
 
 		{/* Render all plugin layers */}
-		{mapInstanceRef.current && getAvailableLayers().map(layerDef => (
+		{mapInstanceRef.current && availableLayers.map(layerDef => (
 		  <PluginLayer
 		    key={layerDef.id}
 		    plugin={layerDef}
