@@ -202,21 +202,21 @@ export const useWeather = (location, tempUnit = 'F') => {
         }
 
         if (response.status === 202) {
-          // Server queued the request — retry in 10s to pick up cached result
-          setError({ message: 'Weather loading...', retryIn: 10 });
+          // Server is fetching this cell via background worker — retry in 5s
+          setError({ message: 'Weather loading...', retryIn: 5 });
           setLoading(false);
-          retryRef.current = setTimeout(() => fetchWeather(true), 10000);
+          retryRef.current = setTimeout(() => fetchWeather(true), 5000);
           return;
         }
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
 
-        // Server may return _pending inside a 200 if it served queued status
+        // Server may return _pending if worker hasn't cached it yet
         if (result._pending) {
-          setError({ message: 'Weather loading...', retryIn: 10 });
+          setError({ message: 'Weather loading...', retryIn: 5 });
           setLoading(false);
-          retryRef.current = setTimeout(() => fetchWeather(true), 10000);
+          retryRef.current = setTimeout(() => fetchWeather(true), 5000);
           return;
         }
 
@@ -238,9 +238,9 @@ export const useWeather = (location, tempUnit = 'F') => {
       }
     };
 
-    // Debounce: wait 30 seconds after last location change before fetching.
-    // This absorbs rapid DX target changes — 2000+ users changing DX constantly
-    // would otherwise hammer the weather endpoint with unique coordinates.
+    // Debounce: wait 10 seconds after last location change before fetching.
+    // Server endpoint is cache-only (no upstream pressure), but debounce still
+    // absorbs rapid DX tuning so we only register the final target.
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (retryRef.current) clearTimeout(retryRef.current);
     retryCountRef.current = 0; // Reset retries on location change
@@ -248,7 +248,7 @@ export const useWeather = (location, tempUnit = 'F') => {
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       fetchWeather();
-    }, 30000);
+    }, 10000);
 
     const interval = setInterval(fetchWeather, POLL_INTERVAL);
     return () => {

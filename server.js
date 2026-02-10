@@ -334,6 +334,8 @@ app.use(compression({
   level: 6, // Balanced compression level (1-9)
   threshold: 1024, // Only compress responses > 1KB
   filter: (req, res) => {
+    // Never compress SSE streams — compression buffers prevent events from flushing
+    if (req.headers['accept'] === 'text/event-stream') return false;
     // Compress everything except already-compressed formats
     if (req.headers['x-no-compression']) return false;
     return compression.filter(req, res);
@@ -343,6 +345,11 @@ app.use(compression({
 // API response caching middleware
 // Sets Cache-Control headers based on endpoint to reduce client polling
 app.use('/api', (req, res, next) => {
+  // Never set cache headers on SSE streams
+  if (req.path.includes('/stream/')) {
+    return next();
+  }
+  
   // Determine cache duration based on endpoint
   let cacheDuration = 30; // Default: 30 seconds
   
@@ -3931,6 +3938,7 @@ pskMqtt.flushInterval = setInterval(() => {
     for (const res of clients) {
       try {
         res.write(message);
+        if (typeof res.flush === 'function') res.flush();
         pskMqtt.stats.spotsRelayed += buffer.length;
       } catch {
         // Client disconnected — will be cleaned up
@@ -3974,12 +3982,13 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
     return res.status(400).json({ error: 'Valid callsign required' });
   }
 
-  // Set up SSE
+  // Set up SSE — disable any buffering
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no'
+    'X-Accel-Buffering': 'no',
+    'Content-Encoding': 'identity'
   });
   res.flushHeaders();
 
@@ -3991,6 +4000,7 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
     recentSpots: recentSpots.slice(-200),
     subscriberCount: (pskMqtt.subscribers.get(callsign)?.size || 0) + 1
   })}\n\n`);
+  if (typeof res.flush === 'function') res.flush();
 
   // Register this client
   if (!pskMqtt.subscribers.has(callsign)) {
@@ -4016,6 +4026,7 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
   const keepalive = setInterval(() => {
     try {
       res.write(`: keepalive ${Date.now()}\n\n`);
+      if (typeof res.flush === 'function') res.flush();
     } catch {
       clearInterval(keepalive);
     }
@@ -6802,9 +6813,10 @@ function generateStatusDashboard() {
         </tbody>
       </table>
       <p style="font-size: 11px; color: #888; margin-top: 8px">
-        Weather cache: ${weatherCache.size} entries (2h TTL) · NWS grid cache: ${nwsPointsCache.size} grids (permanent) ·
-        Total in-flight deduped: ${upstream.inFlight.size} ·
-        Open-Meteo queue: ${openMeteoQueue.queue.length} pending / ${openMeteoQueue.processed} processed / ${openMeteoQueue.dropped} dropped
+        Weather: ${activeWeatherCells.size} active cells · ${weatherCache.size} cached (2h TTL) · NWS grids: ${nwsPointsCache.size} (permanent) ·
+        Worker: cycle ${weatherWorker.cycleCount} (${weatherWorker.cellsRefreshed} refreshed, ${weatherWorker.cellsFailed} failed) ·
+        Open-Meteo queue: ${openMeteoQueue.queue.length} pending / ${openMeteoQueue.processed} processed / ${openMeteoQueue.dropped} dropped ·
+        In-flight deduped: ${upstream.inFlight.size}
       </p>
 
       <h2>📡 PSKReporter MQTT Proxy</h2>
@@ -6924,8 +6936,16 @@ app.get('/api/health', (req, res) => {
         },
         weatherCache: {
           entries: weatherCache.size,
+          activeCells: activeWeatherCells.size,
           ttlMinutes: Math.round(WEATHER_CACHE_TTL / 60000),
           staleTtlHours: Math.round(WEATHER_STALE_TTL / 3600000)
+        },
+        weatherWorker: {
+          running: weatherWorker.running,
+          cycleCount: weatherWorker.cycleCount,
+          lastCycleMs: weatherWorker.lastCycleMs,
+          cellsRefreshed: weatherWorker.cellsRefreshed,
+          cellsFailed: weatherWorker.cellsFailed
         },
         openMeteoQueue: {
           pending: openMeteoQueue.queue.length,
@@ -7404,12 +7424,135 @@ async function fetchOpenMeteoWeather(lat, lon) {
   return enqueueOpenMeteoRequest(lat, lon);
 }
 
-// Per-IP weather request throttle: max 1 request per 30 seconds per client
-// Cache hits bypass this — only triggers on actual upstream fetches
-const weatherClientThrottle = new Map(); // ip → lastRequestTime
-const WEATHER_CLIENT_MIN_INTERVAL = 30 * 1000; // 30 seconds
+// ---- Server-Side Weather Worker ----
+// Clients NEVER trigger upstream fetches. Instead:
+// 1. Client requests register their grid cell as "active"
+// 2. Background worker cycles through active cells, fetching at a steady 4 req/s
+// 3. Client reads are always instant cache hits (or "loading" if not yet cached)
+// With 2000+ users, ~300 unique 1° grid cells takes ~75s to refresh — well within 2h TTL.
 
-app.get('/api/weather', async (req, res) => {
+const activeWeatherCells = new Map(); // "lat,lon" → { lat, lon, lastRequested, source: 'us'|'intl' }
+
+// Fetch weather for a single grid cell (used by background worker only)
+async function refreshWeatherCell(lat, lon) {
+  const cacheKey = `weather:${lat},${lon}`;
+  const isUS = isUSCoordinates(lat, lon);
+  let data = null;
+
+  // Try NWS first for US coordinates
+  if (isUS) {
+    try {
+      data = await fetchNWSWeather(lat, lon);
+    } catch (nwsErr) {
+      logDebug(`[Weather Worker] NWS failed for ${lat},${lon}: ${nwsErr.message}`);
+    }
+  }
+
+  // Fall back to Open-Meteo for international or NWS failure
+  if (!data) {
+    data = await fetchOpenMeteoWeather(lat, lon);
+  }
+
+  weatherCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
+}
+
+// Background worker: cycles through all active cells
+const weatherWorker = {
+  running: false,
+  cycleCount: 0,
+  lastCycleMs: 0,
+  cellsRefreshed: 0,
+  cellsFailed: 0,
+  intervalId: null
+};
+
+async function runWeatherWorkerCycle() {
+  if (weatherWorker.running) return;
+  weatherWorker.running = true;
+  const cycleStart = Date.now();
+
+  // Prune cells not requested in the last 4 hours
+  const pruneCutoff = Date.now() - 4 * 60 * 60 * 1000;
+  for (const [key, cell] of activeWeatherCells) {
+    if (cell.lastRequested < pruneCutoff) {
+      activeWeatherCells.delete(key);
+    }
+  }
+
+  // Build list of cells that need refreshing (expired or missing from cache)
+  const refreshThreshold = Date.now() - WEATHER_CACHE_TTL + (5 * 60 * 1000); // Refresh 5 min before expiry
+  const needsRefresh = [];
+
+  for (const [key, cell] of activeWeatherCells) {
+    const cached = weatherCache.get(`weather:${key}`);
+    if (!cached || cached.timestamp < refreshThreshold) {
+      needsRefresh.push(cell);
+    }
+  }
+
+  if (needsRefresh.length === 0) {
+    weatherWorker.running = false;
+    return;
+  }
+
+  // Sort: US cells first (NWS is fast and unlimited), then international by most recently requested
+  needsRefresh.sort((a, b) => {
+    if (a.source === 'us' && b.source !== 'us') return -1;
+    if (a.source !== 'us' && b.source === 'us') return 1;
+    return b.lastRequested - a.lastRequested;
+  });
+
+  let refreshed = 0, failed = 0;
+
+  for (const cell of needsRefresh) {
+    try {
+      await refreshWeatherCell(cell.lat, cell.lon);
+      refreshed++;
+    } catch (err) {
+      failed++;
+      // If Open-Meteo is backed off, stop processing international cells
+      if (upstream.isBackedOff('openmeteo') && !isUSCoordinates(cell.lat, cell.lon)) {
+        logDebug(`[Weather Worker] Open-Meteo backed off, skipping remaining international cells`);
+        break;
+      }
+    }
+
+    // Small delay between US/NWS requests to be polite (100ms)
+    // Open-Meteo requests are already throttled by the queue at 4/s
+    if (isUSCoordinates(cell.lat, cell.lon)) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  weatherWorker.cycleCount++;
+  weatherWorker.lastCycleMs = Date.now() - cycleStart;
+  weatherWorker.cellsRefreshed += refreshed;
+  weatherWorker.cellsFailed += failed;
+  weatherWorker.running = false;
+
+  if (refreshed > 0 || failed > 0) {
+    console.log(`[Weather Worker] Cycle ${weatherWorker.cycleCount}: refreshed ${refreshed}, failed ${failed} of ${needsRefresh.length} cells (${activeWeatherCells.size} active) in ${weatherWorker.lastCycleMs}ms`);
+  }
+
+  // Prune old cache entries
+  if (weatherCache.size > 1000) {
+    const cutoff = Date.now() - WEATHER_STALE_TTL;
+    for (const [key, entry] of weatherCache) {
+      if (entry.timestamp < cutoff) weatherCache.delete(key);
+    }
+  }
+}
+
+// Run worker every 2 minutes — keeps cache warm well within 2h TTL
+weatherWorker.intervalId = setInterval(runWeatherWorkerCycle, 2 * 60 * 1000);
+// Also run 10s after startup to warm initial cache
+setTimeout(runWeatherWorkerCycle, 10000);
+
+// ---- Weather API Endpoint (cache-only reads) ----
+// Clients NEVER trigger upstream fetches from this endpoint.
+// They register their location as active, and read from cache.
+app.get('/api/weather', (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lon = parseFloat(req.query.lon);
 
@@ -7417,117 +7560,47 @@ app.get('/api/weather', async (req, res) => {
     return res.status(400).json({ error: 'lat and lon required' });
   }
 
-  // Round to whole degrees (~111km grid) — weather doesn't vary within this range
-  // With 2000+ users, this is critical: reduces unique cache keys from thousands to ~hundreds
+  // Round to whole degrees (~111km grid)
   const roundedLat = Math.round(lat);
   const roundedLon = Math.round(lon);
-  const cacheKey = `weather:${roundedLat},${roundedLon}`;
+  const cellKey = `${roundedLat},${roundedLon}`;
+  const cacheKey = `weather:${cellKey}`;
 
+  // Register this cell as active (will be picked up by background worker)
+  activeWeatherCells.set(cellKey, {
+    lat: roundedLat,
+    lon: roundedLon,
+    lastRequested: Date.now(),
+    source: isUSCoordinates(roundedLat, roundedLon) ? 'us' : 'intl'
+  });
+
+  // Read from cache
   const cached = weatherCache.get(cacheKey);
   const now = Date.now();
 
-  // 1. Fresh cache hit — serve immediately (no throttle needed)
+  // Fresh cache hit — serve immediately
   if (cached && (now - cached.timestamp) < WEATHER_CACHE_TTL) {
     return res.json(cached.data);
   }
 
-  // 2. Per-IP throttle — prevent individual clients from hammering
-  const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
-  const lastReq = weatherClientThrottle.get(clientIP);
-  if (lastReq && (now - lastReq) < WEATHER_CLIENT_MIN_INTERVAL) {
-    // Throttled — serve stale if available, otherwise 429
-    if (cached) return res.json(cached.data);
-    return res.status(429).json({ error: 'Weather: too many requests, try again shortly' });
-  }
-  weatherClientThrottle.set(clientIP, now);
-
-  // Prune throttle map periodically
-  if (weatherClientThrottle.size > 5000) {
-    const cutoff = now - WEATHER_CLIENT_MIN_INTERVAL * 2;
-    for (const [ip, t] of weatherClientThrottle) {
-      if (t < cutoff) weatherClientThrottle.delete(ip);
-    }
-  }
-
-  // 2. Stale-while-revalidate check
-  const hasStale = cached && (now - cached.timestamp) < WEATHER_STALE_TTL;
-  const isUS = isUSCoordinates(roundedLat, roundedLon);
-
-  // 3. Deduplicated upstream fetch
-  const doFetch = () => upstream.fetch(cacheKey, async () => {
-    let data = null;
-
-    // Try NWS first for US coordinates (free, generous limits)
-    if (isUS) {
-      try {
-        data = await fetchNWSWeather(roundedLat, roundedLon);
-        console.log(`[Weather] NWS success for ${roundedLat},${roundedLon}`);
-      } catch (nwsErr) {
-        console.warn(`[Weather] NWS failed for ${roundedLat},${roundedLon}: ${nwsErr.message} — falling back to Open-Meteo`);
-      }
-    }
-
-    // Fall back to Open-Meteo for international or NWS failure
-    if (!data) {
-      if (upstream.isBackedOff('openmeteo')) {
-        throw new Error('Open-Meteo backed off');
-      }
-      data = await fetchOpenMeteoWeather(roundedLat, roundedLon);
-    }
-
-    weatherCache.set(cacheKey, { data, timestamp: Date.now() });
-
-    // Prune old cache entries (keep under 500)
-    if (weatherCache.size > 500) {
-      const cutoff = Date.now() - WEATHER_STALE_TTL;
-      for (const [key, entry] of weatherCache) {
-        if (entry.timestamp < cutoff) weatherCache.delete(key);
-      }
-    }
-
-    return data;
-  });
-
-  if (hasStale) {
-    // Stale-while-revalidate: respond with stale data now, refresh in background
-    doFetch().catch(() => {});
+  // Stale but available — serve it (worker will refresh in background)
+  if (cached && (now - cached.timestamp) < WEATHER_STALE_TTL) {
     return res.json(cached.data);
   }
 
-  // No stale data — if queue is backed up, return 202 and let background fill cache
-  // Client retry logic will pick up the data once queue processes and caches it
-  if (openMeteoQueue.queue.length > 10 && !isUS) {
-    // Fire-and-forget the fetch (it'll cache on completion)
-    doFetch().catch(() => {});
-    return res.status(202).json({
-      _pending: true,
-      _source: 'queued',
-      _queueDepth: openMeteoQueue.queue.length,
-      error: 'Weather data loading — will be available shortly'
-    });
+  // No data yet — tell client to check back soon
+  // The background worker will fetch this cell within its next cycle (~2 min max)
+  // Trigger an immediate worker cycle if we have new unserved cells
+  if (!weatherWorker.running) {
+    setTimeout(runWeatherWorkerCycle, 100);
   }
 
-  // Queue is small or it's a US/NWS request — wait for result
-  try {
-    // Add a 15-second timeout so clients don't hang forever
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Weather fetch timeout')), 15000)
-    );
-    const data = await Promise.race([doFetch(), timeoutPromise]);
-    res.json(data);
-  } catch (err) {
-    logErrorOnce('Weather', `Proxy error: ${err.message}`);
-    if (cached && (now - cached.timestamp) < WEATHER_STALE_TTL) {
-      return res.json(cached.data);
-    }
-    // Still enqueue for background cache fill
-    doFetch().catch(() => {});
-    res.status(202).json({
-      _pending: true,
-      _source: 'timeout',
-      error: 'Weather data loading — will be available shortly'
-    });
-  }
+  return res.status(202).json({
+    _pending: true,
+    _source: 'worker-queued',
+    _activeCells: activeWeatherCells.size,
+    error: 'Weather data loading — check back in a few seconds'
+  });
 });
 
 // ============================================
