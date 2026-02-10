@@ -124,7 +124,8 @@ git pull origin $BRANCH
 
 echo ""
 echo "📦 Installing dependencies..."
-npm install
+# --include=dev ensures vite/vitest are installed even if NODE_ENV=production
+npm install --include=dev
 
 echo ""
 echo "🔨 Building frontend..."
