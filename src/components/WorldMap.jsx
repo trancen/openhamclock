@@ -105,6 +105,24 @@ export const WorldMap = ({
     [isLocalInstall]
   );
   
+  // Helper to build initial states from localStorage
+  const getInitialStates = () => {
+    const settings = getStoredMapSettings();
+    const savedLayers = settings.layers || {};
+    const initialStates = {};
+    availableLayers.forEach(layerDef => {
+      if (savedLayers[layerDef.id]) {
+        initialStates[layerDef.id] = savedLayers[layerDef.id];
+      } else {
+        initialStates[layerDef.id] = {
+          enabled: layerDef.defaultEnabled,
+          opacity: layerDef.defaultOpacity
+        };
+      }
+    });
+    return initialStates;
+  };
+  
   // Load map style from localStorage
   const getStoredMapSettings = () => {
     try {
@@ -624,22 +642,7 @@ export const WorldMap = ({
     if (!mapInstanceRef.current) return;
 
     try {
-      const settings = getStoredMapSettings();
-      const savedLayers = settings.layers || {};
-
-      // Build initial states from localStorage
-      const initialStates = {};
-      availableLayers.forEach(layerDef => {
-        // Use saved state if it exists, otherwise use defaults
-        if (savedLayers[layerDef.id]) {
-          initialStates[layerDef.id] = savedLayers[layerDef.id];
-        } else {
-          initialStates[layerDef.id] = {
-            enabled: layerDef.defaultEnabled,
-            opacity: layerDef.defaultOpacity
-          };
-        }
-      });
+      const initialStates = getInitialStates();
 
       // Initialize state ONLY on first mount (when empty)
       if (Object.keys(pluginLayerStates).length === 0) {
@@ -656,19 +659,7 @@ export const WorldMap = ({
     if (!mapInstanceRef.current) return;
 
     try {
-      const settings = getStoredMapSettings();
-      const savedLayers = settings.layers || {};
-      const initialStates = {};
-      availableLayers.forEach(layerDef => {
-        if (savedLayers[layerDef.id]) {
-          initialStates[layerDef.id] = savedLayers[layerDef.id];
-        } else {
-          initialStates[layerDef.id] = {
-            enabled: layerDef.defaultEnabled,
-            opacity: layerDef.defaultOpacity
-          };
-        }
-      });
+      const initialStates = getInitialStates();
 
       window.hamclockLayerControls = {
         layers: availableLayers.map(l => ({
