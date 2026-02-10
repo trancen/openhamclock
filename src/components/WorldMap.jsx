@@ -105,23 +105,23 @@ export const WorldMap = ({
     [isLocalInstall]
   );
   
-  // Helper to build initial states from localStorage
-  const getInitialStates = () => {
+  // Memoize initial states from localStorage to avoid repeated computation
+  const initialStates = useMemo(() => {
     const settings = getStoredMapSettings();
     const savedLayers = settings.layers || {};
-    const initialStates = {};
+    const states = {};
     availableLayers.forEach(layerDef => {
       if (savedLayers[layerDef.id]) {
-        initialStates[layerDef.id] = savedLayers[layerDef.id];
+        states[layerDef.id] = savedLayers[layerDef.id];
       } else {
-        initialStates[layerDef.id] = {
+        states[layerDef.id] = {
           enabled: layerDef.defaultEnabled,
           opacity: layerDef.defaultOpacity
         };
       }
     });
-    return initialStates;
-  };
+    return states;
+  }, [availableLayers]); // Recompute when available layers change
   
   // Load map style from localStorage
   const getStoredMapSettings = () => {
@@ -642,8 +642,6 @@ export const WorldMap = ({
     if (!mapInstanceRef.current) return;
 
     try {
-      const initialStates = getInitialStates();
-
       // Initialize state ONLY on first mount (when empty)
       if (Object.keys(pluginLayerStates).length === 0) {
         console.log('Loading saved layer states:', initialStates);
@@ -652,15 +650,13 @@ export const WorldMap = ({
     } catch (err) {
       console.error('Plugin system error:', err);
     }
-  }, [availableLayers]); // Only re-run when available layers change
+  }, [initialStates]); // Re-run when initial states change
 
   // Expose layer controls to SettingsPanel
   useEffect(() => {
     if (!mapInstanceRef.current) return;
 
     try {
-      const initialStates = getInitialStates();
-
       window.hamclockLayerControls = {
         layers: availableLayers.map(l => ({
           ...l,
