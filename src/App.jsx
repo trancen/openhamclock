@@ -2,17 +2,17 @@
  * OpenHamClock - Main Application Component
  * Amateur Radio Dashboard
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
-import { SettingsPanel, DXFilterManager, PSKFilterManager } from './components';
+import { SettingsPanel, DXFilterManager, PSKFilterManager } from "./components";
 
-import DockableLayout from './layouts/DockableLayout.jsx';
-import ClassicLayout from './layouts/ClassicLayout.jsx';
-import ModernLayout from './layouts/ModernLayout.jsx';
+import DockableLayout from "./layouts/DockableLayout.jsx";
+import ClassicLayout from "./layouts/ClassicLayout.jsx";
+import ModernLayout from "./layouts/ModernLayout.jsx";
 
-import { resetLayout } from './store/layoutStore.js';
-import { RigProvider } from './contexts/RigContext.jsx';
+import { resetLayout } from "./store/layoutStore.js";
+import { RigProvider } from "./contexts/RigContext.jsx";
 
 import {
   useSpaceWeather,
@@ -28,19 +28,19 @@ import {
   useSatellites,
   useSolarIndices,
   usePSKReporter,
-  useWSJTX
-} from './hooks';
+  useWSJTX,
+} from "./hooks";
 
-import useAppConfig from './hooks/app/useAppConfig';
-import useDXLocation from './hooks/app/useDXLocation';
-import useMapLayers from './hooks/app/useMapLayers';
-import useFilters from './hooks/app/useFilters';
-import useSatellitesFilters from './hooks/app/useSatellitesFilters';
-import useTimeState from './hooks/app/useTimeState';
-import useFullscreen from './hooks/app/useFullscreen';
-import useResponsiveScale from './hooks/app/useResponsiveScale';
-import useLocalInstall from './hooks/app/useLocalInstall';
-import useVersionCheck from './hooks/app/useVersionCheck';
+import useAppConfig from "./hooks/app/useAppConfig";
+import useDXLocation from "./hooks/app/useDXLocation";
+import useMapLayers from "./hooks/app/useMapLayers";
+import useFilters from "./hooks/app/useFilters";
+import useSatellitesFilters from "./hooks/app/useSatellitesFilters";
+import useTimeState from "./hooks/app/useTimeState";
+import useFullscreen from "./hooks/app/useFullscreen";
+import useResponsiveScale from "./hooks/app/useResponsiveScale";
+import useLocalInstall from "./hooks/app/useLocalInstall";
+import useVersionCheck from "./hooks/app/useVersionCheck";
 
 const App = () => {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ const App = () => {
     configLoaded,
     showDxWeather,
     classicAnalogClock,
-    handleSaveConfig
+    handleSaveConfig,
   } = useAppConfig();
 
   const [showSettings, setShowSettings] = useState(false);
@@ -59,52 +59,64 @@ const App = () => {
   const [showPSKFilters, setShowPSKFilters] = useState(false);
   const [layoutResetKey, setLayoutResetKey] = useState(0);
   const [tempUnit, setTempUnit] = useState(() => {
-    try { return localStorage.getItem('openhamclock_tempUnit') || 'F'; } catch { return 'F'; }
+    try {
+      return localStorage.getItem("openhamclock_tempUnit") || "F";
+    } catch {
+      return "F";
+    }
   });
   const [updateInProgress, setUpdateInProgress] = useState(false);
 
   useEffect(() => {
     if (!configLoaded) return;
-    const hasLocalStorage = localStorage.getItem('openhamclock_config');
-    if (!hasLocalStorage && config.callsign === 'N0CALL') {
+    const hasLocalStorage = localStorage.getItem("openhamclock_config");
+    if (!hasLocalStorage && config.callsign === "N0CALL") {
       setShowSettings(true);
     }
   }, [configLoaded, config.callsign]);
 
   const handleResetLayout = useCallback(() => {
     resetLayout();
-    setLayoutResetKey(prev => prev + 1);
+    setLayoutResetKey((prev) => prev + 1);
   }, []);
 
   const handleUpdateClick = useCallback(async () => {
     if (updateInProgress) return;
-    const confirmed = window.confirm(t('app.update.confirm'));
+    const confirmed = window.confirm(t("app.update.confirm"));
     if (!confirmed) return;
     setUpdateInProgress(true);
     try {
-      const res = await fetch('/api/update', { method: 'POST' });
+      const res = await fetch("/api/update", { method: "POST" });
       let payload = {};
-      try { payload = await res.json(); } catch { /* ignore */ }
-      if (!res.ok) {
-        throw new Error(payload.error || t('app.update.failedToStart'));
+      try {
+        payload = await res.json();
+      } catch {
+        /* ignore */
       }
-      alert(t('app.update.started'));
+      if (!res.ok) {
+        throw new Error(payload.error || t("app.update.failedToStart"));
+      }
+      alert(t("app.update.started"));
       setTimeout(() => {
-        try { window.location.reload(); } catch { /* ignore */ }
+        try {
+          window.location.reload();
+        } catch {
+          /* ignore */
+        }
       }, 15000);
     } catch (err) {
       setUpdateInProgress(false);
-      alert(t('app.update.failed', { error: err.message || t('app.update.unknownError') }));
+      alert(
+        t("app.update.failed", {
+          error: err.message || t("app.update.unknownError"),
+        }),
+      );
     }
   }, [updateInProgress, t]);
 
   // Location & map state
-  const {
-    dxLocation,
-    dxLocked,
-    handleToggleDxLock,
-    handleDXChange
-  } = useDXLocation(config.defaultDX);
+  const { dxLocation, dxLocked, handleToggleDxLock, handleDXChange } =
+    useDXLocation(config.defaultDX);
 
   const {
     mapLayers,
@@ -115,15 +127,10 @@ const App = () => {
     toggleSatellites,
     togglePSKReporter,
     toggleWSJTX,
-    toggleDXNews
+    toggleDXNews,
   } = useMapLayers();
 
-  const {
-    dxFilters,
-    setDxFilters,
-    pskFilters,
-    setPskFilters
-  } = useFilters();
+  const { dxFilters, setDxFilters, pskFilters, setPskFilters } = useFilters();
 
   const { isFullscreen, handleFullscreenToggle } = useFullscreen();
   const scale = useResponsiveScale();
@@ -139,23 +146,24 @@ const App = () => {
   const dxClusterData = useDXClusterData(dxFilters, config);
   const dxpeditions = useDXpeditions();
   const contests = useContests();
-  const propagation = usePropagation(config.location, dxLocation, config.propagation);
+  const propagation = usePropagation(
+    config.location,
+    dxLocation,
+    config.propagation,
+  );
   const mySpots = useMySpots(config.callsign);
   const satellites = useSatellites(config.location);
   const localWeather = useWeather(config.location, tempUnit);
   const dxWeather = useWeather(dxLocation, tempUnit);
   const pskReporter = usePSKReporter(config.callsign, {
     minutes: config.lowMemoryMode ? 5 : 30,
-    enabled: config.callsign !== 'N0CALL',
-    maxSpots: config.lowMemoryMode ? 50 : 500
+    enabled: config.callsign !== "N0CALL",
+    maxSpots: config.lowMemoryMode ? 50 : 500,
   });
   const wsjtx = useWSJTX();
 
-  const {
-    satelliteFilters,
-    setSatelliteFilters,
-    filteredSatellites
-  } = useSatellitesFilters(satellites.data);
+  const { satelliteFilters, setSatelliteFilters, filteredSatellites } =
+    useSatellitesFilters(satellites.data);
 
   const {
     currentTime,
@@ -169,17 +177,26 @@ const App = () => {
     deGrid,
     dxGrid,
     deSunTimes,
-    dxSunTimes
+    dxSunTimes,
   } = useTimeState(config.location, dxLocation, config.timezone);
 
   const filteredPskSpots = useMemo(() => {
-    const allSpots = [...(pskReporter.txReports || []), ...(pskReporter.rxReports || [])];
-    if (!pskFilters?.bands?.length && !pskFilters?.grids?.length && !pskFilters?.modes?.length) {
+    const allSpots = [
+      ...(pskReporter.txReports || []),
+      ...(pskReporter.rxReports || []),
+    ];
+    if (
+      !pskFilters?.bands?.length &&
+      !pskFilters?.grids?.length &&
+      !pskFilters?.modes?.length
+    ) {
       return allSpots;
     }
-    return allSpots.filter(spot => {
-      if (pskFilters?.bands?.length && !pskFilters.bands.includes(spot.band)) return false;
-      if (pskFilters?.modes?.length && !pskFilters.modes.includes(spot.mode)) return false;
+    return allSpots.filter((spot) => {
+      if (pskFilters?.bands?.length && !pskFilters.bands.includes(spot.band))
+        return false;
+      if (pskFilters?.modes?.length && !pskFilters.modes.includes(spot.mode))
+        return false;
       if (pskFilters?.grids?.length) {
         const grid = spot.receiverGrid || spot.senderGrid;
         if (!grid) return false;
@@ -193,32 +210,38 @@ const App = () => {
   const wsjtxMapSpots = useMemo(() => {
     // Apply same age filter as panel (stored in localStorage)
     let ageMinutes = 30;
-    try { ageMinutes = parseInt(localStorage.getItem('ohc_wsjtx_age')) || 30; } catch {}
+    try {
+      ageMinutes = parseInt(localStorage.getItem("ohc_wsjtx_age")) || 30;
+    } catch {}
     const ageCutoff = Date.now() - ageMinutes * 60 * 1000;
-    
+
     // Map all decodes with resolved coordinates (CQ, QSO exchanges, prefix estimates)
     // WorldMap deduplicates by callsign, keeping most recent
-    return wsjtx.decodes.filter(d => d.lat && d.lon && d.timestamp >= ageCutoff);
+    return wsjtx.decodes.filter(
+      (d) => d.lat && d.lon && d.timestamp >= ageCutoff,
+    );
   }, [wsjtx.decodes]);
 
   // Map hover
   const [hoveredSpot, setHoveredSpot] = useState(null);
 
   // Sidebar visibility & layout (used by some layouts)
-  const leftSidebarVisible = config.panels?.deLocation?.visible !== false ||
+  const leftSidebarVisible =
+    config.panels?.deLocation?.visible !== false ||
     config.panels?.dxLocation?.visible !== false ||
     config.panels?.solar?.visible !== false ||
     config.panels?.propagation?.visible !== false;
-  const rightSidebarVisible = config.panels?.dxCluster?.visible !== false ||
+  const rightSidebarVisible =
+    config.panels?.dxCluster?.visible !== false ||
     config.panels?.pskReporter?.visible !== false ||
     config.panels?.dxpeditions?.visible !== false ||
     config.panels?.pota?.visible !== false ||
     config.panels?.contests?.visible !== false;
-  const leftSidebarWidth = leftSidebarVisible ? '270px' : '0px';
-  const rightSidebarWidth = rightSidebarVisible ? '300px' : '0px';
+  const leftSidebarWidth = leftSidebarVisible ? "270px" : "0px";
+  const rightSidebarWidth = rightSidebarVisible ? "300px" : "0px";
 
   const getGridTemplateColumns = () => {
-    if (!leftSidebarVisible && !rightSidebarVisible) return '1fr';
+    if (!leftSidebarVisible && !rightSidebarVisible) return "1fr";
     if (!leftSidebarVisible) return `1fr ${rightSidebarWidth}`;
     if (!rightSidebarVisible) return `${leftSidebarWidth} 1fr`;
     return `${leftSidebarWidth} 1fr ${rightSidebarWidth}`;
@@ -291,31 +314,38 @@ const App = () => {
     leftSidebarVisible,
     rightSidebarVisible,
     getGridTemplateColumns,
-    scale
+    scale,
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      background: 'var(--bg-primary)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      overflow: 'hidden'
-    }}>
-      <RigProvider rigConfig={config.rigControl || { enabled: false, host: 'http://localhost', port: 5555 }}>
-        {config.layout === 'dockable' ? (
-          <DockableLayout
-            key={layoutResetKey}
-            {...layoutProps}
-          />
-        ) : (config.layout === 'classic' || config.layout === 'tablet' || config.layout === 'compact') ? (
+    <div
+      style={{
+        width: "100vw",
+        height: "100vh",
+        background: "var(--bg-primary)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        overflow: "hidden",
+      }}
+    >
+      <RigProvider
+        rigConfig={
+          config.rigControl || {
+            enabled: false,
+            host: "http://localhost",
+            port: 5555,
+          }
+        }
+      >
+        {config.layout === "dockable" ? (
+          <DockableLayout key={layoutResetKey} {...layoutProps} />
+        ) : config.layout === "classic" ||
+          config.layout === "tablet" ||
+          config.layout === "compact" ? (
           <ClassicLayout {...layoutProps} />
         ) : (
-          <ModernLayout
-            {...layoutProps}
-          />
+          <ModernLayout {...layoutProps} />
         )}
       </RigProvider>
 

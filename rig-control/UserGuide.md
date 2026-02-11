@@ -3,9 +3,10 @@
 This guide will help you set up Rig Control for OpenHamClock so you can control your radio directly from the dashboard!
 
 This feature allows you to:
-*   **See your radio's frequency** on the dashboard.
-*   **Click spots** on the map or cluster to instantly tune your radio.
-*   **Trigger PTT** directly from the web interface.
+
+- **See your radio's frequency** on the dashboard.
+- **Click spots** on the map or cluster to instantly tune your radio.
+- **Trigger PTT** directly from the web interface.
 
 ---
 
@@ -14,13 +15,13 @@ This feature allows you to:
 You need three things installed on the computer connected to your radio (e.g., Raspberry Pi, Mac, or PC):
 
 1.  **Git:** To download the software.
-    *   [Download Git](https://git-scm.com/downloads)
+    - [Download Git](https://git-scm.com/downloads)
 2.  **Node.js:** The engine that runs OpenHamClock.
-    *   **Check:** Open a terminal and type `node -v`. (You want version 18 or higher).
-    *   **Install:** [Download Node.js LTS](https://nodejs.org/).
+    - **Check:** Open a terminal and type `node -v`. (You want version 18 or higher).
+    - **Install:** [Download Node.js LTS](https://nodejs.org/).
 3.  **Radio Software:** One of the following must be running and connected to your radio:
-    *   **FLRIG (Recommended):** [Download FLRIG](http://www.w1hkj.com/files/flrig/)
-    *   **Hamlib (rigctld):** For advanced users.
+    - **FLRIG (Recommended):** [Download FLRIG](http://www.w1hkj.com/files/flrig/)
+    - **Hamlib (rigctld):** For advanced users.
 
 ---
 
@@ -53,7 +54,7 @@ The "Rig Control Bridge" (daemon) is a separate small program that sits between 
     ```bash
     cd rig-control
     ```
-    *(If you are in the main folder, just type `cd rig-control`)*
+    _(If you are in the main folder, just type `cd rig-control`)_
 2.  Install the bridge libraries:
     ```bash
     npm install
@@ -69,27 +70,30 @@ Tell the bridge which radio software you use.
 2.  Edit it with any text editor.
 
 ### If using FLRIG (Easiest)
+
 Ensure FLRIG is running and **XML-RPC** is enabled in its settings (Config > Setup > UI > XML-RPC).
+
 ```json
 {
-    "rigType": "flrig",
-    "flrig": {
-        "host": "127.0.0.1",
-        "port": 12345
-    },
-    "serverPort": 5555
+  "rigType": "flrig",
+  "flrig": {
+    "host": "127.0.0.1",
+    "port": 12345
+  },
+  "serverPort": 5555
 }
 ```
 
 ### If using Hamlib (rigctld)
+
 ```json
 {
-    "rigType": "rigctld",
-    "rigctld": {
-        "host": "127.0.0.1",
-        "port": 4532
-    },
-    "serverPort": 5555
+  "rigType": "rigctld",
+  "rigctld": {
+    "host": "127.0.0.1",
+    "port": 4532
+  },
+  "serverPort": 5555
 }
 ```
 
@@ -100,22 +104,28 @@ Ensure FLRIG is running and **XML-RPC** is enabled in its settings (Config > Set
 You need to run **two separate programs** for this to work. It is best to use two terminal windows.
 
 ### Window 1: Start OpenHamClock
+
 In the main `openhamclock` folder:
+
 ```bash
 npm start
 ```
-*   This will start the **Web Dashboard**.
-*   Standard Port: **3000**
-*   Access it at: `http://localhost:3000`
+
+- This will start the **Web Dashboard**.
+- Standard Port: **3000**
+- Access it at: `http://localhost:3000`
 
 ### Window 2: Start Rig Control Daemon
+
 In the `openhamclock/rig-control` folder:
+
 ```bash
 node rig-daemon.js
 ```
-*   This starts the **Bridge**.
-*   Standard Port: **5555**
-*   *Note: You do NOT visit this port in your browser. It runs in the background.*
+
+- This starts the **Bridge**.
+- Standard Port: **5555**
+- _Note: You do NOT visit this port in your browser. It runs in the background._
 
 ---
 
@@ -126,7 +136,7 @@ node rig-daemon.js
 3.  Scroll to **Rig Control**.
 4.  Check **Enable Rig Control**.
 5.  Set **Host URL** to: `http://localhost:5555`
-    *   *(This points the Dashboard on port 3000 to the Bridge on port 5555)*.
+    - _(This points the Dashboard on port 3000 to the Bridge on port 5555)_.
 6.  **Optional:** Check **"Tune Button Enabled"** if you want to trigger your ATU.
 
 ---
@@ -136,8 +146,9 @@ node rig-daemon.js
 Navigate to the dashboard. You should see the Rig Control panel. Clicking spots on the map/cluster should now tune your radio!
 
 ### Troubleshooting
-*   **"Connection Failed":** Ensure `node rig-daemon.js` is running in a terminal.
-*   **Radio won't tune:** Ensure FLRIG is running and connected to the radio.
-*   **Double check ports:**
-    *   Browser URL: `http://localhost:3000`
-    *   Settings Rig URL: `http://localhost:5555`
+
+- **"Connection Failed":** Ensure `node rig-daemon.js` is running in a terminal.
+- **Radio won't tune:** Ensure FLRIG is running and connected to the radio.
+- **Double check ports:**
+  - Browser URL: `http://localhost:3000`
+  - Settings Rig URL: `http://localhost:5555`
