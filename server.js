@@ -3710,6 +3710,9 @@ function pskMqttConnect() {
       }
       pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
         if (err) {
+          // "Connection closed" errors are expected during unstable reconnects —
+          // the next on('connect') will retry the batch subscribe
+          if (err.message && err.message.includes('onnection closed')) return;
           console.error(`[PSK-MQTT] Batch subscribe error:`, err.message);
         } else {
           console.log(`[PSK-MQTT] Subscribed ${count} callsigns (${topics.length} topics)`);
@@ -3775,12 +3778,15 @@ function pskMqttConnect() {
   });
 
   client.on('error', (err) => {
+    // "Connection closed" is redundant with on('close') handler
+    if (err.message && err.message.includes('onnection closed')) return;
     console.error(`[PSK-MQTT] Error: ${err.message}`);
   });
 
   client.on('close', () => {
     pskMqtt.connected = false;
-    console.log('[PSK-MQTT] Disconnected');
+    // Only log once per disconnect (not on every reconnect cycle)
+    logErrorOnce('PSK-MQTT', 'Disconnected from mqtt.pskreporter.info');
     scheduleMqttReconnect();
   });
 
@@ -3795,7 +3801,10 @@ function scheduleMqttReconnect() {
     (Math.pow(2, pskMqtt.reconnectAttempts) * 1000) + (Math.random() * 5000),
     pskMqtt.maxReconnectDelay
   );
-  console.log(`[PSK-MQTT] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${pskMqtt.reconnectAttempts})...`);
+  // Log first attempt and every 5th to avoid spam during extended outages
+  if (pskMqtt.reconnectAttempts === 1 || pskMqtt.reconnectAttempts % 5 === 0) {
+    console.log(`[PSK-MQTT] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${pskMqtt.reconnectAttempts})...`);
+  }
   setTimeout(() => {
     if (pskMqtt.subscribers.size > 0) {
       pskMqttConnect();
@@ -4474,8 +4483,7 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     
     if (!response.ok) {
       const backoffSecs = upstream.recordFailure('pskreporter', response.status);
-      logErrorOnce('WSPR Heatmap', `HTTP ${response.status} — backing off for ${backoffSecs}s`);
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(`HTTP ${response.status} — backing off for ${backoffSecs}s`);
     }
     
     const xml = await response.text();
@@ -4580,7 +4588,8 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     const result = await doFetch();
     res.json(result);
   } catch (error) {
-    logErrorOnce('WSPR Heatmap', error.message);
+    // Use stable key for dedup (backoff seconds change every time)
+    logErrorOnce('WSPR Heatmap', error.message.replace(/\d+s$/, 'Xs'));
     if (wsprCache.data && wsprCache.data.cacheKey === cacheKey) {
       return res.json({ ...wsprCache.data.result, cached: true, stale: true });
     }
