@@ -17,6 +17,9 @@ RUN npm install
 # Copy source files
 COPY . .
 
+# Ensure public/ exists (may not be tracked in git)
+RUN mkdir -p /app/public
+
 # Build the React app with Vite
 RUN npm run build
 
@@ -48,8 +51,9 @@ COPY wsjtx-relay ./wsjtx-relay
 # Copy built frontend from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy public folder (for monolithic fallback reference)
-COPY public ./public
+# Copy public folder from builder (for monolithic fallback reference)
+# Using builder stage because public/ may not be separately available in production context
+COPY --from=builder /app/public ./public
 
 # Create local data directory as fallback
 RUN mkdir -p /app/data
@@ -62,5 +66,5 @@ EXPOSE 2237/udp
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
-# Start server (running as root to allow writing to Railway volumes)
-CMD ["node", "server.js"]
+# Start server with explicit heap limit (fail fast rather than slow OOM at 4GB)
+CMD ["node", "--max-old-space-size=1024", "server.js"]

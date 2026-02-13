@@ -1,11 +1,11 @@
 /**
- * POTAPanel Component
- * Displays Parks on the Air activations with ON/OFF toggle
+ * SOTAPanel Component
+ * Displays Summits on the Air activations with ON/OFF toggle
  */
 import React from 'react';
 import CallsignLink from './CallsignLink.jsx';
 
-export const POTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
+export const SOTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
   return (
     <div className="panel" style={{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header" style={{ 
@@ -15,14 +15,14 @@ export const POTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
         marginBottom: '6px',
         fontSize: '11px'
       }}>
-        <span>▲ POTA ACTIVATORS {data?.length > 0 ? `(${data.length})` : ''}</span>
+        <span>⛰ SOTA ACTIVATORS {data?.length > 0 ? `(${data.length})` : ''}</span>
         <button
           onClick={onToggleMap}
-          title={showOnMap ? 'Hide POTA activators on map' : 'Show POTA activators on map'}
+          title={showOnMap ? 'Hide SOTA activators on map' : 'Show SOTA activators on map'}
           style={{
-            background: showOnMap ? 'rgba(68, 204, 68, 0.3)' : 'rgba(100, 100, 100, 0.3)',
-            border: `1px solid ${showOnMap ? '#44cc44' : '#666'}`,
-            color: showOnMap ? '#44cc44' : '#888',
+            background: showOnMap ? 'rgba(255, 150, 50, 0.3)' : 'rgba(100, 100, 100, 0.3)',
+            border: `1px solid ${showOnMap ? '#ff9632' : '#666'}`,
+            color: showOnMap ? '#ff9632' : '#888',
             padding: '1px 6px',
             borderRadius: '3px',
             fontSize: '9px',
@@ -52,11 +52,13 @@ export const POTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
                   borderBottom: i < data.length - 1 ? '1px solid var(--border-color)' : 'none'
                 }}
               >
-                <span style={{ color: '#44cc44', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <CallsignLink call={spot.call} color="#44cc44" fontWeight="600" />
+                <span style={{ color: '#ff9632', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <CallsignLink call={spot.call} color="#ff9632" fontWeight="600" />
                 </span>
-                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {spot.locationDesc || spot.ref}
+                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  title={spot.summit ? `${spot.ref} — ${spot.summit}${spot.points ? ` (${spot.points}pt)` : ''}` : spot.ref}
+                >
+                  {spot.ref}
                 </span>
                 <span style={{ color: 'var(--accent-cyan)', textAlign: 'right' }}>
                   {spot.freq}
@@ -69,7 +71,7 @@ export const POTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
           </div>
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '10px', fontSize: '11px' }}>
-            No POTA spots
+            No SOTA spots
           </div>
         )}
       </div>
@@ -77,4 +79,4 @@ export const POTAPanel = ({ data, loading, showOnMap, onToggleMap }) => {
   );
 };
 
-export default POTAPanel;
+export default SOTAPanel;

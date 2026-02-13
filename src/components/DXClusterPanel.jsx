@@ -6,6 +6,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { getBandColor } from '../utils/callsign.js';
 import { IconSearch, IconMap, IconGlobe } from './Icons.jsx';
+import CallsignLink from './CallsignLink.jsx';
 
 export const DXClusterPanel = ({ 
   data, 
@@ -189,7 +190,7 @@ export const DXClusterPanel = ({
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap'
                 }}>
-                  {spot.call}
+                  <CallsignLink call={spot.call} color="var(--text-primary)" fontWeight="700" />
                 </div>
                 <div style={{ 
                   color: 'var(--text-muted)', 
@@ -199,7 +200,7 @@ export const DXClusterPanel = ({
                   whiteSpace: 'nowrap',
                   alignSelf: 'center'
                 }}>
-                  {t('dxClusterPanel.spotter', { spotter: spot.spotter || '?' })}
+                  de <CallsignLink call={spot.spotter || '?'} color="var(--text-muted)" fontSize="10px" />
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
                   {spot.time || ''}

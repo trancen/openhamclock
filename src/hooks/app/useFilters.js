@@ -1,6 +1,7 @@
 'use strict';
 
 import { useState, useEffect } from 'react';
+import { syncAllSettingsToServer } from '../../utils';
 
 export default function useFilters() {
   const [dxFilters, setDxFilters] = useState(() => {
@@ -13,6 +14,7 @@ export default function useFilters() {
   useEffect(() => {
     try {
       localStorage.setItem('openhamclock_dxFilters', JSON.stringify(dxFilters));
+      syncAllSettingsToServer();
     } catch (e) {}
   }, [dxFilters]);
 
@@ -26,6 +28,7 @@ export default function useFilters() {
   useEffect(() => {
     try {
       localStorage.setItem('openhamclock_pskFilters', JSON.stringify(pskFilters));
+      syncAllSettingsToServer();
     } catch (e) {}
   }, [pskFilters]);
 

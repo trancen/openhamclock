@@ -11,6 +11,7 @@ import {
   WorldMap,
   DXClusterPanel,
   POTAPanel,
+  SOTAPanel,
   ContestPanel,
   SolarPanel,
   PropagationPanel,
@@ -19,7 +20,8 @@ import {
   PSKReporterPanel,
   WeatherPanel,
   AmbientPanel,
-  AnalogClockPanel
+  AnalogClockPanel,
+  IDTimerPanel
 } from './components';
 
 import { loadLayout, saveLayout, DEFAULT_LAYOUT } from './store/layoutStore.js';
@@ -64,10 +66,12 @@ export const DockableApp = ({
   // Spots & data
   dxClusterData,
   potaSpots,
+  sotaSpots,
   mySpots,
   dxpeditions,
   contests,
   satellites,
+  filteredSatellites,
   pskReporter,
   wsjtx,
   filteredPskSpots,
@@ -85,6 +89,7 @@ export const DockableApp = ({
   toggleDXPaths,
   toggleDXLabels,
   togglePOTA,
+  toggleSOTA,
   toggleSatellites,
   togglePSKReporter,
   toggleWSJTX,
@@ -163,28 +168,39 @@ export const DockableApp = ({
   }, []);
 
   // Panel definitions
-  const panelDefs = useMemo(() => ({
-    'world-map': { name: 'World Map', icon: '🗺️' },
-    'de-location': { name: 'DE Location', icon: '📍' },
-    'dx-location': { name: 'DX Target', icon: '🎯' },
-    'analog-clock': { name: 'Analog Clock', icon: '🕐' },
-    'solar': { name: 'Solar (all views)', icon: '☀️' },
-    'solar-image': { name: 'Solar Image', icon: '☀️', group: 'Solar' },
-    'solar-indices': { name: 'Solar Indices', icon: '📊', group: 'Solar' },
-    'solar-xray': { name: 'X-Ray Flux', icon: '⚡', group: 'Solar' },
-    'lunar': { name: 'Lunar Phase', icon: '🌙', group: 'Solar' },
-    'propagation': { name: 'Propagation (all views)', icon: '📡' },
-    'propagation-chart': { name: 'VOACAP Chart', icon: '📈', group: 'Propagation' },
-    'propagation-bars': { name: 'VOACAP Bars', icon: '📊', group: 'Propagation' },
-    'band-conditions': { name: 'Band Conditions', icon: '📶', group: 'Propagation' },
-    'band-health': { name: 'Band Health', icon: '📶' },
-    'dx-cluster': { name: 'DX Cluster', icon: '📻' },
-    'psk-reporter': { name: 'PSK Reporter', icon: '📡' },
-    'dxpeditions': { name: 'DXpeditions', icon: '🏝️' },
-    'pota': { name: 'POTA', icon: '🏕️' },
-    'contests': { name: 'Contests', icon: '🏆' },
-    'ambient': { name: 'Ambient Weather', icon: '🌦️' },
-  }), []);
+  const panelDefs = useMemo(() => {
+    // Only show Ambient Weather when credentials are configured
+    const hasAmbient = (() => {
+      try {
+        return !!(import.meta.env?.VITE_AMBIENT_API_KEY && import.meta.env?.VITE_AMBIENT_APPLICATION_KEY);
+      } catch { return false; }
+    })();
+
+    return {
+      'world-map': { name: 'World Map', icon: '🗺️' },
+      'de-location': { name: 'DE Location', icon: '📍' },
+      'dx-location': { name: 'DX Target', icon: '🎯' },
+      'analog-clock': { name: 'Analog Clock', icon: '🕐' },
+      'solar': { name: 'Solar (all views)', icon: '☀️' },
+      'solar-image': { name: 'Solar Image', icon: '☀️', group: 'Solar' },
+      'solar-indices': { name: 'Solar Indices', icon: '📊', group: 'Solar' },
+      'solar-xray': { name: 'X-Ray Flux', icon: '⚡', group: 'Solar' },
+      'lunar': { name: 'Lunar Phase', icon: '🌙', group: 'Solar' },
+      'propagation': { name: 'Propagation (all views)', icon: '📡' },
+      'propagation-chart': { name: 'VOACAP Chart', icon: '📈', group: 'Propagation' },
+      'propagation-bars': { name: 'VOACAP Bars', icon: '📊', group: 'Propagation' },
+      'band-conditions': { name: 'Band Conditions', icon: '📶', group: 'Propagation' },
+      'band-health': { name: 'Band Health', icon: '📶' },
+      'dx-cluster': { name: 'DX Cluster', icon: '📻' },
+      'psk-reporter': { name: 'PSK Reporter', icon: '📡' },
+      'dxpeditions': { name: 'DXpeditions', icon: '🏝️' },
+      'pota': { name: 'POTA', icon: '🏕️' },
+      'sota': { name: 'SOTA', icon: '⛰️' },
+      'contests': { name: 'Contests', icon: '🏆' },
+      ...(hasAmbient ? { 'ambient': { name: 'Ambient Weather', icon: '🌦️' } } : {}),
+      'id-timer': { name: 'ID Timer', icon: '📢' },
+    };
+  }, []);
 
   // Add panel
   const handleAddPanel = useCallback((panelId) => {
@@ -277,15 +293,17 @@ export const DockableApp = ({
         onDXChange={handleDXChange}
         dxLocked={dxLocked}
         potaSpots={potaSpots.data}
+        sotaSpots={sotaSpots.data}
         mySpots={mySpots.data}
         dxPaths={dxClusterData.paths}
         dxFilters={dxFilters}
-        satellites={satellites.data}
+        satellites={filteredSatellites}
         pskReporterSpots={filteredPskSpots}
         showDXPaths={mapLayers.showDXPaths}
         showDXLabels={mapLayers.showDXLabels}
         onToggleDXLabels={toggleDXLabels}
         showPOTA={mapLayers.showPOTA}
+        showSOTA={mapLayers.showSOTA}
         showSatellites={mapLayers.showSatellites}
         showPSKReporter={mapLayers.showPSKReporter}
         wsjtxSpots={wsjtxMapSpots}
@@ -395,6 +413,7 @@ export const DockableApp = ({
         content = (
           <PSKReporterPanel
             callsign={config.callsign}
+            pskReporter={pskReporter}
             showOnMap={mapLayers.showPSKReporter}
             onToggleMap={togglePSKReporter}
             filters={pskFilters}
@@ -428,6 +447,10 @@ export const DockableApp = ({
         content = <POTAPanel data={potaSpots.data} loading={potaSpots.loading} showOnMap={mapLayers.showPOTA} onToggleMap={togglePOTA} />;
         break;
 
+      case 'sota':
+        content = <SOTAPanel data={sotaSpots.data} loading={sotaSpots.loading} showOnMap={mapLayers.showSOTA} onToggleMap={toggleSOTA} />;
+        break;
+
       case 'contests':
         content = <ContestPanel data={contests.data} loading={contests.loading} />;
         break;
@@ -444,6 +467,11 @@ export const DockableApp = ({
           />
         );
         break;
+
+      case 'id-timer':
+        content = <IDTimerPanel callsign={config.callsign} />;
+        break;
+
       default:
         content = (
           <div style={{ padding: '20px', color: '#ff6b6b', textAlign: 'center' }}>
@@ -465,10 +493,10 @@ export const DockableApp = ({
     return content;
   }, [
     config, deGrid, dxGrid, dxLocation, deSunTimes, dxSunTimes, showDxWeather, tempUnit, localWeather, dxWeather, solarIndices,
-    propagation, bandConditions, dxClusterData, dxFilters, hoveredSpot, mapLayers, potaSpots,
-    mySpots, satellites, filteredPskSpots, wsjtxMapSpots, dxpeditions, contests,
+    propagation, bandConditions, dxClusterData, dxFilters, hoveredSpot, mapLayers, potaSpots, sotaSpots,
+    mySpots, satellites, filteredSatellites, filteredPskSpots, wsjtxMapSpots, dxpeditions, contests,
     pskFilters, wsjtx, handleDXChange, setDxFilters, setShowDXFilters, setShowPSKFilters,
-    setHoveredSpot, toggleDXPaths, toggleDXLabels, togglePOTA, toggleSatellites, togglePSKReporter, toggleWSJTX,
+    setHoveredSpot, toggleDXPaths, toggleDXLabels, togglePOTA, toggleSOTA, toggleSatellites, togglePSKReporter, toggleWSJTX,
     dxLocked, handleToggleDxLock, panelZoom
   ]);
 
@@ -555,6 +583,8 @@ export const DockableApp = ({
           localDate={localDate}
           localWeather={localWeather}
           spaceWeather={spaceWeather}
+          solarIndices={solarIndices}
+          bandConditions={bandConditions}
           use12Hour={use12Hour}
           onTimeFormatToggle={handleTimeFormatToggle}
           onSettingsClick={() => setShowSettings(true)}

@@ -18,6 +18,7 @@ import {
   useBandConditions,
   useDXClusterData,
   usePOTASpots,
+  useSOTASpots,
   useContests,
   useWeather,
   usePropagation,
@@ -66,6 +67,19 @@ const App = () => {
     const hasLocalStorage = localStorage.getItem('openhamclock_config');
     if (!hasLocalStorage && config.callsign === 'N0CALL') {
       setShowSettings(true);
+      
+      // Auto-detect mobile/tablet on first visit and set appropriate layout
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= 768;
+      const isTabletSize = window.innerWidth > 768 && window.innerWidth <= 1200;
+      
+      if (isTouchDevice && isSmallScreen) {
+        // Phone → compact layout
+        handleSaveConfig({ ...config, layout: 'compact' });
+      } else if (isTouchDevice && isTabletSize) {
+        // Tablet → tablet layout
+        handleSaveConfig({ ...config, layout: 'tablet' });
+      }
     }
   }, [configLoaded, config.callsign]);
 
@@ -109,6 +123,7 @@ const App = () => {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
     toggleWSJTX,
@@ -132,6 +147,7 @@ const App = () => {
   const bandConditions = useBandConditions();
   const solarIndices = useSolarIndices();
   const potaSpots = usePOTASpots();
+  const sotaSpots = useSOTASpots();
   const dxClusterData = useDXClusterData(dxFilters, config);
   const dxpeditions = useDXpeditions();
   const contests = useContests();
@@ -187,7 +203,14 @@ const App = () => {
   }, [pskReporter.txReports, pskReporter.rxReports, pskFilters]);
 
   const wsjtxMapSpots = useMemo(() => {
-    return wsjtx.decodes.filter(d => d.lat && d.lon && d.type === 'CQ');
+    // Apply same age filter as panel (stored in localStorage)
+    let ageMinutes = 30;
+    try { ageMinutes = parseInt(localStorage.getItem('ohc_wsjtx_age')) || 30; } catch {}
+    const ageCutoff = Date.now() - ageMinutes * 60 * 1000;
+    
+    // Map all decodes with resolved coordinates (CQ, QSO exchanges, prefix estimates)
+    // WorldMap deduplicates by callsign, keeping most recent
+    return wsjtx.decodes.filter(d => d.lat && d.lon && d.timestamp >= ageCutoff);
   }, [wsjtx.decodes]);
 
   // Map hover
@@ -252,6 +275,7 @@ const App = () => {
     propagation,
     dxClusterData,
     potaSpots,
+    sotaSpots,
     mySpots,
     dxpeditions,
     contests,
@@ -268,6 +292,7 @@ const App = () => {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
     toggleWSJTX,

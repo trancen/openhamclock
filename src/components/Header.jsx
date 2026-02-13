@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { IconGear, IconExpand, IconShrink } from './Icons.jsx';
+import { QRZToggle } from './CallsignLink.jsx';
 export const Header = ({
   config,
   utcTime,
@@ -52,6 +53,14 @@ export const Header = ({
           {config.callsign}
         </span>
         {config.version && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>v{config.version}</span>}
+        {(() => {
+          const touch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+          const narrow = typeof window !== 'undefined' && window.innerWidth <= 1024;
+          if (touch && narrow) return <span className="ohc-mobile-badge">{window.innerWidth <= 768 ? '📱' : '📱 Tablet'}</span>;
+          if (touch) return <span className="ohc-mobile-badge">👆 Touch</span>;
+          return null;
+        })()}
+        <QRZToggle />
       </div>
 
       {/* UTC Clock */}

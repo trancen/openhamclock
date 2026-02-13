@@ -9,9 +9,9 @@
  */
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePSKReporter } from '../hooks/usePSKReporter.js';
 import { getBandColor } from '../utils/callsign.js';
 import { IconSearch, IconRefresh, IconMap } from './Icons.jsx';
+import CallsignLink from './CallsignLink.jsx';
 
 const PSKReporterPanel = ({ 
   callsign, 
@@ -20,6 +20,8 @@ const PSKReporterPanel = ({
   onToggleMap,
   filters = {},
   onOpenFilters,
+  // PSK data from App-level hook (single SSE connection)
+  pskReporter = {},
   // WSJT-X props
   wsjtxDecodes = [],
   wsjtxClients = {},
@@ -43,19 +45,19 @@ const PSKReporterPanel = ({
   });
   const [wsjtxTab, setWsjtxTab] = useState('decodes');
   const [wsjtxFilter, setWsjtxFilter] = useState('all'); // 'all' | 'cq' | band name
+  const [wsjtxAge, setWsjtxAge] = useState(() => {
+    try { return parseInt(localStorage.getItem('ohc_wsjtx_age')) || 30; } catch { return 30; }
+  }); // minutes: 5, 15, 30, 60
   
   // Persist panel mode and active tab
   const setPanelModePersist = (v) => { setPanelMode(v); try { localStorage.setItem('openhamclock_pskPanelMode', v); } catch {} };
   const setActiveTabPersist = (v) => { setActiveTab(v); try { localStorage.setItem('openhamclock_pskActiveTab', v); } catch {} };
   
-  // PSKReporter hook
+  // PSKReporter data from App-level hook (single SSE connection shared across app)
   const { 
-    txReports, txCount, rxReports, rxCount, 
-    loading, error, connected, source, refresh 
-  } = usePSKReporter(callsign, { 
-    minutes: 30,
-    enabled: callsign && callsign !== 'N0CALL'
-  });
+    txReports = [], txCount = 0, rxReports = [], rxCount = 0, 
+    loading = false, error = null, connected = false, source = '', refresh = () => {} 
+  } = pskReporter;
 
   // ── PSK filtering ──
   const filterReports = (reports) => {
@@ -102,6 +104,11 @@ const PSKReporterPanel = ({
 
   const filteredDecodes = useMemo(() => {
     let filtered = [...wsjtxDecodes];
+    
+    // Time retention filter
+    const ageCutoff = Date.now() - wsjtxAge * 60 * 1000;
+    filtered = filtered.filter(d => d.timestamp >= ageCutoff);
+    
     if (wsjtxFilter === 'cq') {
       filtered = filtered.filter(d => d.type === 'CQ');
     } else if (wsjtxFilter !== 'all') {
@@ -109,7 +116,7 @@ const PSKReporterPanel = ({
       filtered = filtered.filter(d => d.band === wsjtxFilter);
     }
     return filtered.reverse();
-  }, [wsjtxDecodes, wsjtxFilter]);
+  }, [wsjtxDecodes, wsjtxFilter, wsjtxAge]);
 
   const getSnrColor = (snr) => {
     if (snr == null) return 'var(--text-muted)';
@@ -218,7 +225,7 @@ const PSKReporterPanel = ({
             </>
           )}
 
-          {/* WSJT-X: mode/band info + unified filter */}
+          {/* WSJT-X: mode/band info + unified filter + age */}
           {panelMode === 'wsjtx' && (
             <>
               {primaryClient && (
@@ -244,6 +251,26 @@ const PSKReporterPanel = ({
                 {wsjtxFilterOptions.map(o => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
+              </select>
+              <select
+                value={wsjtxAge}
+                onChange={(e) => { const v = parseInt(e.target.value); setWsjtxAge(v); try { localStorage.setItem('ohc_wsjtx_age', v); } catch {} }}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  padding: '1px 4px',
+                  cursor: 'pointer',
+                  maxWidth: '55px',
+                }}
+                title="Decode retention time"
+              >
+                <option value={5}>5m</option>
+                <option value={15}>15m</option>
+                <option value={30}>30m</option>
+                <option value={60}>60m</option>
               </select>
             </>
           )}
@@ -335,7 +362,7 @@ const PSKReporterPanel = ({
                       color: 'var(--text-primary)', fontWeight: '600', fontSize: '11px',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                     }}>
-                      {displayCall}
+                      <CallsignLink call={displayCall} color="var(--text-primary)" fontWeight="600" fontSize="11px" />
                       {grid && <span style={{ color: 'var(--text-muted)', fontWeight: '400', marginLeft: '4px', fontSize: '9px' }}>{grid}</span>}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9px' }}>
@@ -464,7 +491,7 @@ const PSKReporterPanel = ({
                       <span style={{ 
                         color: q.band ? getBandColor(q.frequency / 1000000) : 'var(--accent-green)', 
                         fontWeight: '600', minWidth: '65px' 
-                      }}>{q.dxCall}</span>
+                      }}><CallsignLink call={q.dxCall} color={q.band ? getBandColor(q.frequency / 1000000) : 'var(--accent-green)'} fontWeight="600" /></span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.band}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.mode}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.reportSent}/{q.reportRecv}</span>

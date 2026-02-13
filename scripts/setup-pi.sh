@@ -148,7 +148,7 @@ setup_repository() {
     git config core.fileMode false 2>/dev/null
     
     # Install npm dependencies
-    npm install
+    npm install --include=dev
     
     # Build frontend for production
     npm run build
@@ -173,8 +173,9 @@ Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/node server.js
-Restart=on-failure
+Restart=always
 RestartSec=10
+SuccessExitStatus=75
 Environment=NODE_ENV=production
 Environment=PORT=3000
 

@@ -8,7 +8,10 @@ import {
   calculateGridSquare, 
   getSunPosition, 
   getMoonPosition, 
-  getGreatCirclePoints 
+  getGreatCirclePoints,
+  replicatePath,
+  replicatePoint,
+  normalizeLon
 } from '../utils/geo.js';
 import { getBandColor } from '../utils/callsign.js';
 import { createTerminator } from '../utils/terminator.js';
@@ -20,6 +23,19 @@ import PluginLayer from './PluginLayer.jsx';
 import { DXNewsTicker } from './DXNewsTicker.jsx';
 import {filterDXPaths} from "../utils";
 
+// SECURITY: Escape HTML to prevent XSS in Leaflet popups/tooltips
+// DX cluster data, POTA/SOTA spots, and WSJT-X decodes come from external sources
+// and could contain malicious HTML/script tags in callsigns, comments, or park names.
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 
 export const WorldMap = ({ 
   deLocation, 
@@ -27,6 +43,7 @@ export const WorldMap = ({
   onDXChange,
   dxLocked,
   potaSpots, 
+  sotaSpots,
   mySpots, 
   dxPaths, 
   dxFilters, 
@@ -37,6 +54,7 @@ export const WorldMap = ({
   showDXLabels, 
   onToggleDXLabels, 
   showPOTA, 
+  showSOTA,
   showSatellites, 
   showPSKReporter,
   showWSJTX,
@@ -57,6 +75,7 @@ export const WorldMap = ({
   const sunMarkerRef = useRef(null);
   const moonMarkerRef = useRef(null);
   const potaMarkersRef = useRef([]);
+  const sotaMarkersRef = useRef([]);
   const mySpotsMarkersRef = useRef([]);
   const mySpotsLinesRef = useRef([]);
   const dxPathsLinesRef = useRef([]);
@@ -72,6 +91,20 @@ export const WorldMap = ({
   const deLocator = useMemo(() => {
     if (!deLocation?.lat || !deLocation?.lon) return '';
     return calculateGridSquare(deLocation.lat, deLocation.lon);
+  }, [deLocation?.lat, deLocation?.lon]);
+
+  // Expose DE location to window for plugins (e.g., RBN)
+  useEffect(() => {
+    if (deLocation?.lat && deLocation?.lon) {
+      window.deLocation = {
+        lat: deLocation.lat,
+        lon: deLocation.lon
+      };
+    }
+    return () => {
+      // Cleanup on unmount
+      delete window.deLocation;
+    };
   }, [deLocation?.lat, deLocation?.lon]);
 
   // Keep dxLockedRef in sync with prop
@@ -438,45 +471,43 @@ export const WorldMap = ({
           const isHovered = hoveredSpot && 
                            hoveredSpot.call?.toUpperCase() === path.dxCall?.toUpperCase();
           
-          // Handle path rendering (single continuous array, unwrapped across antimeridian)
-          if (pathPoints && Array.isArray(pathPoints) && pathPoints.length > 1) {
-            const line = L.polyline(pathPoints, {
+          // Render polyline on all 3 world copies so it's visible across the dateline
+          replicatePath(pathPoints).forEach(copy => {
+            const line = L.polyline(copy, {
               color: isHovered ? '#ffffff' : color,
               weight: isHovered ? 4 : 1.5,
               opacity: isHovered ? 1 : 0.5
             }).addTo(map);
             if (isHovered) line.bringToFront();
             dxPathsLinesRef.current.push(line);
-          }
+          });
 
-          // Use unwrapped endpoint so marker sits where the line ends
-          const endPoint = pathPoints[pathPoints.length - 1];
-          const dxLatDisplay = endPoint[0];
-          const dxLonDisplay = endPoint[1];
-
-          // Add DX marker
-          const dxCircle = L.circleMarker([dxLatDisplay, dxLonDisplay], {
-            radius: isHovered ? 12 : 6,
-            fillColor: isHovered ? '#ffffff' : color,
-            color: isHovered ? color : '#fff',
-            weight: isHovered ? 3 : 1.5,
-            opacity: 1,
-            fillOpacity: isHovered ? 1 : 0.9
-          })
-            .bindPopup(`<b style="color: ${color}">${path.dxCall}</b><br>${path.freq} MHz<br>by ${path.spotter}`)
-            .addTo(map);
-          if (isHovered) dxCircle.bringToFront();
-          dxPathsMarkersRef.current.push(dxCircle);
+          // Render circleMarker on all 3 world copies
+          replicatePoint(path.dxLat, path.dxLon).forEach(([lat, lon]) => {
+            const dxCircle = L.circleMarker([lat, lon], {
+              radius: isHovered ? 12 : 6,
+              fillColor: isHovered ? '#ffffff' : color,
+              color: isHovered ? color : '#fff',
+              weight: isHovered ? 3 : 1.5,
+              opacity: 1,
+              fillOpacity: isHovered ? 1 : 0.9
+            })
+              .bindPopup(`<b data-qrz-call="${esc(path.dxCall)}" style="color: ${color}; cursor:pointer">${esc(path.dxCall)}</b><br>${esc(path.freq)} MHz<br>by <span data-qrz-call="${esc(path.spotter)}" style="cursor:pointer">${esc(path.spotter)}</span>`)
+              .addTo(map);
+            if (isHovered) dxCircle.bringToFront();
+            dxPathsMarkersRef.current.push(dxCircle);
+          });
           
-          // Add label if enabled
+          // Add label if enabled (L.marker with divIcon auto-duplicates across world copies)
           if (showDXLabels || isHovered) {
+            const dxLonNorm = normalizeLon(path.dxLon);
             const labelIcon = L.divIcon({
               className: '',
-              html: `<span style="display:inline-block;background:${isHovered ? '#fff' : color};color:${isHovered ? color : '#000'};padding:${isHovered ? '5px 10px' : '4px 8px'};border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:${isHovered ? '14px' : '12px'};font-weight:700;white-space:nowrap;border:2px solid ${isHovered ? color : 'rgba(0,0,0,0.5)'};box-shadow:0 2px ${isHovered ? '8px' : '4px'} rgba(0,0,0,${isHovered ? '0.6' : '0.4'});">${path.dxCall}</span>`,
+              html: `<span style="display:inline-block;background:${isHovered ? '#fff' : color};color:${isHovered ? color : '#000'};padding:${isHovered ? '5px 10px' : '4px 8px'};border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:${isHovered ? '14px' : '12px'};font-weight:700;white-space:nowrap;border:2px solid ${isHovered ? color : 'rgba(0,0,0,0.5)'};box-shadow:0 2px ${isHovered ? '8px' : '4px'} rgba(0,0,0,${isHovered ? '0.6' : '0.4'});">${esc(path.dxCall)}</span>`,
               iconSize: null,
               iconAnchor: [0, 0]
             });
-            const label = L.marker([dxLatDisplay, dxLonDisplay], { 
+            const label = L.marker([path.dxLat, dxLonNorm], { 
               icon: labelIcon, 
               interactive: false,
               zIndexOffset: isHovered ? 10000 : 0
@@ -509,7 +540,7 @@ export const WorldMap = ({
             iconAnchor: [7, 14]
           });
           const marker = L.marker([spot.lat, spot.lon], { icon: triangleIcon })
-            .bindPopup(`<b style="color:#44cc44">${spot.call}</b><br><span style="color:#888">${spot.ref}</span> ${spot.locationDesc || ''}<br>${spot.name ? `<i>${spot.name}</i><br>` : ''}${spot.freq} ${spot.mode || ''} <span style="color:#888">${spot.time || ''}</span>`)
+            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#44cc44; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
             .addTo(map);
           potaMarkersRef.current.push(marker);
 
@@ -517,7 +548,7 @@ export const WorldMap = ({
           if (showDXLabels) {
             const labelIcon = L.divIcon({
               className: '',
-              html: `<span style="display:inline-block;background:#44cc44;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${spot.call}</span>`,
+              html: `<span style="display:inline-block;background:#44cc44;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${esc(spot.call)}</span>`,
               iconSize: null,
               iconAnchor: [0, -2]
             });
@@ -528,6 +559,45 @@ export const WorldMap = ({
       });
     }
   }, [potaSpots, showPOTA, showDXLabels]);
+
+  // Update SOTA markers
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    sotaMarkersRef.current.forEach(m => map.removeLayer(m));
+    sotaMarkersRef.current = [];
+
+    if (showSOTA && sotaSpots) {
+      sotaSpots.forEach(spot => {
+        if (spot.lat && spot.lon) {
+          // Orange diamond marker for SOTA activators
+          const diamondIcon = L.divIcon({
+            className: '',
+            html: `<span style="display:inline-block;width:12px;height:12px;background:#ff9632;transform:rotate(45deg);border:1px solid rgba(0,0,0,0.4);filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></span>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+          });
+          const marker = L.marker([spot.lat, spot.lon], { icon: diamondIcon })
+            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#ff9632; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span>${spot.summit ? ` — ${esc(spot.summit)}` : ''}${spot.points ? ` <span style="color:#ff9632">(${esc(spot.points)}pt)</span>` : ''}<br>${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
+            .addTo(map);
+          sotaMarkersRef.current.push(marker);
+
+          // Only show callsign label when labels are enabled
+          if (showDXLabels) {
+            const labelIcon = L.divIcon({
+              className: '',
+              html: `<span style="display:inline-block;background:#ff9632;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${esc(spot.call)}</span>`,
+              iconSize: null,
+              iconAnchor: [0, -2]
+            });
+            const label = L.marker([spot.lat, spot.lon], { icon: labelIcon, interactive: false }).addTo(map);
+            sotaMarkersRef.current.push(label);
+          }
+        }
+      });
+    }
+  }, [sotaSpots, showSOTA, showDXLabels]);
 
   // Update satellite markers with orbit tracks
   useEffect(() => {
@@ -546,48 +616,53 @@ export const WorldMap = ({
         
         // Draw orbit track if available
         if (sat.track && sat.track.length > 1) {
-          // Unwrap longitudes for continuous rendering across antimeridian
+          // Unwrap longitudes for continuous path, then replicate across world copies
           const unwrapped = sat.track.map(p => [...p]);
           for (let i = 1; i < unwrapped.length; i++) {
             while (unwrapped[i][1] - unwrapped[i-1][1] > 180) unwrapped[i][1] -= 360;
             while (unwrapped[i][1] - unwrapped[i-1][1] < -180) unwrapped[i][1] += 360;
           }
           
-          const trackLine = L.polyline(unwrapped, {
-            color: sat.visible ? satColor : satColorDark,
-            weight: 2,
-            opacity: sat.visible ? 0.8 : 0.4,
-            dashArray: sat.visible ? null : '5, 5'
-          }).addTo(map);
-          satTracksRef.current.push(trackLine);
+          // Render on all 3 world copies
+          replicatePath(unwrapped).forEach(copy => {
+            const trackLine = L.polyline(copy, {
+              color: sat.visible ? satColor : satColorDark,
+              weight: 2,
+              opacity: sat.visible ? 0.8 : 0.4,
+              dashArray: sat.visible ? null : '5, 5'
+            }).addTo(map);
+            satTracksRef.current.push(trackLine);
+          });
         }
         
         // Draw footprint circle if available and satellite is visible
         if (sat.footprintRadius && sat.lat && sat.lon && sat.visible) {
-          const footprint = L.circle([sat.lat, sat.lon], {
-            radius: sat.footprintRadius * 1000, // Convert km to meters
-            color: satColor,
-            weight: 1,
-            opacity: 0.5,
-            fillColor: satColor,
-            fillOpacity: 0.1
-          }).addTo(map);
-          satTracksRef.current.push(footprint);
+          replicatePoint(sat.lat, sat.lon).forEach(([fLat, fLon]) => {
+            const footprint = L.circle([fLat, fLon], {
+              radius: sat.footprintRadius * 1000, // Convert km to meters
+              color: satColor,
+              weight: 1,
+              opacity: 0.5,
+              fillColor: satColor,
+              fillOpacity: 0.1
+            }).addTo(map);
+            satTracksRef.current.push(footprint);
+          });
         }
         
         // Add satellite marker icon
         const icon = L.divIcon({
           className: '',
-          html: `<span style="display:inline-block;background:${sat.visible ? satColor : satColorDark};color:${sat.visible ? '#000' : '#fff'};padding:4px 8px;border-radius:4px;font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap;border:2px solid ${sat.visible ? '#fff' : '#666'};font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.4);">⛊ ${sat.name}</span>`,
+          html: `<span style="display:inline-block;background:${sat.visible ? satColor : satColorDark};color:${sat.visible ? '#000' : '#fff'};padding:4px 8px;border-radius:4px;font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap;border:2px solid ${sat.visible ? '#fff' : '#666'};font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.4);">⛊ ${esc(sat.name)}</span>`,
           iconSize: null,
           iconAnchor: [0, 0]
         });
         
         const marker = L.marker([sat.lat, sat.lon], { icon })
           .bindPopup(`
-            <b>⛊ ${sat.name}</b><br>
+            <b>⛊ ${esc(sat.name)}</b><br>
             <table style="font-size: 11px;">
-              <tr><td>Mode:</td><td><b>${sat.mode || 'Unknown'}</b></td></tr>
+              <tr><td>Mode:</td><td><b>${esc(sat.mode || 'Unknown')}</b></td></tr>
               <tr><td>Alt:</td><td>${units === 'imperial' ? Math.round(sat.alt * 0.621371).toLocaleString() + ' mi' : Math.round(sat.alt).toLocaleString() + ' km'}</td></tr>
               <tr><td>Az:</td><td>${sat.azimuth}°</td></tr>
               <tr><td>El:</td><td>${sat.elevation}°</td></tr>
@@ -711,37 +786,36 @@ export const WorldMap = ({
               50
             );
             
-            // Validate points before creating polyline (single continuous array, unwrapped across antimeridian)
+            // Render polyline on all 3 world copies
             if (points && Array.isArray(points) && points.length > 1 && 
                 points.every(p => Array.isArray(p) && !isNaN(p[0]) && !isNaN(p[1]))) {
-              const line = L.polyline(points, {
-                color: bandColor,
-                weight: 1.5,
-                opacity: 0.5,
-                dashArray: '4, 4'
-              }).addTo(map);
-              pskMarkersRef.current.push(line);
-              
-              // Use unwrapped endpoint so dot sits where the line ends
-              const endPoint = points[points.length - 1];
-              spotLat = endPoint[0];
-              spotLon = endPoint[1];
+              replicatePath(points).forEach(copy => {
+                const line = L.polyline(copy, {
+                  color: bandColor,
+                  weight: 1.5,
+                  opacity: 0.5,
+                  dashArray: '4, 4'
+                }).addTo(map);
+                pskMarkersRef.current.push(line);
+              });
             }
             
-            // Add small dot marker at spot location
-            const circle = L.circleMarker([spotLat, spotLon], {
-              radius: 4,
-              fillColor: bandColor,
-              color: '#fff',
-              weight: 1,
-              opacity: 0.9,
-              fillOpacity: 0.8
-            }).bindPopup(`
-              <b>${displayCall}</b><br>
-              ${spot.mode} @ ${freqMHz} MHz<br>
-              ${spot.snr !== null ? `SNR: ${spot.snr > 0 ? '+' : ''}${spot.snr} dB` : ''}
-            `).addTo(map);
-            pskMarkersRef.current.push(circle);
+            // Render circleMarker on all 3 world copies
+            replicatePoint(spotLat, spotLon).forEach(([rLat, rLon]) => {
+              const circle = L.circleMarker([rLat, rLon], {
+                radius: 4,
+                fillColor: bandColor,
+                color: '#fff',
+                weight: 1,
+                opacity: 0.9,
+                fillOpacity: 0.8
+              }).bindPopup(`
+                <b data-qrz-call="${esc(displayCall)}" style="cursor:pointer">${esc(displayCall)}</b><br>
+                ${esc(spot.mode)} @ ${esc(freqMHz)} MHz<br>
+                ${spot.snr !== null ? `SNR: ${spot.snr > 0 ? '+' : ''}${spot.snr} dB` : ''}
+              `).addTo(map);
+              pskMarkersRef.current.push(circle);
+            });
           } catch (err) {
             console.warn('Error rendering PSKReporter spot:', err);
           }
@@ -764,6 +838,7 @@ export const WorldMap = ({
 
     if (showWSJTX && wsjtxSpots && wsjtxSpots.length > 0 && hasValidDE) {
       // Deduplicate by callsign - keep most recent
+      // For CQ: caller is the station. For QSO: dxCall is the remote station.
       const seen = new Map();
       wsjtxSpots.forEach(spot => {
         const call = spot.caller || spot.dxCall || '';
@@ -779,9 +854,11 @@ export const WorldMap = ({
         if (!isNaN(spotLat) && !isNaN(spotLon)) {
           const freqMHz = spot.dialFrequency ? (spot.dialFrequency / 1000000) : 0;
           const bandColor = freqMHz ? getBandColor(freqMHz) : '#a78bfa';
+          // Prefix-estimated locations get reduced opacity
+          const isEstimated = spot.gridSource === 'prefix';
 
           try {
-            // Draw line from DE to CQ caller
+            // Draw line from DE to decoded station
             const points = getGreatCirclePoints(
               deLocation.lat, deLocation.lon,
               spotLat, spotLon,
@@ -790,37 +867,36 @@ export const WorldMap = ({
 
             if (points && Array.isArray(points) && points.length > 1 &&
                 points.every(p => Array.isArray(p) && !isNaN(p[0]) && !isNaN(p[1]))) {
-              const line = L.polyline(points, {
-                color: '#a78bfa',
-                weight: 1.5,
-                opacity: 0.4,
-                dashArray: '2, 6'
-              }).addTo(map);
-              wsjtxMarkersRef.current.push(line);
-
-              const endPoint = points[points.length - 1];
-              spotLat = endPoint[0];
-              spotLon = endPoint[1];
+              // Render polyline on all 3 world copies
+              replicatePath(points).forEach(copy => {
+                const line = L.polyline(copy, {
+                  color: '#a78bfa',
+                  weight: 1.5,
+                  opacity: isEstimated ? 0.15 : 0.4,
+                  dashArray: '2, 6'
+                }).addTo(map);
+                wsjtxMarkersRef.current.push(line);
+              });
             }
 
-            // Diamond-shaped marker to distinguish from PSK circles
-            const diamond = L.marker([spotLat, spotLon], {
+            // Diamond-shaped marker (L.marker with divIcon auto-duplicates across world copies)
+            const diamond = L.marker([spotLat, normalizeLon(spotLon)], {
               icon: L.divIcon({
                 className: '',
                 html: `<div style="
                   width: 8px; height: 8px;
                   background: ${bandColor};
-                  border: 1px solid #fff;
+                  border: 1px solid ${isEstimated ? '#888' : '#fff'};
                   transform: rotate(45deg);
-                  opacity: 0.9;
+                  opacity: ${isEstimated ? 0.5 : 0.9};
                 "></div>`,
                 iconSize: [8, 8],
                 iconAnchor: [4, 4]
               })
             }).bindPopup(`
-              <b>${call}</b> CQ<br>
-              ${spot.grid || ''} ${spot.band || ''}<br>
-              ${spot.mode || ''} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
+              <b data-qrz-call="${esc(call)}" style="cursor:pointer">${esc(call)}</b> ${spot.type === 'CQ' ? 'CQ' : ''}<br>
+              ${esc(spot.grid || '')} ${esc(spot.band || '')}${spot.gridSource === 'prefix' ? ' <i>(est)</i>' : spot.gridSource === 'cache' ? ' <i>(prev)</i>' : ''}<br>
+              ${esc(spot.mode || '')} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
             `).addTo(map);
             wsjtxMarkersRef.current.push(diamond);
           } catch (err) {
@@ -996,6 +1072,11 @@ export const WorldMap = ({
         {showPOTA && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <span style={{ background: '#44cc44', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>▲ POTA</span>
+          </div>
+        )}
+        {showSOTA && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <span style={{ background: '#ff9632', color: '#000', padding: '2px 5px', borderRadius: '3px', fontWeight: '600' }}>◆ SOTA</span>
           </div>
         )}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

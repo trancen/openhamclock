@@ -5,7 +5,7 @@ import {
   Header,
   WorldMap,
   DXClusterPanel,
-  POTAPanel,
+  PotaSotaPanel,
   ContestPanel,
   SolarPanel,
   PropagationPanel,
@@ -56,6 +56,7 @@ export default function ModernLayout(props) {
     propagation,
     dxClusterData,
     potaSpots,
+    sotaSpots,
     mySpots,
     dxpeditions,
     contests,
@@ -73,6 +74,7 @@ export default function ModernLayout(props) {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
     toggleWSJTX,
@@ -274,6 +276,7 @@ export default function ModernLayout(props) {
           onDXChange={handleDXChange}
           dxLocked={dxLocked}
           potaSpots={potaSpots.data}
+          sotaSpots={sotaSpots.data}
           mySpots={mySpots.data}
           dxPaths={dxClusterData.paths}
           dxFilters={dxFilters}
@@ -283,6 +286,7 @@ export default function ModernLayout(props) {
           showDXLabels={mapLayers.showDXLabels}
           onToggleDXLabels={toggleDXLabels}
           showPOTA={mapLayers.showPOTA}
+          showSOTA={mapLayers.showSOTA}
           showSatellites={mapLayers.showSatellites}
           showPSKReporter={mapLayers.showPSKReporter}
           wsjtxSpots={wsjtxMapSpots}
@@ -341,6 +345,7 @@ export default function ModernLayout(props) {
             <div style={{ flex: `${config.panels.pskReporter.size || 1} 1 auto`, minHeight: '140px', overflow: 'hidden' }}>
               <PSKReporterPanel
                 callsign={config.callsign}
+                pskReporter={pskReporter}
                 showOnMap={mapLayers.showPSKReporter}
                 onToggleMap={togglePSKReporter}
                 filters={pskFilters}
@@ -373,14 +378,18 @@ export default function ModernLayout(props) {
             </div>
           )}
 
-          {/* POTA */}
+          {/* POTA / SOTA */}
           {config.panels?.pota?.visible !== false && (
-            <div style={{ flex: `${config.panels.pota?.size || 1} 0 auto`, minHeight: '60px', maxHeight: '90px', overflow: 'hidden' }}>
-              <POTAPanel
-                data={potaSpots.data}
-                loading={potaSpots.loading}
-                showOnMap={mapLayers.showPOTA}
-                onToggleMap={togglePOTA}
+            <div style={{ flex: `${config.panels.pota?.size || 1} 0 auto`, minHeight: '60px', maxHeight: '120px', overflow: 'hidden' }}>
+              <PotaSotaPanel
+                potaData={potaSpots.data}
+                potaLoading={potaSpots.loading}
+                showPOTA={mapLayers.showPOTA}
+                onTogglePOTA={togglePOTA}
+                sotaData={sotaSpots.data}
+                sotaLoading={sotaSpots.loading}
+                showSOTA={mapLayers.showSOTA}
+                onToggleSOTA={toggleSOTA}
               />
             </div>
           )}
