@@ -9,9 +9,9 @@
  */
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePSKReporter } from '../hooks/usePSKReporter.js';
 import { getBandColor } from '../utils/callsign.js';
 import { IconSearch, IconRefresh, IconMap } from './Icons.jsx';
+import CallsignLink from './CallsignLink.jsx';
 
 const PSKReporterPanel = ({
   callsign,
@@ -21,6 +21,8 @@ const PSKReporterPanel = ({
   onToggleMap,
   filters = {},
   onOpenFilters,
+  // PSK data from App-level hook (single SSE connection)
+  pskReporter = {},
   // WSJT-X props
   wsjtxDecodes = [],
   wsjtxClients = {},
@@ -52,14 +54,11 @@ const PSKReporterPanel = ({
   const setPanelModePersist = (v) => { setPanelMode(v); try { localStorage.setItem('openhamclock_pskPanelMode', v); } catch { } };
   const setActiveTabPersist = (v) => { setActiveTab(v); try { localStorage.setItem('openhamclock_pskActiveTab', v); } catch { } };
 
-  // PSKReporter hook
+  // PSKReporter data from App-level hook (single SSE connection shared across app)
   const {
-    txReports, txCount, rxReports, rxCount,
-    loading, error, connected, source, refresh
-  } = usePSKReporter(callsign, {
-    minutes: 30,
-    enabled: callsign && callsign !== 'N0CALL'
-  });
+    txReports = [], txCount = 0, rxReports = [], rxCount = 0,
+    loading = false, error = null, connected = false, source = '', refresh = () => { }
+  } = pskReporter;
 
   // ── PSK filtering ──
   const filterReports = (reports) => {
@@ -367,7 +366,7 @@ const PSKReporterPanel = ({
                       color: 'var(--text-primary)', fontWeight: '600', fontSize: '11px',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                     }}>
-                      {displayCall}
+                      <CallsignLink call={displayCall} color="var(--text-primary)" fontWeight="600" fontSize="11px" />
                       {grid && <span style={{ color: 'var(--text-muted)', fontWeight: '400', marginLeft: '4px', fontSize: '9px' }}>{grid}</span>}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9px' }}>
@@ -496,35 +495,37 @@ const PSKReporterPanel = ({
                       <span style={{
                         color: q.band ? getBandColor(q.frequency / 1000000) : 'var(--accent-green)',
                         fontWeight: '600', minWidth: '65px'
-                      }}>{q.dxCall}</span>
+                      }}><CallsignLink call={q.dxCall} color={q.band ? getBandColor(q.frequency / 1000000) : 'var(--accent-green)'} fontWeight="600" /></span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.band}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.mode}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{q.reportSent}/{q.reportRecv}</span>
                       {q.dxGrid && <span style={{ color: '#a78bfa', fontSize: '10px' }}>{q.dxGrid}</span>}
-                    </div>
+                    </div >
                   ))
                 )}
               </>
             )}
           </>
         )}
-      </div>
+      </div >
 
       {/* ── WSJT-X status footer ── */}
-      {panelMode === 'wsjtx' && activeClients.length > 0 && (
-        <div style={{
-          fontSize: '9px', color: 'var(--text-muted)',
-          borderTop: '1px solid var(--border-color)',
-          paddingTop: '2px', marginTop: '2px',
-          display: 'flex', justifyContent: 'space-between', flexShrink: 0
-        }}>
-          <span>{activeClients.map(([id, c]) => `${id}${c.version ? ` v${c.version}` : ''}`).join(', ')}</span>
-          {primaryClient?.dialFrequency && (
-            <span style={{ color: '#a78bfa' }}>{(primaryClient.dialFrequency / 1000000).toFixed(6)} MHz</span>
-          )}
-        </div>
-      )}
-    </div>
+      {
+        panelMode === 'wsjtx' && activeClients.length > 0 && (
+          <div style={{
+            fontSize: '9px', color: 'var(--text-muted)',
+            borderTop: '1px solid var(--border-color)',
+            paddingTop: '2px', marginTop: '2px',
+            display: 'flex', justifyContent: 'space-between', flexShrink: 0
+          }}>
+            <span>{activeClients.map(([id, c]) => `${id}${c.version ? ` v${c.version}` : ''}`).join(', ')}</span>
+            {primaryClient?.dialFrequency && (
+              <span style={{ color: '#a78bfa' }}>{(primaryClient.dialFrequency / 1000000).toFixed(6)} MHz</span>
+            )}
+          </div>
+        )
+      }
+    </div >
   );
 };
 

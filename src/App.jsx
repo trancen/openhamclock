@@ -68,6 +68,19 @@ const App = () => {
     const hasLocalStorage = localStorage.getItem('openhamclock_config');
     if (!hasLocalStorage && config.callsign === 'N0CALL') {
       setShowSettings(true);
+      
+      // Auto-detect mobile/tablet on first visit and set appropriate layout
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= 768;
+      const isTabletSize = window.innerWidth > 768 && window.innerWidth <= 1200;
+      
+      if (isTouchDevice && isSmallScreen) {
+        // Phone → compact layout
+        handleSaveConfig({ ...config, layout: 'compact' });
+      } else if (isTouchDevice && isTabletSize) {
+        // Tablet → tablet layout
+        handleSaveConfig({ ...config, layout: 'tablet' });
+      }
     }
   }, [configLoaded, config.callsign]);
 

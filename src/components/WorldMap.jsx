@@ -23,6 +23,19 @@ import PluginLayer from './PluginLayer.jsx';
 import { DXNewsTicker } from './DXNewsTicker.jsx';
 import { filterDXPaths } from "../utils";
 
+// SECURITY: Escape HTML to prevent XSS in Leaflet popups/tooltips
+// DX cluster data, POTA/SOTA spots, and WSJT-X decodes come from external sources
+// and could contain malicious HTML/script tags in callsigns, comments, or park names.
+function esc(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 
 export const WorldMap = ({
   deLocation,
@@ -480,7 +493,7 @@ export const WorldMap = ({
               opacity: 1,
               fillOpacity: isHovered ? 1 : 0.9
             })
-              .bindPopup(`<b style="color: ${color}">${path.dxCall}</b><br>${path.freq} MHz<br>by ${path.spotter}`)
+              .bindPopup(`<b data-qrz-call="${esc(path.dxCall)}" style="color: ${color}; cursor:pointer">${esc(path.dxCall)}</b><br>${esc(path.freq)} MHz<br>by <span data-qrz-call="${esc(path.spotter)}" style="cursor:pointer">${esc(path.spotter)}</span>`)
               .on('click', () => onSpotClick && onSpotClick(path))
               .addTo(map);
             if (isHovered) dxCircle.bringToFront();
@@ -492,7 +505,7 @@ export const WorldMap = ({
             const dxLonNorm = normalizeLon(path.dxLon);
             const labelIcon = L.divIcon({
               className: '',
-              html: `<span style="display:inline-block;background:${isHovered ? '#fff' : color};color:${isHovered ? color : '#000'};padding:${isHovered ? '5px 10px' : '4px 8px'};border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:${isHovered ? '14px' : '12px'};font-weight:700;white-space:nowrap;border:2px solid ${isHovered ? color : 'rgba(0,0,0,0.5)'};box-shadow:0 2px ${isHovered ? '8px' : '4px'} rgba(0,0,0,${isHovered ? '0.6' : '0.4'});">${path.dxCall}</span>`,
+              html: `<span style="display:inline-block;background:${isHovered ? '#fff' : color};color:${isHovered ? color : '#000'};padding:${isHovered ? '5px 10px' : '4px 8px'};border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:${isHovered ? '14px' : '12px'};font-weight:700;white-space:nowrap;border:2px solid ${isHovered ? color : 'rgba(0,0,0,0.5)'};box-shadow:0 2px ${isHovered ? '8px' : '4px'} rgba(0,0,0,${isHovered ? '0.6' : '0.4'});">${esc(path.dxCall)}</span>`,
               iconSize: null,
               iconAnchor: [0, 0]
             });
@@ -533,7 +546,7 @@ export const WorldMap = ({
             iconAnchor: [7, 14]
           });
           const marker = L.marker([spot.lat, spot.lon], { icon: triangleIcon })
-            .bindPopup(`<b style="color:#44cc44">${spot.call}</b><br><span style="color:#888">${spot.ref}</span> ${spot.locationDesc || ''}<br>${spot.name ? `<i>${spot.name}</i><br>` : ''}${spot.freq} ${spot.mode || ''} <span style="color:#888">${spot.time || ''}</span>`)
+            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#44cc44; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
             .on('click', () => onSpotClick && onSpotClick(spot))
             .addTo(map);
           potaMarkersRef.current.push(marker);
@@ -542,7 +555,7 @@ export const WorldMap = ({
           if (showDXLabels) {
             const labelIcon = L.divIcon({
               className: '',
-              html: `<span style="display:inline-block;background:#44cc44;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${spot.call}</span>`,
+              html: `<span style="display:inline-block;background:#44cc44;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${esc(spot.call)}</span>`,
               iconSize: null,
               iconAnchor: [0, -2]
             });
@@ -573,7 +586,7 @@ export const WorldMap = ({
             iconAnchor: [6, 6]
           });
           const marker = L.marker([spot.lat, spot.lon], { icon: diamondIcon })
-            .bindPopup(`<b style="color:#ff9632">${spot.call}</b><br><span style="color:#888">${spot.ref}</span>${spot.summit ? ` — ${spot.summit}` : ''}${spot.points ? ` <span style="color:#ff9632">(${spot.points}pt)</span>` : ''}<br>${spot.freq} ${spot.mode || ''} <span style="color:#888">${spot.time || ''}</span>`)
+            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#ff9632; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span>${spot.summit ? ` — ${esc(spot.summit)}` : ''}${spot.points ? ` <span style="color:#ff9632">(${esc(spot.points)}pt)</span>` : ''}<br>${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
             .on('click', () => onSpotClick && onSpotClick(spot))
             .addTo(map);
           sotaMarkersRef.current.push(marker);
@@ -582,7 +595,7 @@ export const WorldMap = ({
           if (showDXLabels) {
             const labelIcon = L.divIcon({
               className: '',
-              html: `<span style="display:inline-block;background:#ff9632;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${spot.call}</span>`,
+              html: `<span style="display:inline-block;background:#ff9632;color:#000;padding:4px 8px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:700;white-space:nowrap;border:2px solid rgba(0,0,0,0.5);box-shadow:0 2px 4px rgba(0,0,0,0.4);">${esc(spot.call)}</span>`,
               iconSize: null,
               iconAnchor: [0, -2]
             });
@@ -648,16 +661,16 @@ export const WorldMap = ({
         // Add satellite marker icon
         const icon = L.divIcon({
           className: '',
-          html: `<span style="display:inline-block;background:${sat.visible ? satColor : satColorDark};color:${sat.visible ? '#000' : '#fff'};padding:4px 8px;border-radius:4px;font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap;border:2px solid ${sat.visible ? '#fff' : '#666'};font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.4);">⛊ ${sat.name}</span>`,
+          html: `<span style="display:inline-block;background:${sat.visible ? satColor : satColorDark};color:${sat.visible ? '#000' : '#fff'};padding:4px 8px;border-radius:4px;font-size:11px;font-family:'JetBrains Mono',monospace;white-space:nowrap;border:2px solid ${sat.visible ? '#fff' : '#666'};font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.4);">⛊ ${esc(sat.name)}</span>`,
           iconSize: null,
           iconAnchor: [0, 0]
         });
 
         const marker = L.marker([sat.lat, sat.lon], { icon })
           .bindPopup(`
-            <b>⛊ ${sat.name}</b><br>
+            <b>⛊ ${esc(sat.name)}</b><br>
             <table style="font-size: 11px;">
-              <tr><td>Mode:</td><td><b>${sat.mode || 'Unknown'}</b></td></tr>
+              <tr><td>Mode:</td><td><b>${esc(sat.mode || 'Unknown')}</b></td></tr>
               <tr><td>Alt:</td><td>${units === 'imperial' ? Math.round(sat.alt * 0.621371).toLocaleString() + ' mi' : Math.round(sat.alt).toLocaleString() + ' km'}</td></tr>
               <tr><td>Az:</td><td>${sat.azimuth}°</td></tr>
               <tr><td>El:</td><td>${sat.elevation}°</td></tr>
@@ -805,8 +818,8 @@ export const WorldMap = ({
                 opacity: 0.9,
                 fillOpacity: 0.8
               }).bindPopup(`
-                <b>${displayCall}</b><br>
-                ${spot.mode} @ ${freqMHz} MHz<br>
+                <b data-qrz-call="${esc(displayCall)}" style="cursor:pointer">${esc(displayCall)}</b><br>
+                ${esc(spot.mode)} @ ${esc(freqMHz)} MHz<br>
                 ${spot.snr !== null ? `SNR: ${spot.snr > 0 ? '+' : ''}${spot.snr} dB` : ''}
               `)
                 .on('click', () => onSpotClick && onSpotClick(spot))
@@ -891,9 +904,9 @@ export const WorldMap = ({
                 iconAnchor: [4, 4]
               })
             }).bindPopup(`
-              <b>${call}</b> ${spot.type === 'CQ' ? 'CQ' : ''}<br>
-              ${spot.grid || ''} ${spot.band || ''}${spot.gridSource === 'prefix' ? ' <i>(est)</i>' : spot.gridSource === 'cache' ? ' <i>(prev)</i>' : ''}<br>
-              ${spot.mode || ''} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
+              <b data-qrz-call="${esc(call)}" style="cursor:pointer">${esc(call)}</b> ${spot.type === 'CQ' ? 'CQ' : ''}<br>
+              ${esc(spot.grid || '')} ${esc(spot.band || '')}${spot.gridSource === 'prefix' ? ' <i>(est)</i>' : spot.gridSource === 'cache' ? ' <i>(prev)</i>' : ''}<br>
+              ${esc(spot.mode || '')} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
             `).addTo(map);
             wsjtxMarkersRef.current.push(diamond);
           } catch (err) {

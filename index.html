@@ -2,8 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>OpenHamClock - Amateur Radio Dashboard</title>
+  
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0e14">
+  <meta name="color-scheme" content="dark light">
+  
+  <!-- iOS PWA (Add to Home Screen → fullscreen standalone) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HamClock">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  
+  <!-- Android -->
+  <meta name="mobile-web-app-capable" content="yes">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">

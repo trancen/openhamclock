@@ -3,6 +3,7 @@
  * Shows active and upcoming DXpeditions (compact version)
  */
 import React from 'react';
+import CallsignLink from './CallsignLink.jsx';
 
 export const DXpeditionPanel = ({ data, loading }) => {
   const getStatusStyle = (expedition) => {
@@ -51,7 +52,7 @@ export const DXpeditionPanel = ({ data, loading }) => {
                 fontFamily: 'JetBrains Mono, monospace'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>{exp.callsign}</span>
+                  <CallsignLink call={exp.callsign} color="var(--accent-amber)" fontWeight="700" />
                   <span style={{ color: style.color, fontSize: '9px' }}>
                     {exp.isActive ? '● NOW' : 'SOON'}
                   </span>

@@ -3,6 +3,7 @@
  * Displays Summits on the Air activations with ON/OFF toggle
  */
 import React from 'react';
+import CallsignLink from './CallsignLink.jsx';
 
 export const SOTAPanel = ({ data, loading, showOnMap, onToggleMap, onSpotClick }) => {
   return (
@@ -56,7 +57,7 @@ export const SOTAPanel = ({ data, loading, showOnMap, onToggleMap, onSpotClick }
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 <span style={{ color: '#ff9632', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {spot.call}
+                  <CallsignLink call={spot.call} color="#ff9632" fontWeight="600" />
                 </span>
                 <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   title={spot.summit ? `${spot.ref} — ${spot.summit}${spot.points ? ` (${spot.points}pt)` : ''}` : spot.ref}

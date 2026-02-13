@@ -19,6 +19,8 @@
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fetch = require('node-fetch');
 const net = require('net');
@@ -34,6 +36,17 @@ const APP_VERSION = (() => {
     return pkg.version || '0.0.0';
   } catch { return '0.0.0'; }
 })();
+
+// Global safety nets — log but don't crash on stray errors (e.g. MQTT connack timeout)
+process.on('uncaughtException', (err) => {
+  console.error(`[FATAL] Uncaught exception: ${err.message}`);
+  console.error(err.stack);
+  // Exit on truly fatal errors, but give time to flush logs
+  setTimeout(() => process.exit(1), 1000);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error(`[WARN] Unhandled rejection: ${reason}`);
+});
 
 // Auto-create .env from .env.example on first run
 const envPath = path.join(__dirname, '.env');
@@ -64,6 +77,18 @@ if (fs.existsSync(envPath)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+
+// Security: API key for write operations (set in .env to protect POST endpoints)
+// If not set, write endpoints are open (backward-compatible for local installs)
+const API_WRITE_KEY = process.env.API_WRITE_KEY || '';
+
+// Helper: check write auth on POST endpoints that modify server state
+function requireWriteAuth(req, res, next) {
+  if (!API_WRITE_KEY) return next(); // No key configured = open (local installs)
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
+  if (token === API_WRITE_KEY) return next();
+  return res.status(401).json({ error: 'Unauthorized — set Authorization: Bearer <API_WRITE_KEY>' });
+}
 
 // ============================================
 // UPSTREAM REQUEST MANAGER
@@ -327,9 +352,44 @@ if (ITURHFPROP_URL) {
   console.log('[Propagation] Standalone mode - using built-in calculations');
 }
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Middleware — Security
+app.use(helmet({
+  contentSecurityPolicy: false, // CSP breaks inline Leaflet/React scripts
+  crossOriginEmbedderPolicy: false // Breaks tile loading from CDNs
+}));
+
+// CORS — restrict to same origin by default; allow override via env
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : true; // true = reflect request origin (same as before for local installs)
+app.use(cors({
+  origin: CORS_ORIGINS,
+  methods: ['GET', 'POST'],
+  maxAge: 86400
+}));
+
+// Rate limiting — protect against abuse
+// NOTE: OpenHamClock is a real-time dashboard that polls many endpoints every few seconds
+// per connected client, so the general limit must be generous for normal operation.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 600, // 600 requests per minute per IP (10/sec covers normal dashboard polling)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' }
+});
+app.use('/api/', apiLimiter);
+
+// Stricter rate limit for write/expensive endpoints
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' }
+});
+
+app.use(express.json({ limit: '1mb' })); // Limit body size to prevent DoS
 
 // GZIP compression - reduces response sizes by 70-90%
 // This is critical for reducing bandwidth/egress costs
@@ -1084,6 +1144,22 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
+// Log memory usage every 15 minutes for leak detection
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1);
+  const mqttStats = {
+    subscribers: pskMqtt.subscribers.size,
+    subscribedCalls: pskMqtt.subscribedCalls.size,
+    sseClients: [...pskMqtt.subscribers.values()].reduce((n, s) => n + s.size, 0),
+    recentSpotsEntries: pskMqtt.recentSpots.size,
+    recentSpotsTotal: [...pskMqtt.recentSpots.values()].reduce((n, s) => n + s.length, 0),
+    spotBufferEntries: pskMqtt.spotBuffer.size,
+    spotBufferTotal: [...pskMqtt.spotBuffer.values()].reduce((n, b) => n + b.length, 0),
+  };
+  console.log(`[Memory] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB External=${mb(mem.external)}MB | MQTT: ${mqttStats.sseClients} SSE clients, ${mqttStats.subscribedCalls} calls, ${mqttStats.recentSpotsTotal} recent spots (${mqttStats.recentSpotsEntries} entries), ${mqttStats.spotBufferTotal} buffered | GeoIP=${geoIPCache.size} MySpots=${mySpotsCache.size} AllTimeIPs=${allTimeIPSet.size}`);
+}, 15 * 60 * 1000);
+
 // ============================================
 // AUTO UPDATE (GIT)
 // ============================================
@@ -1220,8 +1296,12 @@ async function autoUpdateTick(trigger = 'interval', force = false) {
     logInfo('[Auto Update] Update complete');
 
     if (AUTO_UPDATE_EXIT_AFTER) {
-      logInfo('[Auto Update] Exiting to allow restart');
-      process.exit(0);
+      // Exit with code 75 (EX_TEMPFAIL) — a non-zero code that signals
+      // "restart me" to systemd's Restart=on-failure AND Restart=always.
+      // Previous versions used exit(0) which was clean/success, causing
+      // Restart=on-failure to NOT restart the service.
+      logInfo('[Auto Update] Restarting service (exit 75)...');
+      process.exit(75);
     }
   } catch (err) {
     autoUpdateState.lastResult = 'error';
@@ -2313,6 +2393,30 @@ app.get('/api/dxcluster/paths', async (req, res) => {
   const customPort = parseInt(req.query.port) || 7300;
   const userCallsign = req.query.callsign;
   
+  // SECURITY: Validate custom host to prevent SSRF (internal network scanning)
+  if (source === 'custom' && customHost) {
+    // Block private/reserved IP ranges and localhost
+    const blockedPatterns = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|0:|\[::1\]|::1|fe80:|fc00:|fd00:|ff00:)/i;
+    if (blockedPatterns.test(customHost)) {
+      return res.status(400).json({ error: 'Custom host cannot be a private/reserved address' });
+    }
+    // Block numeric-only hosts (raw IPs) that could be encoded to bypass above
+    // Only allow hostnames that look like legitimate DX Spider nodes
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(customHost)) {
+      const octets = customHost.split('.').map(Number);
+      if (octets[0] === 10 || octets[0] === 127 || octets[0] === 0 ||
+          (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+          (octets[0] === 192 && octets[1] === 168) ||
+          (octets[0] === 169 && octets[1] === 254)) {
+        return res.status(400).json({ error: 'Custom host cannot be a private/reserved address' });
+      }
+    }
+    // Restrict port range to common DX Spider/telnet ports
+    if (customPort < 1024 || customPort > 49151) {
+      return res.status(400).json({ error: 'Port must be between 1024 and 49151' });
+    }
+  }
+  
   // Generate cache key based on source (custom sources shouldn't share cache)
   const cacheKey = source === 'custom' ? `custom-${customHost}-${customPort}` : 'default';
   
@@ -2461,6 +2565,57 @@ app.get('/api/dxcluster/paths', async (req, res) => {
       }
     }
     
+    // Check HamQTH callsign cache for better accuracy (24h TTL, populated by /api/callsign/:call)
+    // This gives DXCC-level lat/lon which is more accurate than prefix country centroids
+    const hamqthLocations = {};
+    const hamqthMisses = []; // Callsigns to look up in background
+    for (const call of callsToLookup) {
+      const cached = callsignLookupCache.get(call);
+      if (cached && (now - cached.timestamp) < CALLSIGN_CACHE_TTL && cached.data?.lat != null) {
+        hamqthLocations[call] = {
+          lat: cached.data.lat,
+          lon: cached.data.lon,
+          country: cached.data.country || '',
+          grid: cached.data.grid || null,
+          source: 'hamqth'
+        };
+      } else if (!prefixLocations[call]?.grid) {
+        // Only queue lookups for calls that don't already have grid-level accuracy
+        hamqthMisses.push(call);
+      }
+    }
+    
+    // Fire background HamQTH lookups for cache misses (non-blocking, improves next poll)
+    // Limit to 10 per cycle to avoid hammering HamQTH
+    if (hamqthMisses.length > 0) {
+      const batch = hamqthMisses.slice(0, 10);
+      logDebug('[DX Paths] Background HamQTH lookup for', batch.length, 'callsigns');
+      for (const call of batch) {
+        // Fire-and-forget — results land in callsignLookupCache for next poll
+        fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(call)}`, {
+          headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
+          signal: AbortSignal.timeout(5000)
+        }).then(async (resp) => {
+          if (!resp.ok) return;
+          const text = await resp.text();
+          const latMatch = text.match(/<lat>([^<]+)<\/lat>/);
+          const lonMatch = text.match(/<lng>([^<]+)<\/lng>/);
+          const countryMatch = text.match(/<n>([^<]+)<\/name>/);
+          if (latMatch && lonMatch) {
+            callsignLookupCache.set(call, {
+              data: {
+                callsign: call,
+                lat: parseFloat(latMatch[1]),
+                lon: parseFloat(lonMatch[1]),
+                country: countryMatch ? countryMatch[1] : ''
+              },
+              timestamp: Date.now()
+            });
+          }
+        }).catch(() => {}); // Silent fail for background lookups
+      }
+    }
+    
     // Build new paths with locations - try grid first, fall back to prefix
     const newPaths = newSpots
       .map(spot => {
@@ -2487,6 +2642,11 @@ app.get('/api/dxcluster/paths', async (req, res) => {
               dxGridSquare = extractedGrids.dxGrid;
             }
           }
+        }
+        
+        // Fall back to HamQTH cached location (more accurate than prefix)
+        if (!dxLoc && hamqthLocations[spot.dxCall]) {
+          dxLoc = hamqthLocations[spot.dxCall];
         }
         
         // Fall back to prefix location (now includes grid-based coordinates!)
@@ -2520,6 +2680,11 @@ app.get('/api/dxcluster/paths', async (req, res) => {
               spotterGridSquare = extractedGrids.spotterGrid;
             }
           }
+        }
+        
+        // Fall back to HamQTH cached location for spotter
+        if (!spotterLoc && hamqthLocations[spot.spotter]) {
+          spotterLoc = hamqthLocations[spot.spotter];
         }
         
         // Fall back to prefix location for spotter (now includes grid-based coordinates!)
@@ -2617,7 +2782,11 @@ app.get('/api/callsign/:call', async (req, res) => {
   
   try {
     // Try HamQTH XML API (no auth needed for basic lookup)
-    const response = await fetch(`https://www.hamqth.com/dxcc.php?callsign=${callsign}`);
+    // SECURITY: Validate callsign format and encode for URL
+    if (!/^[A-Z0-9\/\-]{1,20}$/.test(callsign)) {
+      return res.status(400).json({ error: 'Invalid callsign format' });
+    }
+    const response = await fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(callsign)}`);
     if (response.ok) {
       const text = await response.text();
       
@@ -3434,6 +3603,16 @@ function getCountryFromPrefix(prefix) {
 let mySpotsCache = new Map(); // key = callsign, value = { data, timestamp }
 const MYSPOTS_CACHE_TTL = 45000; // 45 seconds (just under 60s frontend poll to maximize cache hits)
 
+// Clean expired mySpots entries every 2 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [call, entry] of mySpotsCache) {
+    if (now - entry.timestamp > MYSPOTS_CACHE_TTL * 2) {
+      mySpotsCache.delete(call);
+    }
+  }
+}, 2 * 60 * 1000);
+
 app.get('/api/myspots/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();
   const now = Date.now();
@@ -3542,33 +3721,8 @@ app.get('/api/myspots/:callsign', async (req, res) => {
 // WebSocket endpoints: 1885 (ws), 1886 (wss)
 // Topic format: pskr/filter/v2/{band}/{mode}/{sendercall}/{receivercall}/{senderlocator}/{receiverlocator}/{sendercountry}/{receivercountry}
 
-// Cache for PSKReporter data - stores recent spots from MQTT
-const pskReporterSpots = {
-  tx: new Map(), // Map of callsign -> spots where they're being heard
-  rx: new Map(), // Map of callsign -> spots they're receiving
-  maxAge: 60 * 60 * 1000 // Keep spots for 1 hour max
-};
-
-// Clean up old spots periodically
-setInterval(() => {
-  const cutoff = Date.now() - pskReporterSpots.maxAge;
-  for (const [call, spots] of pskReporterSpots.tx) {
-    const filtered = spots.filter(s => s.timestamp > cutoff);
-    if (filtered.length === 0) {
-      pskReporterSpots.tx.delete(call);
-    } else {
-      pskReporterSpots.tx.set(call, filtered);
-    }
-  }
-  for (const [call, spots] of pskReporterSpots.rx) {
-    const filtered = spots.filter(s => s.timestamp > cutoff);
-    if (filtered.length === 0) {
-      pskReporterSpots.rx.delete(call);
-    } else {
-      pskReporterSpots.rx.set(call, filtered);
-    }
-  }
-}, 5 * 60 * 1000); // Clean every 5 minutes
+// NOTE: PSKReporter spots are now handled entirely through the MQTT proxy system
+// (pskMqtt.recentSpots and pskMqtt.spotBuffer), not this legacy cache.
 
 // Convert grid square to lat/lon
 function gridToLatLonSimple(grid) {
@@ -3620,7 +3774,7 @@ app.get('/api/pskreporter/config', (req, res) => {
     stream: {
       endpoint: '/api/pskreporter/stream/{callsign}',
       type: 'text/event-stream',
-      batchInterval: '10s',
+      batchInterval: '15s',
       note: 'Server maintains single MQTT connection to PSKReporter, relays via SSE'
     },
     mqtt: {
@@ -3656,7 +3810,7 @@ app.get('/api/pskreporter/:callsign', async (req, res) => {
 // ============================================
 // Single MQTT connection to mqtt.pskreporter.info, shared across all users.
 // Dynamically subscribes per-callsign topics based on active SSE clients.
-// Buffers incoming spots and pushes to clients every 10 seconds.
+// Buffers incoming spots and pushes to clients every 15 seconds.
 
 const pskMqtt = {
   client: null,
@@ -3671,14 +3825,25 @@ const pskMqtt = {
   subscribedCalls: new Set(),
   reconnectAttempts: 0,
   maxReconnectDelay: 120000, // 2 min max
+  reconnectTimer: null, // guards against multiple pending reconnects
   flushInterval: null,
   cleanupInterval: null,
   stats: { spotsReceived: 0, spotsRelayed: 0, messagesDropped: 0, lastSpotTime: null }
 };
 
 function pskMqttConnect() {
+  // Tear down old client — remove listeners FIRST to prevent its 'close'
+  // event from scheduling a duplicate reconnect (fork bomb prevention)
   if (pskMqtt.client) {
-    try { pskMqtt.client.end(true); } catch {}
+    try {
+      pskMqtt.client.removeAllListeners();
+      // MUST re-attach a no-op error handler — Node.js crashes on
+      // unhandled 'error' events, and the old client may still emit
+      // errors (e.g. connack timeout) after we've detached
+      pskMqtt.client.on('error', () => {});
+      pskMqtt.client.end(true);
+    } catch {}
+    pskMqtt.client = null;
   }
 
   const clientId = `ohc_svr_${Math.random().toString(16).substr(2, 8)}`;
@@ -3758,9 +3923,11 @@ function pskMqttConnect() {
         const txSpot = { ...spot, lat: receiverLoc?.lat, lon: receiverLoc?.lon, direction: 'tx' };
         if (!pskMqtt.spotBuffer.has(scUpper)) pskMqtt.spotBuffer.set(scUpper, []);
         pskMqtt.spotBuffer.get(scUpper).push(txSpot);
-        // Also add to recent spots
+        // Also add to recent spots (capped at insert time to prevent unbounded growth)
         if (!pskMqtt.recentSpots.has(scUpper)) pskMqtt.recentSpots.set(scUpper, []);
-        pskMqtt.recentSpots.get(scUpper).push(txSpot);
+        const scRecent = pskMqtt.recentSpots.get(scUpper);
+        scRecent.push(txSpot);
+        if (scRecent.length > 250) pskMqtt.recentSpots.set(scUpper, scRecent.slice(-200));
       }
 
       // Buffer for RX subscribers (rc is the callsign being tracked)
@@ -3770,7 +3937,9 @@ function pskMqttConnect() {
         if (!pskMqtt.spotBuffer.has(rcUpper)) pskMqtt.spotBuffer.set(rcUpper, []);
         pskMqtt.spotBuffer.get(rcUpper).push(rxSpot);
         if (!pskMqtt.recentSpots.has(rcUpper)) pskMqtt.recentSpots.set(rcUpper, []);
-        pskMqtt.recentSpots.get(rcUpper).push(rxSpot);
+        const rcRecent = pskMqtt.recentSpots.get(rcUpper);
+        rcRecent.push(rxSpot);
+        if (rcRecent.length > 250) pskMqtt.recentSpots.set(rcUpper, rcRecent.slice(-200));
       }
     } catch {
       pskMqtt.stats.messagesDropped++;
@@ -3778,24 +3947,34 @@ function pskMqttConnect() {
   });
 
   client.on('error', (err) => {
+    if (client !== pskMqtt.client) return;
     // "Connection closed" is redundant with on('close') handler
     if (err.message && err.message.includes('onnection closed')) return;
     console.error(`[PSK-MQTT] Error: ${err.message}`);
   });
 
   client.on('close', () => {
+    // Only react to close events from the CURRENT client — stale clients
+    // (replaced by a reconnect) must not schedule additional reconnects
+    if (client !== pskMqtt.client) return;
     pskMqtt.connected = false;
-    // Only log once per disconnect (not on every reconnect cycle)
     logErrorOnce('PSK-MQTT', 'Disconnected from mqtt.pskreporter.info');
     scheduleMqttReconnect();
   });
 
   client.on('offline', () => {
+    if (client !== pskMqtt.client) return;
     pskMqtt.connected = false;
   });
 }
 
 function scheduleMqttReconnect() {
+  // Clear any existing reconnect timer — only one pending reconnect at a time
+  if (pskMqtt.reconnectTimer) {
+    clearTimeout(pskMqtt.reconnectTimer);
+    pskMqtt.reconnectTimer = null;
+  }
+
   pskMqtt.reconnectAttempts++;
   const delay = Math.min(
     (Math.pow(2, pskMqtt.reconnectAttempts) * 1000) + (Math.random() * 5000),
@@ -3805,7 +3984,8 @@ function scheduleMqttReconnect() {
   if (pskMqtt.reconnectAttempts === 1 || pskMqtt.reconnectAttempts % 5 === 0) {
     console.log(`[PSK-MQTT] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${pskMqtt.reconnectAttempts})...`);
   }
-  setTimeout(() => {
+  pskMqtt.reconnectTimer = setTimeout(() => {
+    pskMqtt.reconnectTimer = null;
     if (pskMqtt.subscribers.size > 0) {
       pskMqttConnect();
     } else {
@@ -3840,7 +4020,7 @@ function unsubscribeCallsign(call) {
   });
 }
 
-// Flush buffered spots to SSE clients every 10 seconds
+// Flush buffered spots to SSE clients every 15 seconds
 pskMqtt.flushInterval = setInterval(() => {
   for (const [call, clients] of pskMqtt.subscribers) {
     const buffer = pskMqtt.spotBuffer.get(call);
@@ -3864,18 +4044,30 @@ pskMqtt.flushInterval = setInterval(() => {
     // Clear the buffer after flushing
     pskMqtt.spotBuffer.set(call, []);
   }
-}, 10000); // 10-second batch interval
+}, 15000); // 15-second batch interval
 
 // Clean old recent spots every 5 minutes
 pskMqtt.cleanupInterval = setInterval(() => {
   const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour
   for (const [call, spots] of pskMqtt.recentSpots) {
+    // Delete entries for unsubscribed callsigns immediately
+    if (!pskMqtt.subscribedCalls.has(call)) {
+      pskMqtt.recentSpots.delete(call);
+      continue;
+    }
     const filtered = spots.filter(s => s.timestamp > cutoff);
     if (filtered.length === 0) {
       pskMqtt.recentSpots.delete(call);
     } else {
-      // Keep max 500 per callsign
-      pskMqtt.recentSpots.set(call, filtered.slice(-500));
+      // Keep max 200 per callsign (matches what clients receive on connect)
+      pskMqtt.recentSpots.set(call, filtered.slice(-200));
+    }
+  }
+
+  // Clean spotBuffer entries for unsubscribed callsigns
+  for (const call of pskMqtt.spotBuffer.keys()) {
+    if (!pskMqtt.subscribedCalls.has(call)) {
+      pskMqtt.spotBuffer.delete(call);
     }
   }
 
@@ -3962,13 +4154,26 @@ app.get('/api/pskreporter/stream/:callsign', (req, res) => {
           if (stillEmpty && stillEmpty.size === 0) {
             pskMqtt.subscribers.delete(callsign);
             pskMqtt.subscribedCalls.delete(callsign);
+            // Clean up spot data for this callsign
+            pskMqtt.recentSpots.delete(callsign);
+            pskMqtt.spotBuffer.delete(callsign);
             unsubscribeCallsign(callsign);
             console.log(`[PSK-MQTT] Unsubscribed ${callsign} (no more clients after grace period)`);
 
             // If no subscribers at all, disconnect MQTT entirely
             if (pskMqtt.subscribedCalls.size === 0 && pskMqtt.client) {
               console.log('[PSK-MQTT] No more subscribers, disconnecting from broker');
-              pskMqtt.client.end(true);
+              // Cancel any pending reconnect
+              if (pskMqtt.reconnectTimer) {
+                clearTimeout(pskMqtt.reconnectTimer);
+                pskMqtt.reconnectTimer = null;
+              }
+              // Strip listeners before end() to prevent close → reconnect
+              try {
+                pskMqtt.client.removeAllListeners();
+                pskMqtt.client.on('error', () => {}); // prevent crash on late errors
+                pskMqtt.client.end(true);
+              } catch {}
               pskMqtt.client = null;
               pskMqtt.connected = false;
               pskMqtt.reconnectAttempts = 0;
@@ -4474,7 +4679,7 @@ app.get('/api/wspr/heatmap', async (req, res) => {
     
     const response = await fetch(url, {
       headers: { 
-        'User-Agent': 'OpenHamClock/15.2.11 (Amateur Radio Dashboard)',
+        'User-Agent': 'OpenHamClock/15.2.12 (Amateur Radio Dashboard)',
         'Accept': '*/*'
       },
       signal: controller.signal
@@ -5238,8 +5443,8 @@ app.get('/api/propagation', async (req, res) => {
     }
     
     // ===== FALLBACK: Built-in calculations =====
-    const bands = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '11m', '10m', '6m'];
-    const bandFreqs = [1.8, 3.5, 7, 10, 14, 18, 21, 24, 27, 28, 50];
+    const bands = ['160m', '80m', '40m', '30m', '20m', '17m', '15m', '12m', '10m'];
+    const bandFreqs = [1.8, 3.5, 7, 10, 14, 18, 21, 24, 28];
     
     // Generate predictions (hybrid or fallback)
     const effectiveIonoData = hasValidIonoData ? ionoData : null;
@@ -6780,6 +6985,10 @@ function generateStatusDashboard() {
 app.get('/api/health', (req, res) => {
   rolloverVisitorStats();
   
+  // SECURITY: Check if request is authenticated for full details
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.key || '';
+  const isAuthed = API_WRITE_KEY && token === API_WRITE_KEY;
+  
   // Check if browser wants HTML or explicitly requesting JSON
   const wantsJSON = req.query.format === 'json' || 
                     req.headers.accept?.includes('application/json') ||
@@ -6800,11 +7009,12 @@ app.get('/api/health', (req, res) => {
       uptime: process.uptime(),
       uptimeFormatted: `${Math.floor(process.uptime() / 86400)}d ${Math.floor((process.uptime() % 86400) / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
       timestamp: new Date().toISOString(),
-      persistence: {
+      // SECURITY: Only expose file paths and detailed internals to authenticated requests
+      persistence: isAuthed ? {
         enabled: !!STATS_FILE,
         file: STATS_FILE || null,
         lastSaved: visitorStats.lastSaved
-      },
+      } : { enabled: !!STATS_FILE },
       sessions: sessionTracker.getStats(),
       visitors: {
         today: {
@@ -6857,7 +7067,8 @@ app.get('/api/health', (req, res) => {
         totalInFlight: upstream.inFlight.size,
         pskMqttProxy: {
           connected: pskMqtt.connected,
-          activeCallsigns: [...pskMqtt.subscribedCalls],
+          // SECURITY: Only expose active callsigns to authenticated requests
+          activeCallsigns: isAuthed ? [...pskMqtt.subscribedCalls] : pskMqtt.subscribedCalls.size,
           sseClients: [...pskMqtt.subscribers.values()].reduce((n, s) => n + s.size, 0),
           spotsReceived: pskMqtt.stats.spotsReceived,
           spotsRelayed: pskMqtt.stats.spotsRelayed,
@@ -6961,7 +7172,7 @@ app.get('/api/settings', (req, res) => {
 });
 
 // POST /api/settings — save UI settings (or 404 if sync disabled)
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', writeLimiter, requireWriteAuth, (req, res) => {
   if (!SETTINGS_SYNC_ENABLED) {
     return res.status(404).json({ enabled: false });
   }
@@ -7063,7 +7274,7 @@ app.get('/api/weather', (req, res) => {
 // ============================================
 // MANUAL UPDATE ENDPOINT
 // ============================================
-app.post('/api/update', async (req, res) => {
+app.post('/api/update', writeLimiter, requireWriteAuth, async (req, res) => {
   if (autoUpdateState.inProgress) {
     return res.status(409).json({ error: 'Update already in progress' });
   }
@@ -7397,21 +7608,49 @@ function parseWSJTXMessage(buffer) {
  */
 // Callsign → grid cache: remembers grids seen in CQ messages for later QSO exchanges
 const wsjtxGridCache = new Map(); // callsign → { grid, lat, lon, timestamp }
+const wsjtxHamqthInflight = new Set(); // callsigns currently being looked up (prevents duplicate requests)
 
 function parseDecodeMessage(text) {
   if (!text) return {};
   const result = {};
   
-  // Grid square regex: 2 alpha + 2 digits, optionally + 2 lowercase alpha
+  // FT8/FT4 protocol tokens that look like valid Maidenhead grids but aren't
+  // RR73 matches [A-R]{2}\d{2} but is a QSO acknowledgment
+  const FT8_TOKENS = new Set(['RR73', 'RR53', 'RR13', 'RR23', 'RR33', 'RR43', 'RR63', 'RR83', 'RR93']);
+  
+  // Validate grid: must be valid Maidenhead AND not an FT8 protocol token
+  function isGrid(s) {
+    if (!s || s.length < 4) return false;
+    const g = s.toUpperCase();
+    if (FT8_TOKENS.has(g)) return false;
+    return /^[A-R]{2}\d{2}(?:[A-Xa-x]{2})?$/.test(s);
+  }
+  
+  // Grid square regex: 2 alpha (A-R) + 2 digits, optionally + 2 alpha (a-x)
   const gridRegex = /\b([A-R]{2}\d{2}(?:[a-x]{2})?)\b/i;
   
-  // CQ message: "CQ DX K1ABC FN42" or "CQ K1ABC FN42"
-  const cqMatch = text.match(/^CQ\s+(?:(\S+)\s+)?([A-Z0-9/]+)\s+([A-R]{2}\d{2}[a-x]{0,2})?/i);
-  if (cqMatch) {
+  // ── CQ messages ──
+  // Format: "CQ [modifier] CALLSIGN [GRID]"
+  // Examples: "CQ K1ABC FN42", "CQ DX K1ABC FN42", "CQ POTA N0VIG EM28", "CQ K1ABC"
+  if (/^CQ\s/i.test(text)) {
     result.type = 'CQ';
-    result.modifier = cqMatch[1] && !cqMatch[1].match(/^[A-Z0-9/]{3,}$/) ? cqMatch[1] : null;
-    result.caller = cqMatch[2] || cqMatch[1];
-    result.grid = cqMatch[3] || null;
+    const tokens = text.split(/\s+/).slice(1); // drop "CQ"
+    
+    // Work backwards: last token might be a grid
+    let grid = null;
+    if (tokens.length >= 2 && isGrid(tokens[tokens.length - 1])) {
+      grid = tokens.pop();
+    }
+    
+    // Remaining tokens: [modifier] CALLSIGN
+    // The callsign is always the LAST remaining token
+    // Modifiers (DX, POTA, NA, EU, etc.) come before it
+    if (tokens.length >= 1) {
+      result.caller = tokens[tokens.length - 1];
+      result.modifier = tokens.length >= 2 ? tokens.slice(0, -1).join(' ') : null;
+    }
+    
+    result.grid = grid;
     
     // Cache this callsign's grid for future lookups
     if (result.caller && result.grid) {
@@ -7428,24 +7667,23 @@ function parseDecodeMessage(text) {
     return result;
   }
   
-  // Standard QSO exchange: "K1ABC W2DEF +05" or "K1ABC W2DEF R-12" or "K1ABC W2DEF RR73"
-  // or "K1ABC W2DEF EN82" or "K1ABC W2DEF EN82 a7"
-  const qsoMatch = text.match(/^([A-Z0-9/]+)\s+([A-Z0-9/]+)\s+(.*)/i);
+  // ── Standard QSO exchange ──
+  // Format: "DXCALL DECALL EXCHANGE"
+  // Exchange can be: grid (EN82), report (+05, -12, R+05, R-12), 73, RR73, RRR
+  const qsoMatch = text.match(/^([A-Z0-9/<>.]+)\s+([A-Z0-9/<>.]+)\s+(.*)/i);
   if (qsoMatch) {
     result.type = 'QSO';
     result.dxCall = qsoMatch[1];
     result.deCall = qsoMatch[2];
     result.exchange = qsoMatch[3].trim();
     
-    // Look for a grid square ANYWHERE in the exchange text
-    // This handles "EN82", "EN82 a7", "R EN82", etc.
+    // Look for a grid square in the exchange, but NOT FT8 protocol tokens
     const gridMatch = result.exchange.match(gridRegex);
-    if (gridMatch && isValidGrid(gridMatch[1])) {
+    if (gridMatch && isGrid(gridMatch[1])) {
       result.grid = gridMatch[1];
-      // Cache grid for both callsigns involved
+      // Cache grid — in exchange it typically belongs to the calling station (dxCall)
       const coords = gridToLatLon(result.grid);
       if (coords) {
-        // Grid in exchange typically belongs to the calling station (dxCall)
         wsjtxGridCache.set(result.dxCall.toUpperCase(), {
           grid: result.grid,
           lat: coords.latitude,
@@ -7562,6 +7800,43 @@ function handleWSJTXMessage(msg, state) {
             decode.lon = cached.lon;
             decode.grid = decode.grid || cached.grid;
             decode.gridSource = 'cache';
+          }
+        }
+      }
+      
+      // Try HamQTH callsign cache (DXCC-level, more accurate than prefix centroid)
+      if (!decode.lat) {
+        const targetCall = (parsed.caller || parsed.dxCall || '').toUpperCase();
+        if (targetCall) {
+          const cached = callsignLookupCache.get(targetCall);
+          if (cached && (Date.now() - cached.timestamp) < CALLSIGN_CACHE_TTL && cached.data?.lat != null) {
+            decode.lat = cached.data.lat;
+            decode.lon = cached.data.lon;
+            decode.gridSource = 'hamqth';
+          } else if (targetCall.length >= 3 && !wsjtxHamqthInflight.has(targetCall) && wsjtxHamqthInflight.size < 5) {
+            // Background lookup for next cycle (fire-and-forget, max 5 concurrent)
+            wsjtxHamqthInflight.add(targetCall);
+            fetch(`https://www.hamqth.com/dxcc.php?callsign=${encodeURIComponent(targetCall)}`, {
+              headers: { 'User-Agent': 'OpenHamClock/' + APP_VERSION },
+              signal: AbortSignal.timeout(5000)
+            }).then(async (resp) => {
+              if (!resp.ok) return;
+              const text = await resp.text();
+              const latMatch = text.match(/<lat>([^<]+)<\/lat>/);
+              const lonMatch = text.match(/<lng>([^<]+)<\/lng>/);
+              const countryMatch = text.match(/<n>([^<]+)<\/name>/);
+              if (latMatch && lonMatch) {
+                callsignLookupCache.set(targetCall, {
+                  data: {
+                    callsign: targetCall,
+                    lat: parseFloat(latMatch[1]),
+                    lon: parseFloat(lonMatch[1]),
+                    country: countryMatch ? countryMatch[1] : ''
+                  },
+                  timestamp: Date.now()
+                });
+              }
+            }).finally(() => { wsjtxHamqthInflight.delete(targetCall); });
           }
         }
       }
@@ -7696,7 +7971,7 @@ async function lookupCallLatLon(callsign) {
 }
 
 // POST one QSO from a bridge (your Python script)
-app.post("/api/n3fjp/qso", async (req, res) => {
+app.post("/api/n3fjp/qso", writeLimiter, requireWriteAuth, async (req, res) => {
   const qso = req.body || {};
   if (!qso.dx_call) return res.status(400).json({ ok: false, error: "dx_call required" });
 
@@ -7930,12 +8205,26 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
     return res.status(400).json({ error: 'Session ID required — download from the OpenHamClock dashboard' });
   }
   
+  // SECURITY: Validate platform parameter
+  if (!['linux', 'mac', 'windows'].includes(platform)) {
+    return res.status(400).json({ error: 'Invalid platform. Use: linux, mac, or windows' });
+  }
+  
+  // SECURITY: Sanitize all values embedded into generated scripts to prevent command injection
+  // Only allow URL-safe characters in serverURL, alphanumeric + hyphen/underscore in session/key
+  function sanitizeForShell(str) {
+    return String(str).replace(/[^a-zA-Z0-9._\-:\/\@]/g, '');
+  }
+  const safeServerURL = sanitizeForShell(serverURL);
+  const safeSessionId = sanitizeForShell(sessionId);
+  const safeRelayKey = sanitizeForShell(WSJTX_RELAY_KEY);
+  
   if (platform === 'linux' || platform === 'mac') {
     // Build bash script with relay.js embedded as heredoc
     const lines = [
       '#!/bin/bash',
       '# OpenHamClock WSJT-X Relay — Auto-configured',
-      '# Generated by ' + serverURL,
+      '# Generated by ' + safeServerURL,
       '#',
       '# Usage:  bash ' + (platform === 'mac' ? 'start-relay.command' : 'start-relay.sh'),
       '# Stop:   Ctrl+C',
@@ -7970,9 +8259,9 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       '',
       '# Run relay',
       'exec node "$RELAY_FILE" \\',
-      '  --url "' + serverURL + '" \\',
-      '  --key "' + WSJTX_RELAY_KEY + '" \\',
-      '  --session "' + sessionId + '"',
+      '  --url "' + safeServerURL + '" \\',
+      '  --key "' + safeRelayKey + '" \\',
+      '  --session "' + safeSessionId + '"',
     ];
     
     const script = lines.join('\n') + '\n';
@@ -8048,12 +8337,12 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       'echo.',
       '',
       ':have_node',
-      'echo   Server: ' + serverURL,
+      'echo   Server: ' + safeServerURL,
       'echo.',
       '',
       ':: Download relay agent',
       'echo   Downloading relay agent...',
-      'powershell -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + serverURL + '/api/wsjtx/relay/agent.js\' -OutFile \'%TEMP%\\ohc-relay.js\' } catch { Write-Host $_.Exception.Message; exit 1 }"',
+      'powershell -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'' + safeServerURL + '/api/wsjtx/relay/agent.js\' -OutFile \'%TEMP%\\ohc-relay.js\' } catch { Write-Host $_.Exception.Message; exit 1 }"',
       'if errorlevel 1 (',
       '    echo   Failed to download relay agent!',
       '    echo   Check your internet connection and try again.',
@@ -8071,7 +8360,7 @@ app.get('/api/wsjtx/relay/download/:platform', (req, res) => {
       'echo.',
       '',
       ':: Run relay',
-      '%NODE_EXE% "%TEMP%\\ohc-relay.js" --url "' + serverURL + '" --key "' + WSJTX_RELAY_KEY + '" --session "' + sessionId + '"',
+      '%NODE_EXE% "%TEMP%\\ohc-relay.js" --url "' + safeServerURL + '" --key "' + safeRelayKey + '" --session "' + safeSessionId + '"',
       '',
       'echo.',
       'echo   Relay stopped.',
@@ -8377,7 +8666,7 @@ app.get('/api/contest/qsos', (req, res) => {
 });
 
 // API endpoint: ingest contest QSOs (JSON)
-app.post('/api/contest/qsos', (req, res) => {
+app.post('/api/contest/qsos', writeLimiter, requireWriteAuth, (req, res) => {
   const payload = Array.isArray(req.body) ? req.body : [req.body];
   let accepted = 0;
 
@@ -8463,6 +8752,20 @@ if (N1MM_ENABLED) {
   console.log('');
 
   startAutoUpdateScheduler();
+  
+  // Check for outdated systemd service file that prevents auto-update restart
+  if (AUTO_UPDATE_ENABLED && (process.env.INVOCATION_ID || process.ppid === 1)) {
+    try {
+      const serviceFile = fs.readFileSync('/etc/systemd/system/openhamclock.service', 'utf8');
+      if (serviceFile.includes('Restart=on-failure') && !serviceFile.includes('Restart=always')) {
+        console.log('  ⚠️  Your systemd service file uses Restart=on-failure');
+        console.log('     Auto-updates may not restart properly.');
+        console.log('     Fix: sudo sed -i "s/Restart=on-failure/Restart=always/" /etc/systemd/system/openhamclock.service');
+        console.log('     Then: sudo systemctl daemon-reload');
+        console.log('');
+      }
+    } catch { /* Not running as systemd service, or can't read file — ignore */ }
+  }
 
   // Pre-warm N0NBH cache so solar-indices has current SFI/SSN on first request
   setTimeout(async () => {
