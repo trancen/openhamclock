@@ -2,11 +2,13 @@
  * useContests Hook
  * Fetches upcoming amateur radio contests
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 export const useContests = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fetchRef = useRef(null);
 
   useEffect(() => {
     const fetchContests = async () => {
@@ -24,9 +26,12 @@ export const useContests = () => {
     };
 
     fetchContests();
+    fetchRef.current = fetchContests;
     const interval = setInterval(fetchContests, 30 * 60 * 1000); // 30 minutes
     return () => clearInterval(interval);
   }, []);
+
+  useVisibilityRefresh(() => fetchRef.current?.(), 30000);
 
   return { data, loading };
 };

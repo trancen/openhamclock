@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import {applyDXFilters} from "../utils/dxClusterFilters";
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 export const useDXClusterData = (filters = {}, config = {}) => {
   const [allData, setAllData] = useState([]);
@@ -13,9 +14,10 @@ export const useDXClusterData = (filters = {}, config = {}) => {
   const [paths, setPaths] = useState([]);     // For map display
   const [loading, setLoading] = useState(true);
   const lastFetchRef = useRef(0);
+  const fetchRef = useRef(null);
   
   const spotRetentionMs = (filters?.spotRetentionMinutes || 30) * 60 * 1000;
-  const pollInterval = config.lowMemoryMode ? 120000 : 60000; // 120s in low memory, 60s otherwise - reduced to save bandwidth
+  const pollInterval = config.lowMemoryMode ? 120000 : 60000; // 120s in low memory, 60s otherwise
 
   // Build query params for custom cluster settings
   const buildQueryParams = useCallback(() => {
@@ -92,8 +94,12 @@ export const useDXClusterData = (filters = {}, config = {}) => {
 
     fetchData();
     const interval = setInterval(fetchData, pollInterval);
+    fetchRef.current = fetchData;
     return () => clearInterval(interval);
   }, [spotRetentionMs, buildQueryParams]);
+
+  // Refresh immediately when tab becomes visible (handles browser throttling)
+  useVisibilityRefresh(() => fetchRef.current?.(), pollInterval);
 
   // Clean up data when retention time changes
   useEffect(() => {

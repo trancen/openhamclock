@@ -16,6 +16,7 @@
  *   lat, lon, direction ('tx' | 'rx')
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 // Deduplicate spots: keep the most recent report per unique callsign + band combination
 function deduplicateSpots(spots, maxSpots) {
@@ -218,6 +219,16 @@ export const usePSKReporter = (callsign, options = {}) => {
     setError(null);
     setReconnectKey(k => k + 1);
   }, []);
+
+  // Reconnect SSE when tab becomes visible if connection was lost (browser throttling)
+  useVisibilityRefresh(() => {
+    if (!enabled) return;
+    const es = eventSourceRef.current;
+    if (!es || es.readyState === EventSource.CLOSED) {
+      console.log('[PSKReporter] Tab visible — reconnecting SSE');
+      refresh();
+    }
+  }, 5000);
 
   return {
     txReports,

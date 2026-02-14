@@ -8,6 +8,7 @@
  * Each browser gets a unique session ID so relay data is per-user.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 const POLL_INTERVAL = 2000; // Poll every 2 seconds for near-real-time feel
 const API_URL = '/api/wsjtx';
@@ -133,6 +134,9 @@ export function useWSJTX(enabled = true) {
     
     return () => clearInterval(interval);
   }, [enabled, fetchFull, pollDecodes]);
+
+  // Refresh immediately when tab becomes visible (handles browser throttling)
+  useVisibilityRefresh(() => { if (enabled) fetchFull(); }, 5000);
 
   return {
     ...data,

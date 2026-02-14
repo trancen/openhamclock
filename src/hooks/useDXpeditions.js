@@ -2,11 +2,13 @@
  * useDXpeditions Hook
  * Fetches active and upcoming DXpeditions
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 export const useDXpeditions = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fetchRef = useRef(null);
 
   useEffect(() => {
     const fetchDXpeditions = async () => {
@@ -24,9 +26,12 @@ export const useDXpeditions = () => {
     };
 
     fetchDXpeditions();
+    fetchRef.current = fetchDXpeditions;
     const interval = setInterval(fetchDXpeditions, 60 * 60 * 1000); // 1 hour
     return () => clearInterval(interval);
   }, []);
+
+  useVisibilityRefresh(() => fetchRef.current?.(), 30000);
 
   return { data, loading };
 };

@@ -2,7 +2,8 @@
  * usePOTASpots Hook
  * Fetches Parks on the Air activations via server proxy (for caching)
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useVisibilityRefresh } from './useVisibilityRefresh';
 
 // Convert grid square to lat/lon
 function gridToLatLon(grid) {
@@ -30,6 +31,7 @@ function gridToLatLon(grid) {
 export const usePOTASpots = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fetchRefPOTA = useRef(null);
 
   useEffect(() => {
     const fetchPOTA = async () => {
@@ -94,9 +96,13 @@ export const usePOTASpots = () => {
     };
     
     fetchPOTA();
-    const interval = setInterval(fetchPOTA, 120 * 1000); // 2 minutes - reduced from 1 to save bandwidth
+    const interval = setInterval(fetchPOTA, 120 * 1000); // 2 minutes
+    fetchRefPOTA.current = fetchPOTA;
     return () => clearInterval(interval);
   }, []);
+
+  // Refresh immediately when tab becomes visible (handles browser throttling)
+  useVisibilityRefresh(() => fetchRefPOTA.current?.(), 10000);
 
   return { data, loading };
 };
