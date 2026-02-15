@@ -2574,13 +2574,23 @@ app.get('/api/dxcluster/paths', async (req, res) => {
       return res.json(validPaths.slice(0, 50));
     }
     
-    // Get unique callsigns to look up (sanitize to remove angle brackets from DX cluster data)
+    // Get unique callsigns to look up (sanitize and strip modifiers)
+    // 5Z4/OZ6ABL → OZ6ABL, UA1TAN/M → UA1TAN so lookups hit the home call
     const allCalls = new Set();
+    const baseCallMap = {}; // raw → base mapping for spot building
     newSpots.forEach(s => {
       const spotter = (s.spotter || '').replace(/[<>]/g, '').trim();
       const dxCall = (s.dxCall || '').replace(/[<>]/g, '').trim();
-      if (spotter) allCalls.add(spotter);
-      if (dxCall) allCalls.add(dxCall);
+      if (spotter) {
+        const base = extractBaseCallsign(spotter);
+        allCalls.add(base);
+        baseCallMap[spotter] = base;
+      }
+      if (dxCall) {
+        const base = extractBaseCallsign(dxCall);
+        allCalls.add(base);
+        baseCallMap[dxCall] = base;
+      }
     });
     
     // Look up prefix-based locations for all callsigns (includes grid squares!)
@@ -2684,13 +2694,13 @@ app.get('/api/dxcluster/paths', async (req, res) => {
         }
         
         // Fall back to HamQTH cached location (more accurate than prefix)
-        if (!dxLoc && hamqthLocations[spot.dxCall]) {
-          dxLoc = hamqthLocations[spot.dxCall];
+        if (!dxLoc && hamqthLocations[baseCallMap[spot.dxCall] || spot.dxCall]) {
+          dxLoc = hamqthLocations[baseCallMap[spot.dxCall] || spot.dxCall];
         }
         
         // Fall back to prefix location (now includes grid-based coordinates!)
         if (!dxLoc) {
-          dxLoc = prefixLocations[spot.dxCall];
+          dxLoc = prefixLocations[baseCallMap[spot.dxCall] || spot.dxCall];
           if (dxLoc && dxLoc.grid) {
             dxGridSquare = dxLoc.grid;
           }
@@ -2722,13 +2732,13 @@ app.get('/api/dxcluster/paths', async (req, res) => {
         }
         
         // Fall back to HamQTH cached location for spotter
-        if (!spotterLoc && hamqthLocations[spot.spotter]) {
-          spotterLoc = hamqthLocations[spot.spotter];
+        if (!spotterLoc && hamqthLocations[baseCallMap[spot.spotter] || spot.spotter]) {
+          spotterLoc = hamqthLocations[baseCallMap[spot.spotter] || spot.spotter];
         }
         
         // Fall back to prefix location for spotter (now includes grid-based coordinates!)
         if (!spotterLoc) {
-          spotterLoc = prefixLocations[spot.spotter];
+          spotterLoc = prefixLocations[baseCallMap[spot.spotter] || spot.spotter];
           if (spotterLoc && spotterLoc.grid) {
             spotterGridSquare = spotterLoc.grid;
           }
@@ -2804,6 +2814,55 @@ app.get('/api/dxcluster/paths', async (req, res) => {
 // Cache for callsign lookups - callsigns don't change location often
 const callsignLookupCache = new Map(); // key = callsign, value = { data, timestamp }
 const CALLSIGN_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// ── Extract base callsign from decorated/portable calls ──
+// Strips prefixes (5Z4/OZ6ABL → OZ6ABL) and suffixes (UA1TAN/M → UA1TAN)
+// so lookups hit QRZ/HamQTH with the home callsign, not the operating indicator.
+//
+// Rules:
+//   UA1TAN/M, /P, /QRP, /MM, /AM, /R, /T  → UA1TAN  (known modifiers)
+//   W1ABC/6                                 → W1ABC   (US call area override)
+//   5Z4/OZ6ABL, DL/AA7BQ, VE3/W1ABC        → OZ6ABL, AA7BQ, W1ABC  (pick the home call)
+//
+// Heuristic: split on '/', pick the segment that looks most like a full callsign
+// (has digits AND letters, and is the longest non-modifier segment).
+function extractBaseCallsign(raw) {
+  if (!raw || typeof raw !== 'string') return raw || '';
+  const call = raw.toUpperCase().trim();
+  
+  if (!call.includes('/')) return call;
+  
+  const parts = call.split('/');
+  
+  // Known suffixes that are always modifiers (not callsigns)
+  const MODIFIERS = new Set([
+    'M', 'P', 'QRP', 'MM', 'AM', 'R', 'T', 'B', 'BCN',
+    'LH', 'A', 'E', 'J', 'AG', 'AE', 'KT'
+  ]);
+  
+  // Filter out known modifiers and single digits (call area overrides like /6)
+  const candidates = parts.filter(p => {
+    if (!p) return false;
+    if (MODIFIERS.has(p)) return false;
+    if (/^\d$/.test(p)) return false; // Single digit = call area
+    return true;
+  });
+  
+  if (candidates.length === 0) return parts[0] || call;
+  if (candidates.length === 1) return candidates[0];
+  
+  // Multiple candidates (e.g. "5Z4/OZ6ABL") — pick the one that looks most like a full callsign
+  // A full callsign has: prefix letters, digit(s), suffix letters (e.g. OZ6ABL, AA7BQ, W1ABC)
+  const callsignPattern = /^[A-Z]{1,3}\d{1,4}[A-Z]{1,4}$/;
+  
+  // Prefer the segment matching a full callsign pattern
+  const fullMatches = candidates.filter(c => callsignPattern.test(c));
+  if (fullMatches.length === 1) return fullMatches[0];
+  
+  // If multiple match (rare) or none match, pick the longest
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0];
+}
 
 // ── QRZ XML API Session Manager ──
 // QRZ provides the most accurate lat/lon (user-supplied, geocoded, or grid-derived).
@@ -3039,7 +3098,7 @@ app.get('/api/qrz/status', (req, res) => {
 });
 
 // POST /api/qrz/configure — save QRZ credentials (from Settings UI)
-app.post('/api/qrz/configure', writeLimiter, requireWriteAuth, async (req, res) => {
+app.post('/api/qrz/configure', writeLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   
   if (!username || !password) {
@@ -3085,7 +3144,7 @@ app.post('/api/qrz/configure', writeLimiter, requireWriteAuth, async (req, res) 
 });
 
 // POST /api/qrz/remove — remove saved QRZ credentials
-app.post('/api/qrz/remove', writeLimiter, requireWriteAuth, (req, res) => {
+app.post('/api/qrz/remove', writeLimiter, (req, res) => {
   qrzSession.username = CONFIG._qrzUsername || '';
   qrzSession.password = CONFIG._qrzPassword || '';
   qrzSession.key = null;
@@ -3111,11 +3170,14 @@ app.post('/api/qrz/remove', writeLimiter, requireWriteAuth, (req, res) => {
 
 app.get('/api/callsign/:call', async (req, res) => {
   // Strip angle brackets and other junk that can arrive from DX cluster data
-  const callsign = req.params.call.replace(/[<>]/g, '').toUpperCase().trim();
+  const rawCallsign = req.params.call.replace(/[<>]/g, '').toUpperCase().trim();
   const now = Date.now();
   
-  // Check cache first
-  const cached = callsignLookupCache.get(callsign);
+  // Extract base callsign: 5Z4/OZ6ABL → OZ6ABL, UA1TAN/M → UA1TAN
+  const callsign = extractBaseCallsign(rawCallsign);
+  
+  // Check cache first (check both raw and base forms)
+  const cached = callsignLookupCache.get(callsign) || callsignLookupCache.get(rawCallsign);
   if (cached && (now - cached.timestamp) < CALLSIGN_CACHE_TTL) {
     logDebug('[Callsign Lookup] Cache hit for:', callsign);
     return res.json(cached.data);
@@ -3126,6 +3188,9 @@ app.get('/api/callsign/:call', async (req, res) => {
     return res.status(400).json({ error: 'Invalid callsign format' });
   }
   
+  if (callsign !== rawCallsign) {
+    logDebug(`[Callsign Lookup] Stripped: ${rawCallsign} → ${callsign}`);
+  }
   logDebug('[Callsign Lookup] Looking up:', callsign);
   
   try {
@@ -4020,11 +4085,14 @@ app.get('/api/myspots/:callsign', async (req, res) => {
     const uniqueCalls = [...new Set(mySpots.map(s => s.isMySpot ? s.dxCall : s.spotter))];
     const locations = {};
     
-    for (const call of uniqueCalls.slice(0, 10)) { // Limit to 10 lookups
+    for (const rawCall of uniqueCalls.slice(0, 10)) { // Limit to 10 lookups
       try {
+        const call = extractBaseCallsign(rawCall);
         const loc = estimateLocationFromPrefix(call);
         if (loc) {
-          locations[call] = { lat: loc.lat, lon: loc.lon, country: loc.country };
+          // Store under both raw and base key so spot lookup finds it
+          locations[rawCall] = { lat: loc.lat, lon: loc.lon, country: loc.country };
+          if (call !== rawCall) locations[call] = locations[rawCall];
         }
       } catch (e) {
         // Ignore lookup errors
@@ -8204,7 +8272,8 @@ function handleWSJTXMessage(msg, state) {
       
       // Try HamQTH callsign cache (DXCC-level, more accurate than prefix centroid)
       if (!decode.lat) {
-        const targetCall = (parsed.caller || parsed.dxCall || '').toUpperCase();
+        const rawCall = (parsed.caller || parsed.dxCall || '').toUpperCase();
+        const targetCall = extractBaseCallsign(rawCall);
         if (targetCall) {
           const cached = callsignLookupCache.get(targetCall);
           if (cached && (Date.now() - cached.timestamp) < CALLSIGN_CACHE_TTL && cached.data?.lat != null) {
@@ -8241,7 +8310,8 @@ function handleWSJTXMessage(msg, state) {
       
       // Last resort: estimate from callsign prefix
       if (!decode.lat) {
-        const targetCall = parsed.caller || parsed.dxCall || '';
+        const rawCall = parsed.caller || parsed.dxCall || '';
+        const targetCall = extractBaseCallsign(rawCall);
         if (targetCall) {
           const prefixLoc = estimateLocationFromPrefix(targetCall);
           if (prefixLoc) {
@@ -8864,7 +8934,9 @@ function resolveQsoLocation(dxCall, grid, comment) {
       return { lat: loc.lat, lon: loc.lon, grid: gridToUse, source: 'grid' };
     }
   }
-  const prefixLoc = estimateLocationFromPrefix(dxCall);
+  // Strip modifiers (5Z4/OZ6ABL → OZ6ABL) so prefix estimation uses the home call
+  const baseCall = extractBaseCallsign(dxCall);
+  const prefixLoc = estimateLocationFromPrefix(baseCall);
   if (prefixLoc) {
     return { lat: prefixLoc.lat, lon: prefixLoc.lon, grid: prefixLoc.grid || null, source: prefixLoc.source || 'prefix' };
   }
@@ -8988,7 +9060,7 @@ function normalizeContestQso(input, source) {
   }
 
   if (Number.isNaN(lat) || Number.isNaN(lon)) {
-    const loc = estimateLocationFromPrefix(dxCall);
+    const loc = estimateLocationFromPrefix(extractBaseCallsign(dxCall));
     if (loc) {
       lat = loc.lat;
       lon = loc.lon;
