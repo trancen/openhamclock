@@ -22,19 +22,6 @@ import PluginLayer from './PluginLayer.jsx';
 import { DXNewsTicker } from './DXNewsTicker.jsx';
 import {filterDXPaths} from "../utils";
 
-// SECURITY: Escape HTML to prevent XSS in Leaflet popups/tooltips
-// DX cluster data, POTA/SOTA spots, and WSJT-X decodes come from external sources
-// and could contain malicious HTML/script tags in callsigns, comments, or park names.
-function esc(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 
 export const WorldMap = ({ 
   deLocation, 
@@ -578,7 +565,7 @@ export const WorldMap = ({
               opacity: 1,
               fillOpacity: isHovered ? 1 : 0.9
             })
-              .bindPopup(`<b data-qrz-call="${esc(path.dxCall)}" style="color: ${color}; cursor:pointer">${esc(path.dxCall)}</b><br>${esc(path.freq)} MHz<br>by <span data-qrz-call="${esc(path.spotter)}" style="cursor:pointer">${esc(path.spotter)}</span>`)
+              .bindPopup(`<b style="color: ${color}">${path.dxCall}</b><br>${path.freq} MHz<br>by ${path.spotter}`)
               .addTo(map);
             if (isHovered) dxCircle.bringToFront();
             dxPathsMarkersRef.current.push(dxCircle);
@@ -626,7 +613,7 @@ export const WorldMap = ({
             iconAnchor: [7, 14]
           });
           const marker = L.marker([spot.lat, spot.lon], { icon: triangleIcon })
-            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#44cc44; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span> ${esc(spot.locationDesc || '')}<br>${spot.name ? `<i>${esc(spot.name)}</i><br>` : ''}${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
+            .bindPopup(`<b style="color:#44cc44">${spot.call}</b><br><span style="color:#888">${spot.ref}</span> ${spot.locationDesc || ''}<br>${spot.name ? `<i>${spot.name}</i><br>` : ''}${spot.freq} ${spot.mode || ''} <span style="color:#888">${spot.time || ''}</span>`)
             .addTo(map);
           potaMarkersRef.current.push(marker);
 
@@ -665,7 +652,7 @@ export const WorldMap = ({
             iconAnchor: [6, 6]
           });
           const marker = L.marker([spot.lat, spot.lon], { icon: diamondIcon })
-            .bindPopup(`<b data-qrz-call="${esc(spot.call)}" style="color:#ff9632; cursor:pointer">${esc(spot.call)}</b><br><span style="color:#888">${esc(spot.ref)}</span>${spot.summit ? ` — ${esc(spot.summit)}` : ''}${spot.points ? ` <span style="color:#ff9632">(${esc(spot.points)}pt)</span>` : ''}<br>${esc(spot.freq)} ${esc(spot.mode || '')} <span style="color:#888">${esc(spot.time || '')}</span>`)
+            .bindPopup(`<b style="color:#ff9632">${spot.call}</b><br><span style="color:#888">${spot.ref}</span>${spot.summit ? ` — ${spot.summit}` : ''}${spot.points ? ` <span style="color:#ff9632">(${spot.points}pt)</span>` : ''}<br>${spot.freq} ${spot.mode || ''} <span style="color:#888">${spot.time || ''}</span>`)
             .addTo(map);
           sotaMarkersRef.current.push(marker);
 
@@ -824,8 +811,8 @@ export const WorldMap = ({
                 opacity: 0.9,
                 fillOpacity: 0.8
               }).bindPopup(`
-                <b data-qrz-call="${esc(displayCall)}" style="cursor:pointer">${esc(displayCall)}</b><br>
-                ${esc(spot.mode)} @ ${esc(freqMHz)} MHz<br>
+                <b>${displayCall}</b><br>
+                ${spot.mode} @ ${freqMHz} MHz<br>
                 ${spot.snr !== null ? `SNR: ${spot.snr > 0 ? '+' : ''}${spot.snr} dB` : ''}
               `).addTo(map);
               pskMarkersRef.current.push(circle);
@@ -908,9 +895,9 @@ export const WorldMap = ({
                 iconAnchor: [4, 4]
               })
             }).bindPopup(`
-              <b data-qrz-call="${esc(call)}" style="cursor:pointer">${esc(call)}</b> ${spot.type === 'CQ' ? 'CQ' : ''}<br>
-              ${esc(spot.grid || '')} ${esc(spot.band || '')}${spot.gridSource === 'prefix' ? ' <i>(est)</i>' : spot.gridSource === 'cache' ? ' <i>(prev)</i>' : ''}<br>
-              ${esc(spot.mode || '')} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
+              <b>${call}</b> ${spot.type === 'CQ' ? 'CQ' : ''}<br>
+              ${spot.grid || ''} ${spot.band || ''}${spot.gridSource === 'prefix' ? ' <i>(est)</i>' : spot.gridSource === 'cache' ? ' <i>(prev)</i>' : ''}<br>
+              ${spot.mode || ''} SNR: ${spot.snr != null ? (spot.snr >= 0 ? '+' : '') + spot.snr : '?'} dB
             `).addTo(map);
             wsjtxMarkersRef.current.push(diamond);
           } catch (err) {
