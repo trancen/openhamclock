@@ -184,6 +184,15 @@ export const WorldMap = ({
   // GIBS MODIS CODE
   const [gibsOffset, setGibsOffset] = useState(0);
 
+  // Night overlay darkness (0-100 → fillOpacity 0.0-1.0)
+  const [nightDarkness, setNightDarkness] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem("ohc_nightDarkness")) || 60;
+    } catch {
+      return 60;
+    }
+  });
+
   const getGibsUrl = (days) => {
     const date = new Date(Date.now() - (days * 24 + 12) * 60 * 60 * 1000);
     const dateStr = date.toISOString().split("T")[0];
@@ -333,7 +342,7 @@ export const WorldMap = ({
     // Day/night terminator
     terminatorRef.current = createTerminator({
       resolution: 2,
-      fillOpacity: 0.1,
+      fillOpacity: nightDarkness / 100,
       fillColor: "#000010",
       color: "#ffaa00",
       weight: 2,
@@ -511,7 +520,7 @@ export const WorldMap = ({
     // 3. Terminator Shadow (Gray Line) Set Color to transparent to hide terminator vertical lines at 180° and -180°
     if (terminatorRef.current) {
       terminatorRef.current.setStyle({
-        fillOpacity: 0.6,
+        fillOpacity: nightDarkness / 100,
         fillColor: "#000008",
         color: "transparent",
         weight: 2,
@@ -550,6 +559,16 @@ export const WorldMap = ({
 
     return () => clearInterval(maskInterval);
   }, [mapStyle, gibsOffset]);
+
+  // Live-update night overlay darkness when slider changes
+  useEffect(() => {
+    if (terminatorRef.current) {
+      terminatorRef.current.setStyle({ fillOpacity: nightDarkness / 100 });
+    }
+    try {
+      localStorage.setItem("ohc_nightDarkness", String(nightDarkness));
+    } catch {}
+  }, [nightDarkness]);
 
   // End code dynamic GIBS generator if 'MODIS' is selected
 
@@ -1497,6 +1516,98 @@ export const WorldMap = ({
       >
         {mapLocked ? "🔒" : "🔓"}
       </button>
+
+      {/* Night darkness slider */}
+      <div
+        title="Adjust night overlay darkness"
+        style={{
+          position: "absolute",
+          top: "108px",
+          left: "10px",
+          background: "rgba(0, 0, 0, 0.7)",
+          border: "1px solid #444",
+          borderRadius: "4px",
+          padding: "6px 8px",
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "3px",
+          width: "30px",
+        }}
+      >
+        <span style={{ fontSize: "12px", lineHeight: 1 }}>🌙</span>
+        <input
+          type="range"
+          min="0"
+          max="90"
+          value={nightDarkness}
+          onChange={(e) => setNightDarkness(parseInt(e.target.value))}
+          style={{
+            cursor: "pointer",
+            width: "80px",
+            transform: "rotate(-90deg)",
+            transformOrigin: "center center",
+            margin: "32px 0",
+          }}
+        />
+        <span
+          style={{
+            fontSize: "9px",
+            fontFamily: "JetBrains Mono, monospace",
+            color: "#999",
+            lineHeight: 1,
+          }}
+        >
+          {nightDarkness}%
+        </span>
+      </div>
+
+      {/* Night darkness slider */}
+      <div
+        title="Adjust night overlay darkness"
+        style={{
+          position: "absolute",
+          top: "108px",
+          left: "10px",
+          background: "rgba(0, 0, 0, 0.7)",
+          border: "1px solid #444",
+          borderRadius: "4px",
+          padding: "6px 8px",
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "3px",
+          width: "30px",
+        }}
+      >
+        <span style={{ fontSize: "12px", lineHeight: 1 }}>🌙</span>
+        <input
+          type="range"
+          min="0"
+          max="90"
+          value={nightDarkness}
+          onChange={(e) => setNightDarkness(parseInt(e.target.value))}
+          style={{
+            cursor: "pointer",
+            width: "80px",
+            transform: "rotate(-90deg)",
+            transformOrigin: "center center",
+            margin: "32px 0",
+          }}
+        />
+        <span
+          style={{
+            fontSize: "9px",
+            fontFamily: "JetBrains Mono, monospace",
+            color: "#999",
+            lineHeight: 1,
+          }}
+        >
+          {nightDarkness}%
+        </span>
+      </div>
 
       {mapStyle === "MODIS" && (
         <div
