@@ -1,30 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * useRotator (V1)
+ * useRotator (V2)
+ * - Polls endpointUrl for rotator status
+ * - Auto-disables polling if server reports source === 'none'
  * - mock mode: smooth rotating azimuth for UI dev
- * - later: poll endpointUrl for real azimuth
  *
  * Return:
  *  azimuth: number | null
+ *  lastGoodAzimuth: number | null
  *  source: string
  *  isStale: boolean
  *  ageMs: number
+ *  available: boolean  — whether a rotator is configured server-side
  */
 export default function useRotator({
   endpointUrl,
-  pollMs = 500,
-  staleMs = 3000,
-  mock = true,
+  pollMs = 2000,
+  staleMs = 5000,
+  mock = false,
 } = {}) {
   const [azimuth, setAzimuth] = useState(null);
   const [lastGoodAzimuth, setLastGoodAzimuth] = useState(null);
-  const [source, setSource] = useState(mock ? "mock" : "rotator");
+  const [source, setSource] = useState(mock ? "mock" : "unknown");
   const [lastUpdate, setLastUpdate] = useState(0);
+  const [available, setAvailable] = useState(false);
 
   const timerRef = useRef(null);
+  const disabledRef = useRef(false); // sticky: once server says 'none', stop forever
 
-  // Derived: stale + age
   const ageMs = useMemo(() => {
     if (!lastUpdate) return Number.POSITIVE_INFINITY;
     return Date.now() - lastUpdate;
@@ -36,7 +40,6 @@ export default function useRotator({
   }, [lastUpdate, staleMs]);
 
   useEffect(() => {
-    // cleanup any existing timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -44,7 +47,7 @@ export default function useRotator({
 
     if (mock) {
       setSource("mock");
-      // Start at a pleasant number if empty
+      setAvailable(true);
       setAzimuth((prev) => (prev == null ? 22 : prev));
       setLastGoodAzimuth((prev) => (prev == null ? 22 : prev));
       setLastUpdate(Date.now());
@@ -52,7 +55,6 @@ export default function useRotator({
       timerRef.current = setInterval(() => {
         setAzimuth((prev) => {
           const p = prev == null ? 0 : prev;
-          // gentle motion + wrap
           const next = (p + 3) % 360;
           setLastGoodAzimuth(next);
           return next;
@@ -65,11 +67,12 @@ export default function useRotator({
       };
     }
 
-    // Real mode placeholder: polling pattern
-    setSource("pstrotator");
+    // Real mode
+    if (!endpointUrl) return;
 
     async function poll() {
-      if (!endpointUrl) return;
+      // Once server told us 'none', stop polling entirely
+      if (disabledRef.current) return;
 
       try {
         const res = await fetch(endpointUrl, { cache: "no-store" });
@@ -77,45 +80,44 @@ export default function useRotator({
 
         const data = await res.json();
 
-        // Backend returns:
-        // { source, live, azimuth, lastSeen, staleMs, error }
-        const {
-          source: src,
-          azimuth,
-          lastSeen,
-          staleMs: serverStaleMs,
-          error,
-        } = data || {};
+        // If server says rotator provider is 'none', stop all future polling
+        if (data?.source === 'none') {
+          disabledRef.current = true;
+          setSource('none');
+          setAvailable(false);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          return;
+        }
 
-        const a = Number(azimuth);
-        if (!Number.isFinite(a)) throw new Error("Invalid azimuth");
+        setAvailable(true);
 
-        setAzimuth(a);
-        setLastGoodAzimuth(a);
+        const a = Number(data?.azimuth);
+        if (Number.isFinite(a)) {
+          setAzimuth(a);
+          setLastGoodAzimuth(a);
+        }
 
-        // Use server timestamp if provided (preferred), otherwise fallback
-        const ts = Number(lastSeen);
+        const ts = Number(data?.lastSeen);
         setLastUpdate(Number.isFinite(ts) && ts > 0 ? ts : Date.now());
 
-        // Prefer server-provided source if present
-        if (src) setSource(String(src));
-        else setSource("pstrotator_udp");
-
-        // (Optional) If you want: you can log/track live/error later.
-        // For now, staleness is derived from lastUpdate + staleMs in this hook.
+        if (data?.source) setSource(String(data.source));
       } catch {
         // Keep last value; staleness will indicate trouble
       }
     }
 
-    // initial + interval
+    // Initial poll
     poll();
-    timerRef.current = setInterval(poll, Math.max(200, pollMs));
+    // Poll at a reasonable interval (default 2s, minimum 1s)
+    timerRef.current = setInterval(poll, Math.max(1000, pollMs));
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [endpointUrl, pollMs, staleMs, mock]);
 
-  return { azimuth, lastGoodAzimuth, source, isStale, ageMs };
+  return { azimuth, lastGoodAzimuth, source, isStale, ageMs, available };
 }

@@ -4,6 +4,7 @@
 import { DXNewsTicker, WorldMap } from '../components';
 import { getBandColor } from '../utils';
 import CallsignLink from '../components/CallsignLink.jsx';
+import { useRig } from '../contexts/RigContext.jsx';
 
 export default function ClassicLayout(props) {
   const {
@@ -50,6 +51,8 @@ export default function ClassicLayout(props) {
     toggleDXLabels,
     toggleSatellites,
   } = props;
+
+  const { tuneTo } = useRig();
 
   return config.layout === 'classic' ? (
     <div style={{
@@ -247,13 +250,14 @@ export default function ClassicLayout(props) {
                 onMouseEnter={() => setHoveredSpot(spot)}
                 onMouseLeave={() => setHoveredSpot(null)}
                 onClick={() => {
+                  tuneTo(spot);
                   const path = (dxClusterData.paths || []).find(p => p.dxCall === spot.call);
                   if (path && path.dxLat != null && path.dxLon != null) {
                     handleDXChange({ lat: path.dxLat, lon: path.dxLon });
                   }
                 }}
               >
-                <span style={{ color: '#ffff00' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
+                <span style={{ color: '#ffff00' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f / 1000).toFixed(3) : f.toFixed(3); })()}</span>
                 <span style={{ color: '#00ffff' }}><CallsignLink call={spot.call} color="#00ffff" /></span>
                 <span style={{ color: '#888' }}>{spot.time || '--'}</span>
               </div>
@@ -289,7 +293,9 @@ export default function ClassicLayout(props) {
             hoveredSpot={hoveredSpot}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
-          units={config.units}
+            units={config.units}
+            mouseZoom={config.mouseZoom}
+            onSpotClick={tuneTo}
           />
 
           {/* Map overlay buttons — bottom-left to avoid WorldMap's SAT/CALLS buttons at top */}
@@ -437,11 +443,11 @@ export default function ClassicLayout(props) {
             </span>
           )}
           {bandConditions?.extras?.geomagField && (
-            <span style={{ 
+            <span style={{
               fontSize: '12px',
-              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' : 
-                     bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' : 
-                     'var(--accent-amber)',
+              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' :
+                bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' :
+                  'var(--accent-amber)',
               fontWeight: '600'
             }}>
               {bandConditions.extras.geomagField}
@@ -531,7 +537,9 @@ export default function ClassicLayout(props) {
             hideOverlays={true}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
-          units={config.units}
+            units={config.units}
+            mouseZoom={config.mouseZoom}
+            onSpotClick={tuneTo}
           />
           {/* DX Lock button overlay — bottom-left to avoid WorldMap's SAT/CALLS buttons at top */}
           <button
@@ -660,13 +668,14 @@ export default function ClassicLayout(props) {
                   onMouseEnter={() => setHoveredSpot(spot)}
                   onMouseLeave={() => setHoveredSpot(null)}
                   onClick={() => {
+                    tuneTo(spot);
                     const path = (dxClusterData.paths || []).find(p => p.dxCall === spot.call);
                     if (path && path.dxLat != null && path.dxLon != null) {
                       handleDXChange({ lat: path.dxLat, lon: path.dxLon });
                     }
                   }}
                 >
-                  <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq)/1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
+                  <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq) / 1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f / 1000).toFixed(3) : f.toFixed(3); })()}</span>
                   <span style={{ color: 'var(--accent-cyan)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><CallsignLink call={spot.call} color="var(--accent-cyan)" fontWeight="600" /></span>
                   <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '12px' }}>{spot.time || '--'}</span>
                 </div>
@@ -676,16 +685,16 @@ export default function ClassicLayout(props) {
 
           {/* DX News - sidebar footer */}
           {mapLayers.showDXNews && (
-          <div style={{
-            flexShrink: 0,
-            borderTop: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
-            height: '28px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <DXNewsTicker sidebar={true} />
-          </div>
+            <div style={{
+              flexShrink: 0,
+              borderTop: '1px solid var(--border-color)',
+              background: 'var(--bg-panel)',
+              height: '28px',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <DXNewsTicker sidebar={true} />
+            </div>
           )}
         </div>
       </div>
@@ -813,11 +822,11 @@ export default function ClassicLayout(props) {
             </span>
           )}
           {bandConditions?.extras?.geomagField && (
-            <span style={{ 
+            <span style={{
               fontSize: '12px',
-              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' : 
-                     bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' : 
-                     'var(--accent-amber)',
+              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' :
+                bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' :
+                  'var(--accent-amber)',
               fontWeight: '600'
             }}>
               {bandConditions.extras.geomagField}
@@ -907,7 +916,9 @@ export default function ClassicLayout(props) {
             hideOverlays={true}
             callsign={config.callsign}
             lowMemoryMode={config.lowMemoryMode}
-          units={config.units}
+            units={config.units}
+            mouseZoom={config.mouseZoom}
+            onSpotClick={tuneTo}
           />
           <div style={{
             position: 'absolute',
@@ -1007,13 +1018,14 @@ export default function ClassicLayout(props) {
                 onMouseEnter={() => setHoveredSpot(spot)}
                 onMouseLeave={() => setHoveredSpot(null)}
                 onClick={() => {
+                  tuneTo(spot);
                   const path = (dxClusterData.paths || []).find(p => p.dxCall === spot.call);
                   if (path && path.dxLat != null && path.dxLon != null) {
                     handleDXChange({ lat: path.dxLat, lon: path.dxLon });
                   }
                 }}
               >
-                <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq)/1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f/1000).toFixed(3) : f.toFixed(3); })()}</span>
+                <span style={{ color: getBandColor(parseFloat(spot.freq) > 1000 ? parseFloat(spot.freq) / 1000 : parseFloat(spot.freq)), fontWeight: '700' }}>{(() => { const f = parseFloat(spot.freq); return f > 1000 ? (f / 1000).toFixed(3) : f.toFixed(3); })()}</span>
                 <span style={{ color: 'var(--accent-cyan)', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><CallsignLink call={spot.call} color="var(--accent-cyan)" fontWeight="600" /></span>
                 <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '12px' }}>{spot.time || '--'}</span>
               </div>
@@ -1022,16 +1034,16 @@ export default function ClassicLayout(props) {
 
           {/* DX News - sidebar footer */}
           {mapLayers.showDXNews && (
-          <div style={{
-            flexShrink: 0,
-            borderTop: '1px solid var(--border-color)',
-            background: 'var(--bg-panel)',
-            height: '28px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <DXNewsTicker sidebar={true} />
-          </div>
+            <div style={{
+              flexShrink: 0,
+              borderTop: '1px solid var(--border-color)',
+              background: 'var(--bg-panel)',
+              height: '28px',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <DXNewsTicker sidebar={true} />
+            </div>
           )}
         </div>
       </div>

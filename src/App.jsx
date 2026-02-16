@@ -12,12 +12,14 @@ import ClassicLayout from './layouts/ClassicLayout.jsx';
 import ModernLayout from './layouts/ModernLayout.jsx';
 
 import { resetLayout } from './store/layoutStore.js';
+import { RigProvider } from './contexts/RigContext.jsx';
 
 import {
   useSpaceWeather,
   useBandConditions,
   useDXClusterData,
   usePOTASpots,
+  useWWFFSpots,
   useSOTASpots,
   useContests,
   useWeather,
@@ -40,6 +42,7 @@ import useFullscreen from './hooks/app/useFullscreen';
 import useResponsiveScale from './hooks/app/useResponsiveScale';
 import useLocalInstall from './hooks/app/useLocalInstall';
 import useVersionCheck from './hooks/app/useVersionCheck';
+import WhatsNew from './components/WhatsNew.jsx';
 
 const App = () => {
   const { t } = useTranslation();
@@ -123,6 +126,7 @@ const App = () => {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleWWFF,
     toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
@@ -147,6 +151,7 @@ const App = () => {
   const bandConditions = useBandConditions();
   const solarIndices = useSolarIndices();
   const potaSpots = usePOTASpots();
+  const wwffSpots = useWWFFSpots();
   const sotaSpots = useSOTASpots();
   const dxClusterData = useDXClusterData(dxFilters, config);
   const dxpeditions = useDXpeditions();
@@ -275,6 +280,7 @@ const App = () => {
     propagation,
     dxClusterData,
     potaSpots,
+    wwffSpots,
     sotaSpots,
     mySpots,
     dxpeditions,
@@ -292,6 +298,7 @@ const App = () => {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleWWFF,
     toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
@@ -316,18 +323,20 @@ const App = () => {
       alignItems: 'center',
       overflow: 'hidden'
     }}>
-      {config.layout === 'dockable' ? (
-        <DockableLayout
-          key={layoutResetKey}
-          {...layoutProps}
-        />
-      ) : (config.layout === 'classic' || config.layout === 'tablet' || config.layout === 'compact') ? (
-        <ClassicLayout {...layoutProps} />
-      ) : (
-        <ModernLayout
-          {...layoutProps}
-        />
-      )}
+      <RigProvider rigConfig={config.rigControl || { enabled: false, host: 'http://localhost', port: 5555 }}>
+        {config.layout === 'dockable' ? (
+          <DockableLayout
+            key={layoutResetKey}
+            {...layoutProps}
+          />
+        ) : (config.layout === 'classic' || config.layout === 'tablet' || config.layout === 'compact') ? (
+          <ClassicLayout {...layoutProps} />
+        ) : (
+          <ModernLayout
+            {...layoutProps}
+          />
+        )}
+      </RigProvider>
 
       {/* Modals */}
       <SettingsPanel
@@ -354,6 +363,7 @@ const App = () => {
         isOpen={showPSKFilters}
         onClose={() => setShowPSKFilters(false)}
       />
+      <WhatsNew />
     </div>
   );
 };

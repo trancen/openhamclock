@@ -14,6 +14,7 @@ import {
   WeatherPanel,
   AnalogClockPanel
 } from '../components';
+import { useRig } from '../contexts/RigContext.jsx';
 
 export default function ModernLayout(props) {
   const {
@@ -56,6 +57,7 @@ export default function ModernLayout(props) {
     propagation,
     dxClusterData,
     potaSpots,
+    wwffSpots,
     sotaSpots,
     mySpots,
     dxpeditions,
@@ -74,6 +76,7 @@ export default function ModernLayout(props) {
     toggleDXPaths,
     toggleDXLabels,
     togglePOTA,
+    toggleWWFF,
     toggleSOTA,
     toggleSatellites,
     togglePSKReporter,
@@ -82,6 +85,8 @@ export default function ModernLayout(props) {
     setHoveredSpot,
     filteredSatellites,
   } = props;
+
+  const { tuneTo } = useRig();
 
   return (
     <div style={{
@@ -276,6 +281,7 @@ export default function ModernLayout(props) {
           onDXChange={handleDXChange}
           dxLocked={dxLocked}
           potaSpots={potaSpots.data}
+          wwffSpots={wwffSpots.data}
           sotaSpots={sotaSpots.data}
           mySpots={mySpots.data}
           dxPaths={dxClusterData.paths}
@@ -286,6 +292,7 @@ export default function ModernLayout(props) {
           showDXLabels={mapLayers.showDXLabels}
           onToggleDXLabels={toggleDXLabels}
           showPOTA={mapLayers.showPOTA}
+          showWWFF={mapLayers.showWWFF}
           showSOTA={mapLayers.showSOTA}
           showSatellites={mapLayers.showSatellites}
           showPSKReporter={mapLayers.showPSKReporter}
@@ -297,6 +304,8 @@ export default function ModernLayout(props) {
           callsign={config.callsign}
           lowMemoryMode={config.lowMemoryMode}
           units={config.units}
+          mouseZoom={config.mouseZoom}
+          onSpotClick={tuneTo}
         />
         <div style={{
           position: 'absolute',
@@ -328,6 +337,7 @@ export default function ModernLayout(props) {
                 onOpenFilters={() => setShowDXFilters(true)}
                 onHoverSpot={setHoveredSpot}
                 onSpotClick={(spot) => {
+                  tuneTo(spot);
                   const path = (dxClusterData.paths || []).find(p => p.dxCall === spot.call);
                   if (path && path.dxLat != null && path.dxLon != null) {
                     handleDXChange({ lat: path.dxLat, lon: path.dxLon });
@@ -390,6 +400,10 @@ export default function ModernLayout(props) {
                 sotaLoading={sotaSpots.loading}
                 showSOTA={mapLayers.showSOTA}
                 onToggleSOTA={toggleSOTA}
+                wwffData={wwffSpots.data}
+                wwffLoading={wwffSpots.loading}
+                showWWFF={mapLayers.showWWFF}
+                onToggleWWFF={toggleWWFF}
               />
             </div>
           )}
