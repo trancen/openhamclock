@@ -5559,7 +5559,6 @@ app.get('/api/wspr/heatmap', async (req, res) => {
   }
 });
 
-
 // ============================================
 // SATELLITE TRACKING API
 // ============================================
@@ -5575,8 +5574,8 @@ const HAM_SATELLITES = {
   'PO-101': { norad: 43678, name: 'PO-101 (Diwata-2)', color: '#ff3399', priority: 1, mode: 'FM' },
   
   // Weather Satellites - GOES & METEOR
-  //'GOES-18': { norad: 51850, name: 'GOES-18', color: '#66ff66', priority: 1, mode: 'GRB/HRIT/LRIT' },
-  //'GOES-19': { norad: 60133, name: 'GOES-19', color: '#33cc33', priority: 1, mode: 'GRB/HRIT/LRIT' },
+  'GOES-18': { norad: 51850, name: 'GOES-18', color: '#66ff66', priority: 1, mode: 'GRB/HRIT/LRIT' },
+  'GOES-19': { norad: 60133, name: 'GOES-19', color: '#33cc33', priority: 1, mode: 'GRB/HRIT/LRIT' },
   'METEOR-M2-3': { norad: 57166, name: 'METEOR M2-3', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
   'METEOR-M2-4': { norad: 59051, name: 'METEOR M2-4', color: '#FF0000', priority: 1, mode: 'HRPT/LRPT' },
   'SUOMI-NPP': { norad: 37849, name: 'SUOMI NPP', color: '#0000FF', priority: 2, mode: 'HRD/SMD' },
