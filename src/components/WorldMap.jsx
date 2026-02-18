@@ -200,6 +200,10 @@ export const WorldMap = ({
   const [bandColorOverrides, setBandColorOverrides] = useState(() =>
     loadBandColorOverrides(),
   );
+  // Tracks whether window.L (Leaflet, loaded via <script> in index.html) is ready.
+  // Leaflet is NOT bundled by Vite — it's a self-hosted vendor file. If it hasn't
+  // loaded by the time this component mounts, we poll and flip this flag to retry.
+  const [leafletReady, setLeafletReady] = useState(() => typeof window.L !== "undefined");
   const effectiveBandColors = useMemo(
     () => getEffectiveBandColors(bandColorOverrides),
     [bandColorOverrides],
@@ -337,11 +341,30 @@ export const WorldMap = ({
     // If map is already initialized, don't do it again
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    const L = window.L;
-    if (typeof L === "undefined") {
-      console.error("Leaflet not loaded");
-      return;
+    // Leaflet is loaded via a <script> tag in index.html (self-hosted vendor file).
+    // On slow connections or if the file 404s, window.L may not be ready yet.
+    // Poll for up to 5 seconds before giving up with an actionable error.
+    if (typeof window.L === "undefined") {
+      let attempts = 0;
+      const maxAttempts = 50; // 50 × 100ms = 5 seconds
+      const poll = setInterval(() => {
+        attempts++;
+        if (typeof window.L !== "undefined") {
+          clearInterval(poll);
+          setLeafletReady(true); // triggers a re-render → re-runs this effect with L defined
+        } else if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          console.error(
+            "Leaflet failed to load after 5s. " +
+            "Check that /vendor/leaflet/leaflet.js is accessible. " +
+            "Run: bash scripts/vendor-download.sh"
+          );
+        }
+      }, 100);
+      return () => clearInterval(poll);
     }
+
+    const L = window.L;
 
     const map = L.map(mapRef.current, {
       center: mapView.center,
@@ -479,7 +502,7 @@ export const WorldMap = ({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, []); // Empty dependency array for initialization
+  }, [leafletReady]); // leafletReady flips to true once window.L is confirmed available
 
   // Update the value for how many scroll pixels count as a zoom level
   useEffect(() => {
