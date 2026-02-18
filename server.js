@@ -44,6 +44,10 @@ process.on('uncaughtException', (err) => {
   if (err.type === 'request.aborted' || (err.name === 'BadRequestError' && err.message === 'request aborted')) {
     return; // Silently ignore — not a real crash
   }
+  // PayloadTooLargeError — client sent oversized body, already handled by Express middleware
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return; // Silently ignore
+  }
   console.error(`[FATAL] Uncaught exception: ${err.message}`);
   console.error(err.stack);
   // Exit on truly fatal errors, but give time to flush logs
@@ -965,7 +969,7 @@ const visitorStats = loadVisitorStats();
 // Convert today's IPs to a Set for fast lookup
 const todayIPSet = new Set(visitorStats.uniqueIPsToday);
 const allTimeIPSet = new Set(visitorStats.allTimeUniqueIPs);
-const MAX_TRACKED_IPS = 100000; // Stop tracking individual IPs after this (just count)
+const MAX_TRACKED_IPS = 50000; // Stop tracking individual IPs after this (just count)
 
 // Free the array — Set is the authoritative source now, array is no longer persisted
 visitorStats.allTimeUniqueIPs = [];
@@ -1392,7 +1396,7 @@ setInterval(() => {
     spotBufferEntries: pskMqtt.spotBuffer.size,
     spotBufferTotal: [...pskMqtt.spotBuffer.values()].reduce((n, b) => n + b.length, 0),
   };
-  console.log(`[Memory] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB External=${mb(mem.external)}MB | MQTT: ${mqttStats.sseClients} SSE clients, ${mqttStats.subscribedCalls} calls, ${mqttStats.recentSpotsTotal} recent spots (${mqttStats.recentSpotsEntries} entries), ${mqttStats.spotBufferTotal} buffered | GeoIP=${geoIPCache.size} CallLookup=${callsignLookupCache?.size || 0} LocCache=${callsignLocationCache?.size || 0} MySpots=${mySpotsCache.size} AllTimeIPs=${allTimeIPSet.size} RBN=${rbnSpotsByDX?.size || 0}`);
+  console.log(`[Memory] RSS=${mb(mem.rss)}MB Heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB External=${mb(mem.external)}MB | MQTT: ${mqttStats.sseClients} SSE clients, ${mqttStats.subscribedCalls} calls, ${mqttStats.recentSpotsTotal} recent spots (${mqttStats.recentSpotsEntries} entries), ${mqttStats.spotBufferTotal} buffered | GeoIP=${geoIPCache.size} CallLookup=${callsignLookupCache?.size || 0} LocCache=${callsignLocationCache?.size || 0} MySpots=${mySpotsCache.size} AllTimeIPs=${allTimeIPSet.size} RBN=${rbnSpotsByDX?.size || 0} RBNapi=${rbnApiCaches?.size || 0}`);
 }, 15 * 60 * 1000);
 
 // Periodic GC compaction — helps V8 release fragmented old-space memory
@@ -3141,7 +3145,7 @@ app.get('/api/dxcluster/paths', async (req, res) => {
 // Cache for callsign lookups - callsigns don't change location often
 const callsignLookupCache = new Map(); // key = callsign, value = { data, timestamp }
 const CALLSIGN_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const CALLSIGN_CACHE_MAX = 10000; // Hard cap — evict oldest when exceeded
+const CALLSIGN_CACHE_MAX = 5000; // Hard cap — evict oldest when exceeded
 
 // Periodic cleanup: purge expired entries every 30 minutes
 setInterval(() => {
@@ -3483,11 +3487,24 @@ app.post('/api/qrz/configure', writeLimiter, async (req, res) => {
   // Test credentials by attempting login
   const oldUsername = qrzSession.username;
   const oldPassword = qrzSession.password;
+  const credsChanged = username.trim() !== oldUsername || password.trim() !== oldPassword;
   qrzSession.username = username.trim();
   qrzSession.password = password.trim();
   qrzSession.key = null;
   qrzSession.expiry = 0;
-  qrzSession.authFailedUntil = 0; // Clear cooldown — user is providing new credentials
+  // Only clear cooldown if credentials actually changed — prevents users from
+  // hammering QRZ by re-testing the same bad creds over and over
+  if (credsChanged) {
+    qrzSession.authFailedUntil = 0;
+  } else if (Date.now() < qrzSession.authFailedUntil) {
+    // Same bad creds, still in cooldown — reject immediately
+    qrzSession.username = oldUsername;
+    qrzSession.password = oldPassword;
+    return res.status(429).json({
+      success: false,
+      error: 'QRZ login recently failed with these credentials. Try again later or use different credentials.'
+    });
+  }
   
   const key = await qrzLogin();
   
@@ -5192,6 +5209,11 @@ setInterval(() => {
   }
   if (cleaned > 0) {
     console.log(`[RBN] Cleanup: removed ${cleaned} expired spots, tracking ${rbnSpotsByDX.size} DX stations`);
+  }
+  // Also purge expired rbnApiCaches entries (10s TTL, but entries never removed otherwise)
+  const apiCutoff = Date.now() - 60000; // Keep entries under 1 minute (6x the 10s TTL)
+  for (const [call, entry] of rbnApiCaches) {
+    if (entry.timestamp < apiCutoff) rbnApiCaches.delete(call);
   }
 }, 60000); // Run every 60 seconds
 
@@ -9820,6 +9842,33 @@ app.get('*', (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.sendFile(indexPath);
+});
+
+// ============================================
+// EXPRESS ERROR HANDLER
+// ============================================
+// Catches body-parser errors (BadRequestError, PayloadTooLargeError)
+// before they bubble to uncaughtException and spam the logs.
+// Express error handlers MUST have 4 parameters: (err, req, res, next)
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  // Client disconnected mid-request — completely benign
+  if (err.type === 'request.aborted' || (err.name === 'BadRequestError' && err.message === 'request aborted')) {
+    return; // Silently swallow — not a real error
+  }
+  // Request body too large
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'Request too large' });
+  }
+  // Malformed JSON body
+  if (err.type === 'entity.parse.failed' || err.status === 400) {
+    return res.status(400).json({ error: 'Invalid request body' });
+  }
+  // Unknown Express error — log once and return 500
+  logErrorOnce('Express', `${err.name || 'Error'}: ${err.message}`);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ============================================
