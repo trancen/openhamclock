@@ -1121,7 +1121,41 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             },
           );
           gridRect.addTo(map);
+          
+          // Grid center marker
+          const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
+            radius: 10,
+            fillColor: '#ff00ff',
+            color: '#ffffff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8,
+          });
+          gridMarker.addTo(map);
+          gridMarker.bindPopup(`
+            <div style="font-family: 'JetBrains Mono', monospace; text-align: center;">
+              <b style="color: #ff00ff; font-size: 12px;">WSPR Filter</b><br>
+              <span style="font-size: 11px;">Grid: ${gridFilter.toUpperCase()}</span><br>
+              <span style="font-size: 10px; opacity: 0.7;">${gridLoc.lat.toFixed(2)}°, ${gridLoc.lon.toFixed(2)}°</span>
+            </div>
+          `);
+          
+          // WSPR label
+          const labelIcon = L.divIcon({
+            className: '',
+            html: `<span style="display:inline-block;background:#ff00ff;color:#fff;padding:2px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.1;">WSPR</span>`,
+            iconSize: null,
+            iconAnchor: [0, 0],
+          });
+          const gridLabel = L.marker([gridLoc.lat, gridLoc.lon], {
+            icon: labelIcon,
+            interactive: false,
+            zIndexOffset: 10000,
+          });
+          gridLabel.addTo(map);
+          
           setPathLayers([gridRect]);
+          setMarkerLayers([gridMarker, gridLabel]);
         }
       }
       return;
