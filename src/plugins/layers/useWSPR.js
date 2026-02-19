@@ -1373,7 +1373,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       const gridBounds = gridToBounds(gridFilter);
 
       if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
-        // Draw grid boundary rectangle - lighter opacity
+        // Draw grid boundary rectangle - very light opacity
         const gridRect = L.rectangle(
           [
             [gridBounds.minLat, gridBounds.minLon],
@@ -1383,7 +1383,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             color: '#ff00ff',
             weight: 2,
             fillColor: '#ff00ff',
-            fillOpacity: 0.08,
+            fillOpacity: 0.03,
             dashArray: '5, 5',
           },
         );
