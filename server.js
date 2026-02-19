@@ -6226,6 +6226,23 @@ app.get('/api/pskreporter/config', (req, res) => {
   });
 });
 
+// New endpoint to get all recent spots from MQTT cache (no callsign required)
+app.get('/api/pskreporter/all', (req, res) => {
+  const allSpots = [];
+  for (const [call, spots] of pskMqtt.recentSpots) {
+    allSpots.push(...spots);
+  }
+  // Sort by timestamp descending and limit
+  allSpots.sort((a, b) => b.timestamp - a.timestamp);
+  const limit = parseInt(req.query.limit) || 2000;
+  res.json({
+    spots: allSpots.slice(0, limit),
+    total: allSpots.length,
+    mqttConnected: pskMqtt.connected,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Combined endpoint - returns stream info (live spots via SSE, no HTTP backfill)
 app.get('/api/pskreporter/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();

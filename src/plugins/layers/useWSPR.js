@@ -493,9 +493,24 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       try {
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
-        // Fetch raw data when grid filtering is enabled to get callsigns
-        const useRaw = filterByGrid && gridFilter && gridFilter.length >= 4;
-        const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}&raw=${useRaw}`);
+        // Use PSKReporter MQTT stream when grid filtering is enabled for more reliable data with callsigns
+        const usePskReporter = filterByGrid && gridFilter && gridFilter.length >= 4;
+        
+        let data;
+        if (usePskReporter) {
+          // Fetch from PSKReporter MQTT stream (more reliable, includes callsigns)
+          const response = await fetch(`/api/pskreporter/all?limit=2000`);
+          if (response.ok) {
+            data = await response.json();
+            console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots from PSKReporter MQTT`);
+            // Transform to match expected format
+            setWsprData(data.spots || []);
+            return;
+          }
+        }
+        
+        // Default: fetch aggregated data from WSPR heatmap endpoint
+        const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
         if (response.ok) {
           const data = await response.json();
 
