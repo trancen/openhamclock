@@ -7187,7 +7187,7 @@ function aggregateWSPRByGrid(spots) {
     }
 
     // Track paths between grid squares
-    if (senderGrid4 && receiverGrid4 && senderGrid4 !== receiverGrid4) {
+    if (senderGrid4 && receiverGrid4) {
       const pathKey = `${senderGrid4}-${receiverGrid4}`;
       if (!paths.has(pathKey)) {
         paths.set(pathKey, {
