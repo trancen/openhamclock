@@ -1199,7 +1199,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
@@ -1521,7 +1521,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
         // Larger marker at grid center
         const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
-          radius: 10,
+          radius: 6,
           fillColor: '#ff00ff',
           color: '#ffffff',
           weight: 2,
@@ -1702,7 +1702,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
