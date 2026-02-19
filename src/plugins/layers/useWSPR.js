@@ -503,15 +503,28 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         
         if (usePskReporter) {
           const gridUpper = gridFilter.toUpperCase().substring(0, 4);
-          // Fetch from PSKReporter - filter by both sender and receiver grid
-          // This will auto-subscribe to the grid MQTT topics
-          const response = await fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=2000`);
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots for grid ${gridUpper}`);
+          
+          // Fetch from PSKReporter with retry logic
+          // First fetch may return 0 spots if MQTT hasn't collected data yet
+          let data = null;
+          let attempts = 0;
+          const maxAttempts = 3;
+          
+          while (attempts < maxAttempts && (!data || data.spots?.length === 0)) {
+            const response = await fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=2000`);
+            if (response.ok) {
+              data = await response.json();
+            }
+            attempts++;
+            if (!data || data.spots?.length === 0) {
+              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+            }
+          }
+          
+          console.log(`[WSPR Plugin] Loaded ${data?.spots?.length || 0} spots for grid ${gridUpper} (attempts: ${attempts})`);
             
             // Transform PSKReporter spots to add lat/lon from grids
-            const spots = (data.spots || []).map((spot) => {
+            const spots = (data?.spots || []).map((spot) => {
               const updated = { ...spot };
               // Convert sender grid to lat/lon if missing
               if ((!updated.senderLat || !updated.senderLon) && updated.senderGrid) {
