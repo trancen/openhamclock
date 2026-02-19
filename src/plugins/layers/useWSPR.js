@@ -1199,7 +1199,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return false;
+        return true;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
@@ -1702,7 +1702,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return false;
+        return true;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
