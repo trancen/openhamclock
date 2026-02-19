@@ -493,9 +493,20 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       try {
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
-        const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
+        // Fetch raw data when grid filtering is enabled to get callsigns
+        const useRaw = filterByGrid && gridFilter && gridFilter.length >= 4;
+        const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}&raw=${useRaw}`);
         if (response.ok) {
           const data = await response.json();
+
+          // Handle raw format (individual spots with callsigns)
+          if (data.format === 'raw' && data.spots) {
+            console.log(
+              `[WSPR Plugin] Loaded raw data: ${data.spots.length} spots`,
+            );
+            setWsprData(data.spots);
+            return;
+          }
 
           // Handle new aggregated format
           if (data.format === 'aggregated' && data.grids) {
