@@ -503,8 +503,33 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           if (response.ok) {
             data = await response.json();
             console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots from PSKReporter MQTT`);
-            // Transform to match expected format
-            setWsprData(data.spots || []);
+            
+            // Transform PSKReporter spots to add lat/lon from grids
+            const spots = (data.spots || []).map((spot) => {
+              const updated = { ...spot };
+              // Convert sender grid to lat/lon if missing
+              if ((!updated.senderLat || !updated.senderLon) && updated.senderGrid) {
+                const loc = gridToLatLon(updated.senderGrid);
+                if (loc) {
+                  updated.senderLat = loc.lat;
+                  updated.senderLon = loc.lon;
+                }
+              }
+              // Use sender lat/lon if available (PSKReporter sends sender location)
+              if (!updated.senderLat && spot.lat) updated.senderLat = spot.lat;
+              if (!updated.senderLon && spot.lon) updated.senderLon = spot.lon;
+              // Convert receiver grid to lat/lon if missing
+              if ((!updated.receiverLat || !updated.receiverLon) && updated.receiverGrid) {
+                const loc = gridToLatLon(updated.receiverGrid);
+                if (loc) {
+                  updated.receiverLat = loc.lat;
+                  updated.receiverLon = loc.lon;
+                }
+              }
+              return updated;
+            });
+            
+            setWsprData(spots);
             return;
           }
         }
