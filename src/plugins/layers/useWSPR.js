@@ -816,8 +816,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             gridInput.disabled = !e.target.checked;
             gridInput.style.opacity = e.target.checked ? '1' : '0.5';
           }
-          console.log('[WSPR] Grid filter toggle:', e.target.checked);
         });
+
+      // Sync initial checkbox state
+      if (gridFilterCheck && gridInput) {
+        gridInput.disabled = !gridFilterCheck.checked;
+        gridInput.style.opacity = gridFilterCheck.checked ? '1' : '0.5';
+      }
       if (gridInput) {
         gridInput.addEventListener('input', (e) => {
           const value = e.target.value.toUpperCase().substring(0, 6);
