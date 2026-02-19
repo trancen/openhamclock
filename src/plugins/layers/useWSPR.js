@@ -489,8 +489,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   useEffect(() => {
     if (!enabled) return;
 
+    // Skip fetch when grid filter is enabled but less than 4 chars (wait for complete grid)
+    const shouldFetch = !(filterByGrid && gridFilter && gridFilter.length > 0 && gridFilter.length < 4);
+    
     const fetchWSPR = async () => {
       try {
+        if (!shouldFetch) return;
+        
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
         // Use PSKReporter MQTT stream when grid filtering is enabled (4+ chars)
