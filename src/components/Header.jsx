@@ -22,30 +22,35 @@ export const Header = ({
   onFullscreenToggle,
   isFullscreen,
   updateInProgress,
-  showUpdateButton
+  showUpdateButton,
 }) => {
   return (
-    <div style={{
-      gridColumn: '1 / -1',
-      display: 'flex',
-      flexWrap: 'nowrap',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      background: 'var(--bg-panel)',
-      border: '1px solid var(--border-color)',
-      borderRadius: '6px',
-      padding: '6px 12px',
-      minHeight: '50px',
-      fontFamily: 'JetBrains Mono, monospace',
-      overflow: 'hidden'
-    }}>
+    <div
+      style={{
+        gridColumn: '1 / -1',
+        display: 'flex',
+        flexWrap: 'nowrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '6px',
+        padding: '6px 12px',
+        minHeight: '50px',
+        fontFamily: 'JetBrains Mono, monospace',
+        overflow: 'hidden',
+      }}
+    >
       {/* Callsign & Settings */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
         <span
           style={{
-            fontSize: config.headerSize > 0.1 && config.headerSize <= 2
-              ? `${22 * config.headerSize}px`
-              : "22px", fontWeight: '900', color: 'var(--accent-amber)', cursor: 'pointer', fontFamily: 'Orbitron, monospace', whiteSpace: 'nowrap'
+            fontSize: config.headerSize > 0.1 && config.headerSize <= 2 ? `${22 * config.headerSize}px` : '22px',
+            fontWeight: '900',
+            color: 'var(--accent-amber)',
+            cursor: 'pointer',
+            fontFamily: 'Orbitron, monospace',
+            whiteSpace: 'nowrap',
           }}
           onClick={onSettingsClick}
           title="Click for settings"
@@ -56,7 +61,8 @@ export const Header = ({
         {(() => {
           const touch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
           const narrow = typeof window !== 'undefined' && window.innerWidth <= 1024;
-          if (touch && narrow) return <span className="ohc-mobile-badge">{window.innerWidth <= 768 ? '📱' : '📱 Tablet'}</span>;
+          if (touch && narrow)
+            return <span className="ohc-mobile-badge">{window.innerWidth <= 768 ? '📱' : '📱 Tablet'}</span>;
           return null;
         })()}
         <QRZToggle />
@@ -65,15 +71,17 @@ export const Header = ({
       {/* UTC Clock */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
         <span style={{ fontSize: '13px', color: 'var(--accent-cyan)', fontWeight: '600' }}>UTC</span>
-        <span style={{
-          fontSize: config.headerSize > 0.1 && config.headerSize <= 2
-            ? `${24 * config.headerSize}px`
-            : "24px",
-          fontWeight: '700',
-          color: 'var(--accent-cyan)',
-          fontFamily: 'JetBrains Mono, Consolas, monospace',
-          whiteSpace: 'nowrap'
-        }}>{utcTime}</span>
+        <span
+          style={{
+            fontSize: config.headerSize > 0.1 && config.headerSize <= 2 ? `${24 * config.headerSize}px` : '24px',
+            fontWeight: '700',
+            color: 'var(--accent-cyan)',
+            fontFamily: 'JetBrains Mono, Consolas, monospace',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {utcTime}
+        </span>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{utcDate}</span>
       </div>
 
@@ -84,79 +92,122 @@ export const Header = ({
         title={`Click to switch to ${use12Hour ? '24-hour' : '12-hour'} format`}
       >
         <span style={{ fontSize: '13px', color: 'var(--accent-amber)', fontWeight: '600' }}>LOCAL</span>
-        <span style={{
-          fontSize: config.headerSize > 0.1 && config.headerSize <= 2
-            ? `${24 * config.headerSize}px`
-            : "24px",
-          fontWeight: '700',
-          color: 'var(--accent-amber)',
-          fontFamily: 'JetBrains Mono, Consolas, monospace',
-          whiteSpace: 'nowrap'
-        }}>{localTime}</span>
+        <span
+          style={{
+            fontSize: config.headerSize > 0.1 && config.headerSize <= 2 ? `${24 * config.headerSize}px` : '24px',
+            fontWeight: '700',
+            color: 'var(--accent-amber)',
+            fontFamily: 'JetBrains Mono, Consolas, monospace',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {localTime}
+        </span>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{localDate}</span>
       </div>
 
       {/* Weather & Solar Stats */}
-      <div style={{ display: 'flex', gap: '12px', fontSize: '13px', fontFamily: 'JetBrains Mono, Consolas, monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
-        {localWeather?.data && (() => {
-          // Always compute both F and C from the raw Celsius source
-          // This avoids ±1° rounding drift when toggling units
-          const rawC = localWeather.data.rawTempC;
-          const tempF = Math.round(rawC * 9 / 5 + 32);
-          const tempC = Math.round(rawC);
-          const windLabel = localWeather.data.windUnit || 'mph';
-          return (
-            <div title={`${localWeather.data.description} • Wind: ${localWeather.data.windSpeed} ${windLabel}`}>
-              <span style={{
-                marginRight: '3px',
-                fontSize: config.headerSize > 0.1 && config.headerSize <= 2
-                  ? `${12 * config.headerSize}px`
-                  : "12px",
-              }}>
-                {localWeather.data.icon}
-              </span>
-              <span style={{
-                color: 'var(--accent-cyan)', fontWeight: '600',
-                fontSize: config.headerSize > 0.1 && config.headerSize <= 2
-                  ? `${12 * config.headerSize}px`
-                  : "12px",
-              }}>
-                {tempF}°F/{tempC}°C
-              </span>
-            </div>
-          );
-        })()}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          fontSize: '13px',
+          fontFamily: 'JetBrains Mono, Consolas, monospace',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+      >
+        {localWeather?.data &&
+          (() => {
+            // Always compute both F and C from the raw Celsius source
+            // This avoids ±1° rounding drift when toggling units
+            const rawC = localWeather.data.rawTempC;
+            const tempF = Math.round((rawC * 9) / 5 + 32);
+            const tempC = Math.round(rawC);
+            const windLabel = localWeather.data.windUnit || 'mph';
+            return (
+              <div title={`${localWeather.data.description} • Wind: ${localWeather.data.windSpeed} ${windLabel}`}>
+                <span
+                  style={{
+                    marginRight: '3px',
+                    fontSize:
+                      config.headerSize > 0.1 && config.headerSize <= 2 ? `${12 * config.headerSize}px` : '12px',
+                  }}
+                >
+                  {localWeather.data.icon}
+                </span>
+                <span
+                  style={{
+                    color: 'var(--accent-cyan)',
+                    fontWeight: '600',
+                    fontSize:
+                      config.headerSize > 0.1 && config.headerSize <= 2 ? `${12 * config.headerSize}px` : '12px',
+                  }}
+                >
+                  {tempF}°F/{tempC}°C
+                </span>
+              </div>
+            );
+          })()}
         <div>
           <span style={{ color: 'var(--text-muted)' }}>SFI </span>
-          <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>{solarIndices?.data?.sfi?.current || spaceWeather?.data?.solarFlux || '--'}</span>
+          <span style={{ color: 'var(--accent-amber)', fontWeight: '700' }}>
+            {solarIndices?.data?.sfi?.current || spaceWeather?.data?.solarFlux || '--'}
+          </span>
         </div>
         <div>
           <span style={{ color: 'var(--text-muted)' }}>K </span>
-          <span style={{ color: parseInt(solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex) >= 4 ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: '700' }}>
+          <span
+            style={{
+              color:
+                parseInt(solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex) >= 4
+                  ? 'var(--accent-red)'
+                  : 'var(--accent-green)',
+              fontWeight: '700',
+            }}
+          >
             {solarIndices?.data?.kp?.current ?? spaceWeather?.data?.kIndex ?? '--'}
           </span>
         </div>
         <div>
           <span style={{ color: 'var(--text-muted)' }}>SSN </span>
-          <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{solarIndices?.data?.ssn?.current || spaceWeather?.data?.sunspotNumber || '--'}</span>
+          <span style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>
+            {solarIndices?.data?.ssn?.current || spaceWeather?.data?.sunspotNumber || '--'}
+          </span>
         </div>
         {bandConditions?.extras?.aIndex && (
           <div>
             <span style={{ color: 'var(--text-muted)' }}>A </span>
-            <span style={{ color: parseInt(bandConditions.extras.aIndex) >= 20 ? 'var(--accent-red)' : parseInt(bandConditions.extras.aIndex) >= 10 ? 'var(--accent-amber)' : 'var(--accent-green)', fontWeight: '700' }}>
+            <span
+              style={{
+                color:
+                  parseInt(bandConditions.extras.aIndex) >= 20
+                    ? 'var(--accent-red)'
+                    : parseInt(bandConditions.extras.aIndex) >= 10
+                      ? 'var(--accent-amber)'
+                      : 'var(--accent-green)',
+                fontWeight: '700',
+              }}
+            >
               {bandConditions.extras.aIndex}
             </span>
           </div>
         )}
         {bandConditions?.extras?.geomagField && (
           <div>
-            <span style={{
-              fontSize: '10px',
-              color: bandConditions.extras.geomagField === 'QUIET' ? 'var(--accent-green)' :
-                bandConditions.extras.geomagField === 'ACTIVE' || bandConditions.extras.geomagField.includes('STORM') ? 'var(--accent-red)' :
-                  'var(--accent-amber)',
-              fontWeight: '600'
-            }}>
+            <span
+              style={{
+                fontSize: '10px',
+                color:
+                  bandConditions.extras.geomagField === 'QUIET'
+                    ? 'var(--accent-green)'
+                    : bandConditions.extras.geomagField === 'ACTIVE' ||
+                        bandConditions.extras.geomagField.includes('STORM')
+                      ? 'var(--accent-red)'
+                      : 'var(--accent-amber)',
+                fontWeight: '600',
+              }}
+            >
               {bandConditions.extras.geomagField}
             </span>
           </div>
@@ -184,7 +235,7 @@ export const Header = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '3px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}
               title="Buy me a coffee!"
             >
@@ -207,7 +258,7 @@ export const Header = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '3px',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}
               title="Donate via PayPal"
             >
@@ -227,7 +278,7 @@ export const Header = ({
               color: updateInProgress ? 'var(--accent-green)' : 'var(--text-secondary)',
               fontSize: '12px',
               cursor: updateInProgress ? 'wait' : 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
             }}
             title="Run update now (server will restart)"
           >
@@ -244,10 +295,11 @@ export const Header = ({
             color: 'var(--text-secondary)',
             fontSize: '12px',
             cursor: 'pointer',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
           }}
         >
-          <IconGear size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Settings
+          <IconGear size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+          Settings
         </button>
         <button
           onClick={onFullscreenToggle}
@@ -259,14 +311,21 @@ export const Header = ({
             color: isFullscreen ? 'var(--accent-green)' : 'var(--text-secondary)',
             fontSize: '12px',
             cursor: 'pointer',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
           }}
-          title={isFullscreen ? "Exit Fullscreen (Esc)" : "Enter Fullscreen"}
+          title={isFullscreen ? 'Exit Fullscreen (Esc)' : 'Enter Fullscreen'}
         >
-          {isFullscreen
-            ? <><IconShrink size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Exit</>
-            : <><IconExpand size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />Full</>
-          }
+          {isFullscreen ? (
+            <>
+              <IconShrink size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+              Exit
+            </>
+          ) : (
+            <>
+              <IconExpand size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+              Full
+            </>
+          )}
         </button>
       </div>
     </div>

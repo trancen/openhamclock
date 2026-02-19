@@ -17,24 +17,24 @@ const CHANGELOG = [
       {
         icon: '🗺️',
         title: 'Leaflet Load Reliability Fix',
-        desc: 'Fixed a race condition where the world map could silently fail to initialize if Leaflet\'s vendor script hadn\'t finished loading by the time the map component mounted — most likely on slower connections or after a failed vendor-download. The map now polls for up to 5 seconds and retries automatically instead of giving up on first mount.'
+        desc: "Fixed a race condition where the world map could silently fail to initialize if Leaflet's vendor script hadn't finished loading by the time the map component mounted — most likely on slower connections or after a failed vendor-download. The map now polls for up to 5 seconds and retries automatically instead of giving up on first mount.",
       },
       {
         icon: '🛠️',
         title: 'Actionable Leaflet Error',
-        desc: 'If Leaflet genuinely fails to load after 5 seconds (missing vendor file, 404, network error), the console now shows a clear message with the exact fix: run bash scripts/vendor-download.sh. No more cryptic "Leaflet not loaded" with no context.'
+        desc: 'If Leaflet genuinely fails to load after 5 seconds (missing vendor file, 404, network error), the console now shows a clear message with the exact fix: run bash scripts/vendor-download.sh. No more cryptic "Leaflet not loaded" with no context.',
       },
       {
         icon: '🤝',
         title: 'Contributor Self-Assign',
-        desc: 'Any GitHub user can now self-assign issues without needing write access. Comment /assign on any open issue and the bot will claim it for you instantly and react with 👍. Makes it easy to signal you\'re working on something without waiting for a maintainer.'
+        desc: "Any GitHub user can now self-assign issues without needing write access. Comment /assign on any open issue and the bot will claim it for you instantly and react with 👍. Makes it easy to signal you're working on something without waiting for a maintainer.",
       },
       {
         icon: '📋',
         title: 'Updated Contributing Guide',
-        desc: 'CONTRIBUTING.md now includes a dedicated "Claiming a Bug or Issue" section explaining the /assign workflow, sitting right where new contributors naturally look — between feature requests and code submission instructions.'
+        desc: 'CONTRIBUTING.md now includes a dedicated "Claiming a Bug or Issue" section explaining the /assign workflow, sitting right where new contributors naturally look — between feature requests and code submission instructions.',
       },
-    ]
+    ],
   },
   {
     version: '15.5.4',
@@ -44,44 +44,44 @@ const CHANGELOG = [
       {
         icon: '📡',
         title: 'Stale Spots Fix',
-        desc: 'Fixed a bug where WWFF spots could show data hours old due to a cache validation error. All three spot sources (POTA, SOTA, WWFF) now enforce a 60-minute age filter and a 10-minute stale cache limit — no more chasing ghosts.'
+        desc: 'Fixed a bug where WWFF spots could show data hours old due to a cache validation error. All three spot sources (POTA, SOTA, WWFF) now enforce a 60-minute age filter and a 10-minute stale cache limit — no more chasing ghosts.',
       },
       {
         icon: '🧠',
         title: 'Memory Leak Fixes',
-        desc: 'Plugged several server-side memory leaks: RBN API response cache now auto-cleans, callsign and IP tracking caps tightened, and cache structures that grew unbounded over 24 hours are now properly pruned.'
+        desc: 'Plugged several server-side memory leaks: RBN API response cache now auto-cleans, callsign and IP tracking caps tightened, and cache structures that grew unbounded over 24 hours are now properly pruned.',
       },
       {
         icon: '🔇',
         title: 'QRZ Login Spam Eliminated',
-        desc: 'QRZ credential failures now properly respect the 1-hour cooldown. Previously, any user testing credentials in Settings would reset the timer for everyone, hammering QRZ with bad logins all day.'
+        desc: 'QRZ credential failures now properly respect the 1-hour cooldown. Previously, any user testing credentials in Settings would reset the timer for everyone, hammering QRZ with bad logins all day.',
       },
       {
         icon: '🛡️',
         title: 'Cleaner Error Handling',
-        desc: 'Added proper Express error middleware to catch body-parser errors gracefully. No more stack traces in logs from clients disconnecting mid-request or sending oversized payloads.'
+        desc: 'Added proper Express error middleware to catch body-parser errors gracefully. No more stack traces in logs from clients disconnecting mid-request or sending oversized payloads.',
       },
       {
         icon: '🎨',
         title: 'Prettier for Contributors',
-        desc: 'Standardized code formatting with Prettier, pre-commit hooks via Husky, and CI enforcement. No more quote style debates in pull requests — formatting is now automatic.'
+        desc: 'Standardized code formatting with Prettier, pre-commit hooks via Husky, and CI enforcement. No more quote style debates in pull requests — formatting is now automatic.',
       },
       {
         icon: '📻',
         title: 'Rig Control Options Restored',
-        desc: 'The rig-bridge (flrig/rigctld) and rig-control (daemon mode) directories are back for power users who need more customization than the one-click Rig Listener provides.'
+        desc: 'The rig-bridge (flrig/rigctld) and rig-control (daemon mode) directories are back for power users who need more customization than the one-click Rig Listener provides.',
       },
       {
         icon: '🔎',
         title: 'DX Cluster Mode Filter Fixed',
-        desc: 'Filtering by SSB, FT8, or CW no longer hides everything. Mode detection now infers from frequency when the spot comment doesn\'t mention a mode — which is most spots. 14.074? That\'s FT8. 14.250? SSB. It just works now.'
+        desc: "Filtering by SSB, FT8, or CW no longer hides everything. Mode detection now infers from frequency when the spot comment doesn't mention a mode — which is most spots. 14.074? That's FT8. 14.250? SSB. It just works now.",
       },
       {
         icon: '📡',
         title: 'RBN Skimmer Locations Fixed',
-        desc: 'Fixed a bug where RBN skimmer callsigns could show at wrong locations on the map. Enrichment is now sequential with cross-validation — if a lookup returns a location >5000 km from the callsign\'s expected country, it falls back to prefix estimation.'
+        desc: "Fixed a bug where RBN skimmer callsigns could show at wrong locations on the map. Enrichment is now sequential with cross-validation — if a lookup returns a location >5000 km from the callsign's expected country, it falls back to prefix estimation.",
       },
-    ]
+    ],
   },
   {
     version: '15.5.3',
@@ -91,44 +91,44 @@ const CHANGELOG = [
       {
         icon: '🛰️',
         title: 'Satellite Tracker Overhaul',
-        desc: 'Completely redesigned satellite layer with a floating data window, blinking indicators for visible passes, pinned satellite tracking, and GOES-18/19 weather satellites re-enabled.'
+        desc: 'Completely redesigned satellite layer with a floating data window, blinking indicators for visible passes, pinned satellite tracking, and GOES-18/19 weather satellites re-enabled.',
       },
       {
         icon: '⛰️',
         title: 'SOTA Summit Details',
-        desc: 'SOTA spots now include full summit information — name, altitude, coordinates, and point values — pulled from the official SOTA summits database and refreshed daily.'
+        desc: 'SOTA spots now include full summit information — name, altitude, coordinates, and point values — pulled from the official SOTA summits database and refreshed daily.',
       },
       {
         icon: '📻',
         title: 'WSJT-X Rig Tuning Fix',
-        desc: 'Clicking a WSJT-X decode now sends the correct dial frequency to your radio instead of the audio offset. FT8/FT4 click-to-tune works properly.'
+        desc: 'Clicking a WSJT-X decode now sends the correct dial frequency to your radio instead of the audio offset. FT8/FT4 click-to-tune works properly.',
       },
       {
         icon: '🎯',
         title: 'POTA/WWFF Click-to-Tune',
-        desc: 'POTA and WWFF spots now properly trigger rig control when clicked — same one-click tuning that DX cluster spots have always had.'
+        desc: 'POTA and WWFF spots now properly trigger rig control when clicked — same one-click tuning that DX cluster spots have always had.',
       },
       {
         icon: '📊',
         title: 'Frequency Display Fix',
-        desc: 'POTA, SOTA, and WWFF panels now consistently display frequencies in MHz. No more confusion between kHz and MHz values across different data sources.'
+        desc: 'POTA, SOTA, and WWFF panels now consistently display frequencies in MHz. No more confusion between kHz and MHz values across different data sources.',
       },
       {
         icon: '🔇',
         title: 'SOTA QRT Filtering',
-        desc: 'Operators who have signed off (QRT) are now automatically filtered out of the SOTA spots list — no more chasing stations that are already off the air.'
+        desc: 'Operators who have signed off (QRT) are now automatically filtered out of the SOTA spots list — no more chasing stations that are already off the air.',
       },
       {
         icon: '🔍',
         title: 'SEO & Branding',
-        desc: 'New favicon, Open Graph social sharing cards, structured data for search engines, and a canonical URL to ensure openhamclock.com is always the top result.'
+        desc: 'New favicon, Open Graph social sharing cards, structured data for search engines, and a canonical URL to ensure openhamclock.com is always the top result.',
       },
       {
         icon: '🤝',
         title: 'Community Tab',
-        desc: 'New Community tab in Settings with links to GitHub, Facebook Group, and Reddit — plus a contributors wall thanking everyone who has helped build OpenHamClock.'
+        desc: 'New Community tab in Settings with links to GitHub, Facebook Group, and Reddit — plus a contributors wall thanking everyone who has helped build OpenHamClock.',
       },
-    ]
+    ],
   },
   {
     version: '15.5.1',
@@ -138,24 +138,24 @@ const CHANGELOG = [
       {
         icon: '🌍',
         title: 'cty.dat DXCC Entity Database',
-        desc: 'Callsign → entity identification now uses the full AD1C cty.dat database — the same file every contest logger uses. ~400 DXCC entities, thousands of prefixes, zone overrides, and exact callsign matches. Replaces the old hand-coded 120-entry prefix table.'
+        desc: 'Callsign → entity identification now uses the full AD1C cty.dat database — the same file every contest logger uses. ~400 DXCC entities, thousands of prefixes, zone overrides, and exact callsign matches. Replaces the old hand-coded 120-entry prefix table.',
       },
       {
         icon: '📡',
         title: 'MUF Layer Restored',
-        desc: 'Fixed a regression where the MUF Map layer disappeared from the Map Layers list. The ionosonde-based MUF overlay is back.'
+        desc: 'Fixed a regression where the MUF Map layer disappeared from the Map Layers list. The ionosonde-based MUF overlay is back.',
       },
       {
         icon: '🔥',
         title: 'VOACAP Power Levels Fixed',
-        desc: 'Changing TX power (e.g. 5W vs 1000W) now produces dramatically different propagation maps, matching real-world behavior. Previously, power barely affected the heatmap colors.'
+        desc: 'Changing TX power (e.g. 5W vs 1000W) now produces dramatically different propagation maps, matching real-world behavior. Previously, power barely affected the heatmap colors.',
       },
       {
         icon: '🔎',
         title: 'Smarter DX Cluster Filtering',
-        desc: 'Spotter and spot continent/zone filtering is now far more accurate thanks to the cty.dat database. Calls like 3B9WR (Rodriguez Island) and 5B4 (Cyprus) are correctly identified instead of falling through to crude single-character guesses.'
+        desc: 'Spotter and spot continent/zone filtering is now far more accurate thanks to the cty.dat database. Calls like 3B9WR (Rodriguez Island) and 5B4 (Cyprus) are correctly identified instead of falling through to crude single-character guesses.',
       },
-    ]
+    ],
   },
   {
     version: '15.5.0',
@@ -165,34 +165,34 @@ const CHANGELOG = [
       {
         icon: '📻',
         title: 'Direct Rig Control',
-        desc: 'Click any DX cluster spot, POTA activation, or WSJT-X decode and your radio tunes instantly. Supports Yaesu, Kenwood, Elecraft, and Icom radios — no flrig or rigctld needed.'
+        desc: 'Click any DX cluster spot, POTA activation, or WSJT-X decode and your radio tunes instantly. Supports Yaesu, Kenwood, Elecraft, and Icom radios — no flrig or rigctld needed.',
       },
       {
         icon: '⬇️',
         title: 'One-Click Rig Listener Download',
-        desc: 'Enable Rig Control in Settings and download the Rig Listener for Windows, Mac, or Linux. Double-click to run — it auto-installs everything. No Node.js, no command line, no setup headaches.'
+        desc: 'Enable Rig Control in Settings and download the Rig Listener for Windows, Mac, or Linux. Double-click to run — it auto-installs everything. No Node.js, no command line, no setup headaches.',
       },
       {
         icon: '🔌',
         title: 'Interactive Setup Wizard',
-        desc: 'The Rig Listener detects your USB serial ports, asks your radio brand and model, saves the config, and connects. First run is a 30-second wizard — after that, just double-click to start.'
+        desc: 'The Rig Listener detects your USB serial ports, asks your radio brand and model, saves the config, and connects. First run is a 30-second wizard — after that, just double-click to start.',
       },
       {
         icon: '🔄',
         title: 'Live Frequency & Mode Display',
-        desc: 'Your radio\'s current frequency and mode are shown in real time on the dashboard. Polls every 500ms over USB so the display always matches your dial.'
+        desc: "Your radio's current frequency and mode are shown in real time on the dashboard. Polls every 500ms over USB so the display always matches your dial.",
       },
       {
         icon: '🌙',
         title: 'Night Darkness Slider',
-        desc: 'Adjust how dark the nighttime shading appears on the map. Slide from subtle to dramatic — find the look that works for your setup. Located below the map lock toggle.'
+        desc: 'Adjust how dark the nighttime shading appears on the map. Slide from subtle to dramatic — find the look that works for your setup. Located below the map lock toggle.',
       },
       {
         icon: '👁️',
         title: 'Hosted User Cleanup',
-        desc: 'Rotator panel and local-only features are now hidden for hosted users — cleaner interface, no confusing controls that don\'t apply to your setup.'
+        desc: "Rotator panel and local-only features are now hidden for hosted users — cleaner interface, no confusing controls that don't apply to your setup.",
       },
-    ]
+    ],
   },
   {
     version: '15.4.1',
@@ -202,55 +202,55 @@ const CHANGELOG = [
       {
         icon: '📡',
         title: 'QRZ.com Callsign Lookups',
-        desc: 'Precise station locations from QRZ user profiles, geocoded addresses, and grid squares. 3-tier waterfall: QRZ → HamQTH → prefix estimation. Configure credentials in Settings → Profiles.'
+        desc: 'Precise station locations from QRZ user profiles, geocoded addresses, and grid squares. 3-tier waterfall: QRZ → HamQTH → prefix estimation. Configure credentials in Settings → Profiles.',
       },
       {
         icon: '🎯',
         title: 'Antenna Rotator Panel',
-        desc: 'Real-time rotator control and bearing display. Shows current azimuth on the map with an animated bearing line. Shift+click the map to turn your antenna to any point.'
+        desc: 'Real-time rotator control and bearing display. Shows current azimuth on the map with an animated bearing line. Shift+click the map to turn your antenna to any point.',
       },
       {
         icon: '🖱️',
         title: 'Mouse Wheel Zoom Sensitivity',
-        desc: 'Adjustable scroll-to-zoom speed for the map. Fine-tune it in Settings → Station.'
+        desc: 'Adjustable scroll-to-zoom speed for the map. Fine-tune it in Settings → Station.',
       },
       {
         icon: '🔒',
         title: 'Map Lock',
-        desc: 'Lock the map to prevent accidental panning and zooming — great for touch screens. Toggle with the lock icon below the zoom controls.'
+        desc: 'Lock the map to prevent accidental panning and zooming — great for touch screens. Toggle with the lock icon below the zoom controls.',
       },
       {
         icon: '🔗',
         title: 'Clickable QRZ Callsigns',
-        desc: 'Callsigns across DX Cluster, POTA, SOTA, PSK Reporter, WSJT-X, and map popups are now clickable links to QRZ.com profiles.'
+        desc: 'Callsigns across DX Cluster, POTA, SOTA, PSK Reporter, WSJT-X, and map popups are now clickable links to QRZ.com profiles.',
       },
       {
         icon: '🏆',
         title: 'Contest Calendar Links',
-        desc: 'Contest names in the Contests panel now link directly to the WA7BNM contest calendar for rules and details.'
+        desc: 'Contest names in the Contests panel now link directly to the WA7BNM contest calendar for rules and details.',
       },
       {
         icon: '🌍',
         title: 'World Copy Replication',
-        desc: 'All map markers (DE, DX, POTA, SOTA, DX cluster, WSJT-X, labels) now properly replicate across all three world copies — no more disappearing markers when scrolling east/west.'
+        desc: 'All map markers (DE, DX, POTA, SOTA, DX cluster, WSJT-X, labels) now properly replicate across all three world copies — no more disappearing markers when scrolling east/west.',
       },
       {
         icon: '📻',
         title: 'RBN Firehose Fix',
-        desc: 'Reverse Beacon Network spots are no longer lost from telnet buffer overflow. All spots for each DX station are now preserved.'
+        desc: 'Reverse Beacon Network spots are no longer lost from telnet buffer overflow. All spots for each DX station are now preserved.',
       },
       {
         icon: '📡',
         title: 'VOACAP Power Reactivity',
-        desc: 'The propagation heatmap now updates immediately when you change transmit power or mode — no more stale predictions.'
+        desc: 'The propagation heatmap now updates immediately when you change transmit power or mode — no more stale predictions.',
       },
       {
         icon: '🗺️',
         title: 'PSK Reporter Direction Fix',
-        desc: 'Map popups now correctly show the remote station callsign instead of your own for both TX and RX spots.'
+        desc: 'Map popups now correctly show the remote station callsign instead of your own for both TX and RX spots.',
       },
-    ]
-  }
+    ],
+  },
 ];
 
 const LS_KEY = 'openhamclock_lastSeenVersion';
@@ -274,7 +274,7 @@ export default function WhatsNew() {
         // Show if never seen, or if the stored version differs from current
         if (!lastSeen || lastSeen !== version) {
           // Only show if we actually have changelog entries for this version
-          const hasEntry = CHANGELOG.some(c => c.version === version);
+          const hasEntry = CHANGELOG.some((c) => c.version === version);
           if (hasEntry) {
             setVisible(true);
           } else {
@@ -301,7 +301,7 @@ export default function WhatsNew() {
 
   if (!visible || !currentVersion) return null;
 
-  const entry = CHANGELOG.find(c => c.version === currentVersion);
+  const entry = CHANGELOG.find((c) => c.version === currentVersion);
   if (!entry) return null;
 
   return (
@@ -336,43 +336,53 @@ export default function WhatsNew() {
         }}
       >
         {/* Header */}
-        <div style={{
-          padding: '24px 24px 16px',
-          borderBottom: '1px solid var(--border-color, #333)',
-          textAlign: 'center',
-        }}>
-          <div style={{
-            fontSize: '13px',
-            fontFamily: "'JetBrains Mono', monospace",
-            color: 'var(--accent-cyan, #00ffcc)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            marginBottom: '8px',
-          }}>
+        <div
+          style={{
+            padding: '24px 24px 16px',
+            borderBottom: '1px solid var(--border-color, #333)',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '13px',
+              fontFamily: "'JetBrains Mono', monospace",
+              color: 'var(--accent-cyan, #00ffcc)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+            }}
+          >
             OpenHamClock v{entry.version}
           </div>
-          <div style={{
-            fontSize: '20px',
-            fontWeight: '700',
-            color: 'var(--text-primary, #e0e0e0)',
-          }}>
+          <div
+            style={{
+              fontSize: '20px',
+              fontWeight: '700',
+              color: 'var(--text-primary, #e0e0e0)',
+            }}
+          >
             What's New
           </div>
-          <div style={{
-            fontSize: '13px',
-            color: 'var(--text-muted, #888)',
-            marginTop: '6px',
-          }}>
+          <div
+            style={{
+              fontSize: '13px',
+              color: 'var(--text-muted, #888)',
+              marginTop: '6px',
+            }}
+          >
             {entry.heading}
           </div>
         </div>
 
         {/* Feature list — scrollable */}
-        <div style={{
-          overflowY: 'auto',
-          padding: '16px 24px',
-          flex: 1,
-        }}>
+        <div
+          style={{
+            overflowY: 'auto',
+            padding: '16px 24px',
+            flex: 1,
+          }}
+        >
           {entry.features.map((f, i) => (
             <div
               key={i}
@@ -380,34 +390,38 @@ export default function WhatsNew() {
                 display: 'flex',
                 gap: '12px',
                 padding: '10px 0',
-                borderBottom: i < entry.features.length - 1
-                  ? '1px solid rgba(255,255,255,0.06)'
-                  : 'none',
+                borderBottom: i < entry.features.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
               }}
             >
-              <div style={{
-                fontSize: '20px',
-                lineHeight: '28px',
-                flexShrink: 0,
-                width: '28px',
-                textAlign: 'center',
-              }}>
+              <div
+                style={{
+                  fontSize: '20px',
+                  lineHeight: '28px',
+                  flexShrink: 0,
+                  width: '28px',
+                  textAlign: 'center',
+                }}
+              >
                 {f.icon}
               </div>
               <div>
-                <div style={{
-                  fontWeight: '600',
-                  fontSize: '14px',
-                  color: 'var(--text-primary, #e0e0e0)',
-                  marginBottom: '3px',
-                }}>
+                <div
+                  style={{
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    color: 'var(--text-primary, #e0e0e0)',
+                    marginBottom: '3px',
+                  }}
+                >
                   {f.title}
                 </div>
-                <div style={{
-                  fontSize: '12px',
-                  lineHeight: '1.5',
-                  color: 'var(--text-muted, #999)',
-                }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    lineHeight: '1.5',
+                    color: 'var(--text-muted, #999)',
+                  }}
+                >
                   {f.desc}
                 </div>
               </div>
@@ -416,12 +430,14 @@ export default function WhatsNew() {
         </div>
 
         {/* Footer */}
-        <div style={{
-          padding: '16px 24px',
-          borderTop: '1px solid var(--border-color, #333)',
-          display: 'flex',
-          justifyContent: 'center',
-        }}>
+        <div
+          style={{
+            padding: '16px 24px',
+            borderTop: '1px solid var(--border-color, #333)',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
           <button
             onClick={handleDismiss}
             style={{
@@ -436,8 +452,8 @@ export default function WhatsNew() {
               cursor: 'pointer',
               transition: 'opacity 0.15s',
             }}
-            onMouseEnter={(e) => e.target.style.opacity = '0.85'}
-            onMouseLeave={(e) => e.target.style.opacity = '1'}
+            onMouseEnter={(e) => (e.target.style.opacity = '0.85')}
+            onMouseLeave={(e) => (e.target.style.opacity = '1')}
           >
             Got it — 73!
           </button>

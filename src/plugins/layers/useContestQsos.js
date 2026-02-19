@@ -10,7 +10,7 @@ export const metadata = {
   category: 'amateur',
   defaultEnabled: false,
   defaultOpacity: 0.7,
-  version: '1.0.0'
+  version: '1.0.0',
 };
 
 export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
@@ -66,11 +66,15 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
   useEffect(() => {
     if (!map || typeof L === 'undefined') return;
 
-    linesRef.current.forEach(line => {
-      try { map.removeLayer(line); } catch (e) {}
+    linesRef.current.forEach((line) => {
+      try {
+        map.removeLayer(line);
+      } catch (e) {}
     });
-    markersRef.current.forEach(marker => {
-      try { map.removeLayer(marker); } catch (e) {}
+    markersRef.current.forEach((marker) => {
+      try {
+        map.removeLayer(marker);
+      } catch (e) {}
     });
     linesRef.current = [];
     markersRef.current = [];
@@ -80,7 +84,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
     const recent = qsos.slice(-120);
     const de = deLocation;
 
-    recent.forEach(qso => {
+    recent.forEach((qso) => {
       const lat = parseFloat(qso.lat);
       const lon = parseFloat(qso.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
@@ -93,19 +97,19 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
       if (de && Number.isFinite(de.lat) && Number.isFinite(de.lon)) {
         const points = getGreatCirclePoints(de.lat, de.lon, lat, lon, 50);
         if (Array.isArray(points) && points.length > 1) {
-          replicatePath(points).forEach(copy => {
+          replicatePath(points).forEach((copy) => {
             const line = L.polyline(copy, {
               color: bandColor,
               weight: 1.5,
               opacity: lineOpacity,
-              dashArray: '2, 6'
+              dashArray: '2, 6',
             }).addTo(map);
             linesRef.current.push(line);
           });
         }
       }
 
-      const bandLabel = qso.bandMHz ? `${qso.bandMHz} MHz` : (qso.band || '');
+      const bandLabel = qso.bandMHz ? `${qso.bandMHz} MHz` : qso.band || '';
       const timeLabel = qso.time || (qso.timestamp ? new Date(qso.timestamp).toLocaleTimeString() : '');
       const sourceLabel = qso.source ? qso.source.toUpperCase() : '';
 
@@ -116,13 +120,17 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null }) {
           color: '#fff',
           weight: 1,
           opacity: 0.9,
-          fillOpacity: markerOpacity
-        }).bindPopup(`
+          fillOpacity: markerOpacity,
+        })
+          .bindPopup(
+            `
           <b>${qso.dxCall || ''}</b><br>
           ${qso.mode || ''} ${bandLabel}<br>
           ${timeLabel ? `${timeLabel}<br>` : ''}
           ${sourceLabel}
-        `).addTo(map);
+        `,
+          )
+          .addTo(map);
 
         markersRef.current.push(marker);
       });

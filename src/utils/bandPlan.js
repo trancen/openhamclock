@@ -1,4 +1,4 @@
-import bandPlan from "./bandplan.json";
+import bandPlan from './bandplan.json';
 
 /**
  * Band Plan Utilities
@@ -11,7 +11,7 @@ import bandPlan from "./bandplan.json";
  * @returns {string} - 'LSB', 'USB', 'CW', 'FM', 'AM'
  */
 export const getModeFromFreq = (hz) => {
-  if (!hz) return "USB"; // Default safe fallback
+  if (!hz) return 'USB'; // Default safe fallback
 
   const khz = hz / 1000;
   const mhz = hz / 1000000;
@@ -26,8 +26,8 @@ export const getModeFromFreq = (hz) => {
   // Generic Rules if outside specific ham bands
   // < 10 MHz -> LSB
   // >= 10 MHz -> USB
-  if (mhz < 10) return "LSB";
-  return "USB";
+  if (mhz < 10) return 'LSB';
+  return 'USB';
 };
 
 /**
@@ -36,14 +36,14 @@ export const getModeFromFreq = (hz) => {
  * @returns {string} - 'USB' or 'LSB'
  */
 export const getSideband = (hz) => {
-  if (!hz) return "USB";
+  if (!hz) return 'USB';
   const mhz = hz / 1000000;
 
   // Check for 60m exception (always USB)
-  if (mhz >= 5.3 && mhz <= 5.405) return "USB";
+  if (mhz >= 5.3 && mhz <= 5.405) return 'USB';
 
   // Standard rule: < 10MHz is LSB, >= 10MHz is USB
-  return mhz < 10 ? "LSB" : "USB";
+  return mhz < 10 ? 'LSB' : 'USB';
 };
 
 /**
@@ -54,29 +54,17 @@ export const getSideband = (hz) => {
  * @returns {string} - The mapped mode string
  */
 export const mapModeToRig = (mode, freq) => {
-  if (!mode) return "";
+  if (!mode) return '';
   const m = mode.toUpperCase();
   const sb = getSideband(freq);
 
-  const suffix = sb === "USB" ? "U" : "L";
+  const suffix = sb === 'USB' ? 'U' : 'L';
 
   // List of digital modes to map to sideband
-  const digitalModes = [
-    "FT8",
-    "FT4",
-    "JS8",
-    "WSPR",
-    "JT65",
-    "JT9",
-    "PSK31",
-    "PSK63",
-    "RTTY",
-    "DATA",
-    "PKT",
-  ];
+  const digitalModes = ['FT8', 'FT4', 'JS8', 'WSPR', 'JT65', 'JT9', 'PSK31', 'PSK63', 'RTTY', 'DATA', 'PKT'];
 
   // Map Digital, CW, and generic SSB to specific sideband
-  if (digitalModes.includes(m) || m === "CW" || m === "SSB") {
+  if (digitalModes.includes(m) || m === 'CW' || m === 'SSB') {
     return sb;
   }
 

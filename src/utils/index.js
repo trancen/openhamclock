@@ -14,7 +14,7 @@ export {
   syncAllSettingsToServer,
   installSettingsSyncInterceptor,
   isConfigIncomplete,
-  MAP_STYLES
+  MAP_STYLES,
 } from './config.js';
 
 // Geographic calculations
@@ -31,7 +31,7 @@ export {
   replicatePath,
   replicatePoint,
   normalizeLon,
-  WORLD_COPY_OFFSETS
+  WORLD_COPY_OFFSETS,
 } from './geo.js';
 
 // Callsign and band utilities
@@ -43,9 +43,9 @@ export {
   getBandColor,
   detectMode,
   PREFIX_MAP,
-  getCallsignInfo
+  getCallsignInfo,
 } from './callsign.js';
-export {filterDXPaths} from "./dxClusterFilters";
+export { filterDXPaths } from './dxClusterFilters';
 
 // Band color utilities
 export {
@@ -58,5 +58,5 @@ export {
   getEffectiveBandColors,
   getBandColorForBand,
   getBandColorForFreq,
-  getBandTextColor
+  getBandTextColor,
 } from './bandColors.js';

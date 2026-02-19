@@ -8,7 +8,7 @@ export default function useMapLayers() {
     showPOTA: true,
     showPOTALabels: true,
     showWWFF: true,
-    showWWFFLabels:true,
+    showWWFFLabels: true,
     showSOTA: true,
     showSOTALabels: true,
     showSatellites: false,
@@ -49,19 +49,37 @@ export default function useMapLayers() {
     } catch {}
   }, [mapLayers]);
 
-  const toggleDXPaths = useCallback(() => setMapLayers(prev => ({ ...prev, showDXPaths: !prev.showDXPaths })), []);
-  const toggleDXLabels = useCallback(() => setMapLayers(prev => ({ ...prev, showDXLabels: !prev.showDXLabels })), []);
-  const togglePOTA = useCallback(() => setMapLayers(prev => ({ ...prev, showPOTA: !prev.showPOTA })), []);
-  const togglePOTALabels = useCallback(() => setMapLayers(prev => ({ ...prev, showPOTALabels: !prev.showPOTALabels })), []);
-  const toggleWWFF = useCallback(() => setMapLayers(prev => ({ ...prev, showWWFF: !prev.showWWFF })), []);
-  const toggleWWFFLabels = useCallback(() => setMapLayers(prev => ({ ...prev, showWWFFLabels: !prev.showWWFFLabels })), []);
-  const toggleSOTA = useCallback(() => setMapLayers(prev => ({ ...prev, showSOTA: !prev.showSOTA })), []);
-  const toggleSOTALabels = useCallback(() => setMapLayers(prev => ({ ...prev, showSOTALabels: !prev.showSOTALabels })), []);
-  const toggleSatellites = useCallback(() => setMapLayers(prev => ({ ...prev, showSatellites: !prev.showSatellites })), []);
-  const togglePSKReporter = useCallback(() => setMapLayers(prev => ({ ...prev, showPSKReporter: !prev.showPSKReporter })), []);
-  const toggleWSJTX = useCallback(() => setMapLayers(prev => ({ ...prev, showWSJTX: !prev.showWSJTX })), []);
-  const toggleDXNews = useCallback(() => setMapLayers(prev => ({ ...prev, showDXNews: !prev.showDXNews })), []);
-  const toggleRotatorBearing = useCallback(() => setMapLayers(prev => ({ ...prev, showRotatorBearing: !prev.showRotatorBearing })), []);
+  const toggleDXPaths = useCallback(() => setMapLayers((prev) => ({ ...prev, showDXPaths: !prev.showDXPaths })), []);
+  const toggleDXLabels = useCallback(() => setMapLayers((prev) => ({ ...prev, showDXLabels: !prev.showDXLabels })), []);
+  const togglePOTA = useCallback(() => setMapLayers((prev) => ({ ...prev, showPOTA: !prev.showPOTA })), []);
+  const togglePOTALabels = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showPOTALabels: !prev.showPOTALabels })),
+    [],
+  );
+  const toggleWWFF = useCallback(() => setMapLayers((prev) => ({ ...prev, showWWFF: !prev.showWWFF })), []);
+  const toggleWWFFLabels = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showWWFFLabels: !prev.showWWFFLabels })),
+    [],
+  );
+  const toggleSOTA = useCallback(() => setMapLayers((prev) => ({ ...prev, showSOTA: !prev.showSOTA })), []);
+  const toggleSOTALabels = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showSOTALabels: !prev.showSOTALabels })),
+    [],
+  );
+  const toggleSatellites = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showSatellites: !prev.showSatellites })),
+    [],
+  );
+  const togglePSKReporter = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showPSKReporter: !prev.showPSKReporter })),
+    [],
+  );
+  const toggleWSJTX = useCallback(() => setMapLayers((prev) => ({ ...prev, showWSJTX: !prev.showWSJTX })), []);
+  const toggleDXNews = useCallback(() => setMapLayers((prev) => ({ ...prev, showDXNews: !prev.showDXNews })), []);
+  const toggleRotatorBearing = useCallback(
+    () => setMapLayers((prev) => ({ ...prev, showRotatorBearing: !prev.showRotatorBearing })),
+    [],
+  );
 
   return {
     mapLayers,

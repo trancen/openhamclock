@@ -22,11 +22,15 @@ export const useSOTASpots = () => {
         if (res?.ok) {
           const spots = await res.json();
           console.log(`[SOTA] Fetched ${Array.isArray(spots) ? spots.length : 0} spots`);
-          
+
           // Only mark as "updated" when data content actually changes
           let newestTime = null;
           if (Array.isArray(spots) && spots.length > 0) {
-            const times = spots.map(s => s.timeStamp).filter(Boolean).sort().reverse();
+            const times = spots
+              .map((s) => s.timeStamp)
+              .filter(Boolean)
+              .sort()
+              .reverse();
             newestTime = times[0] || null;
           }
           if (newestTime !== lastNewestSpotRef.current || lastNewestSpotRef.current === null) {
@@ -36,8 +40,8 @@ export const useSOTASpots = () => {
 
           // Map SOTA API response to our standard spot format
           const mapped = (Array.isArray(spots) ? spots : [])
-            .filter(s => {
-              if (! (s.activatorCallsign && s.frequency)) return false;
+            .filter((s) => {
+              if (!(s.activatorCallsign && s.frequency)) return false;
               // Filter out QRT (operator signed off)
               const comments = (s.comments || '').toUpperCase().trim();
               if (comments === 'QRT' || comments.startsWith('QRT ') || comments.startsWith('QRT,')) return false;
@@ -49,7 +53,7 @@ export const useSOTASpots = () => {
               }
               return true;
             })
-            .map(s => {
+            .map((s) => {
               // summitDetails often contains lat/lng from the SOTA DB
               const details = s.summitDetails || {};
               const lat = details.latitude != null ? parseFloat(details.latitude) : null;
@@ -60,9 +64,7 @@ export const useSOTASpots = () => {
 
               return {
                 call: s.activatorCallsign,
-                ref: s.associationCode && s.summitCode
-                  ? `${s.associationCode}/${s.summitCode}`
-                  : (s.summitCode || ''),
+                ref: s.associationCode && s.summitCode ? `${s.associationCode}/${s.summitCode}` : s.summitCode || '',
                 summit: details.name || '',
                 altM: details.altM || details.altitude || null,
                 points: details.points || s.points || null,
@@ -73,10 +75,13 @@ export const useSOTASpots = () => {
                 lon,
                 // SOTA API returns UTC timestamps without 'Z' suffix, violating ISO 8601
                 // Defensively append 'Z' if not present to force UTC interpretation
-                time: s.timeStamp ? (() => {
-                  const ts = s.timeStamp.endsWith('Z') || s.timeStamp.endsWith('z') ? s.timeStamp : s.timeStamp + 'Z';
-                  return new Date(ts).toISOString().substr(11, 5) + 'z';
-                })() : ''
+                time: s.timeStamp
+                  ? (() => {
+                      const ts =
+                        s.timeStamp.endsWith('Z') || s.timeStamp.endsWith('z') ? s.timeStamp : s.timeStamp + 'Z';
+                      return new Date(ts).toISOString().substr(11, 5) + 'z';
+                    })()
+                  : '',
               };
             });
 

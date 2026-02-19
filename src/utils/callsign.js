@@ -2,46 +2,46 @@
  * Callsign and Band Utilities
  * Band detection, mode detection, callsign parsing
  */
-import { getBandColorForFreq } from "./bandColors.js";
-import { ctyLookup } from "./ctyLookup.js";
+import { getBandColorForFreq } from './bandColors.js';
+import { ctyLookup } from './ctyLookup.js';
 
 /**
  * HF Amateur Bands
  */
 export const HF_BANDS = [
-  "160m",
-  "80m",
-  "60m",
-  "40m",
-  "30m",
-  "20m",
-  "17m",
-  "15m",
-  "12m",
-  "11m",
-  "10m",
-  "6m",
-  "2m",
-  "70cm",
+  '160m',
+  '80m',
+  '60m',
+  '40m',
+  '30m',
+  '20m',
+  '17m',
+  '15m',
+  '12m',
+  '11m',
+  '10m',
+  '6m',
+  '2m',
+  '70cm',
 ];
 
 /**
  * Continents for DX filtering
  */
 export const CONTINENTS = [
-  { code: "NA", name: "North America" },
-  { code: "SA", name: "South America" },
-  { code: "EU", name: "Europe" },
-  { code: "AF", name: "Africa" },
-  { code: "AS", name: "Asia" },
-  { code: "OC", name: "Oceania" },
-  { code: "AN", name: "Antarctica" },
+  { code: 'NA', name: 'North America' },
+  { code: 'SA', name: 'South America' },
+  { code: 'EU', name: 'Europe' },
+  { code: 'AF', name: 'Africa' },
+  { code: 'AS', name: 'Asia' },
+  { code: 'OC', name: 'Oceania' },
+  { code: 'AN', name: 'Antarctica' },
 ];
 
 /**
  * Digital/Voice Modes
  */
-export const MODES = ["CW", "SSB", "FT8", "FT4", "RTTY", "PSK", "AM", "FM"];
+export const MODES = ['CW', 'SSB', 'FT8', 'FT4', 'RTTY', 'PSK', 'AM', 'FM'];
 
 /**
  * Get band from frequency (in kHz)
@@ -50,21 +50,21 @@ export const getBandFromFreq = (freq) => {
   const f = parseFloat(freq);
   // Handle MHz input (convert to kHz)
   const freqKhz = f < 1000 ? f * 1000 : f;
-  if (freqKhz >= 1800 && freqKhz <= 2000) return "160m";
-  if (freqKhz >= 3500 && freqKhz <= 4000) return "80m";
-  if (freqKhz >= 5330 && freqKhz <= 5405) return "60m";
-  if (freqKhz >= 7000 && freqKhz <= 7300) return "40m";
-  if (freqKhz >= 10100 && freqKhz <= 10150) return "30m";
-  if (freqKhz >= 14000 && freqKhz <= 14350) return "20m";
-  if (freqKhz >= 18068 && freqKhz <= 18168) return "17m";
-  if (freqKhz >= 21000 && freqKhz <= 21450) return "15m";
-  if (freqKhz >= 24890 && freqKhz <= 24990) return "12m";
-  if (freqKhz >= 26000 && freqKhz <= 28000) return "11m"; // CB band
-  if (freqKhz >= 28000 && freqKhz <= 29700) return "10m";
-  if (freqKhz >= 50000 && freqKhz <= 54000) return "6m";
-  if (freqKhz >= 144000 && freqKhz <= 148000) return "2m";
-  if (freqKhz >= 420000 && freqKhz <= 450000) return "70cm";
-  return "other";
+  if (freqKhz >= 1800 && freqKhz <= 2000) return '160m';
+  if (freqKhz >= 3500 && freqKhz <= 4000) return '80m';
+  if (freqKhz >= 5330 && freqKhz <= 5405) return '60m';
+  if (freqKhz >= 7000 && freqKhz <= 7300) return '40m';
+  if (freqKhz >= 10100 && freqKhz <= 10150) return '30m';
+  if (freqKhz >= 14000 && freqKhz <= 14350) return '20m';
+  if (freqKhz >= 18068 && freqKhz <= 18168) return '17m';
+  if (freqKhz >= 21000 && freqKhz <= 21450) return '15m';
+  if (freqKhz >= 24890 && freqKhz <= 24990) return '12m';
+  if (freqKhz >= 26000 && freqKhz <= 28000) return '11m'; // CB band
+  if (freqKhz >= 28000 && freqKhz <= 29700) return '10m';
+  if (freqKhz >= 50000 && freqKhz <= 54000) return '6m';
+  if (freqKhz >= 144000 && freqKhz <= 148000) return '2m';
+  if (freqKhz >= 420000 && freqKhz <= 450000) return '70cm';
+  return 'other';
 };
 
 /**
@@ -87,16 +87,15 @@ export const detectMode = (comment, freq) => {
   // 1) Try comment-based detection first (highest confidence)
   if (comment) {
     const upper = comment.toUpperCase();
-    if (upper.includes("FT8")) return "FT8";
-    if (upper.includes("FT4")) return "FT4";
-    if (upper.includes("CW")) return "CW";
-    if (upper.includes("SSB") || upper.includes("LSB") || upper.includes("USB"))
-      return "SSB";
-    if (upper.includes("RTTY")) return "RTTY";
-    if (upper.includes("PSK")) return "PSK";
+    if (upper.includes('FT8')) return 'FT8';
+    if (upper.includes('FT4')) return 'FT4';
+    if (upper.includes('CW')) return 'CW';
+    if (upper.includes('SSB') || upper.includes('LSB') || upper.includes('USB')) return 'SSB';
+    if (upper.includes('RTTY')) return 'RTTY';
+    if (upper.includes('PSK')) return 'PSK';
     // Check AM/FM carefully — "AM" appears in many callsigns/words
-    if (/\bAM\b/.test(upper)) return "AM";
-    if (/\bFM\b/.test(upper)) return "FM";
+    if (/\bAM\b/.test(upper)) return 'AM';
+    if (/\bFM\b/.test(upper)) return 'FM';
   }
 
   // 2) Frequency-based fallback
@@ -110,32 +109,32 @@ export const detectMode = (comment, freq) => {
   const TOLERANCE = 0.003;
   const DIGITAL_ISLANDS = [
     // FT8 calling frequencies
-    { mhz: 1.840, mode: "FT8" },
-    { mhz: 3.573, mode: "FT8" },
-    { mhz: 7.074, mode: "FT8" },
-    { mhz: 10.136, mode: "FT8" },
-    { mhz: 14.074, mode: "FT8" },
-    { mhz: 18.100, mode: "FT8" },
-    { mhz: 21.074, mode: "FT8" },
-    { mhz: 24.915, mode: "FT8" },
-    { mhz: 28.074, mode: "FT8" },
-    { mhz: 50.313, mode: "FT8" },
+    { mhz: 1.84, mode: 'FT8' },
+    { mhz: 3.573, mode: 'FT8' },
+    { mhz: 7.074, mode: 'FT8' },
+    { mhz: 10.136, mode: 'FT8' },
+    { mhz: 14.074, mode: 'FT8' },
+    { mhz: 18.1, mode: 'FT8' },
+    { mhz: 21.074, mode: 'FT8' },
+    { mhz: 24.915, mode: 'FT8' },
+    { mhz: 28.074, mode: 'FT8' },
+    { mhz: 50.313, mode: 'FT8' },
     // FT4 calling frequencies
-    { mhz: 3.575, mode: "FT4" },
-    { mhz: 7.0475, mode: "FT4" },
-    { mhz: 10.140, mode: "FT4" },
-    { mhz: 14.080, mode: "FT4" },
-    { mhz: 18.104, mode: "FT4" },
-    { mhz: 21.140, mode: "FT4" },
-    { mhz: 24.919, mode: "FT4" },
-    { mhz: 28.180, mode: "FT4" },
-    { mhz: 50.318, mode: "FT4" },
+    { mhz: 3.575, mode: 'FT4' },
+    { mhz: 7.0475, mode: 'FT4' },
+    { mhz: 10.14, mode: 'FT4' },
+    { mhz: 14.08, mode: 'FT4' },
+    { mhz: 18.104, mode: 'FT4' },
+    { mhz: 21.14, mode: 'FT4' },
+    { mhz: 24.919, mode: 'FT4' },
+    { mhz: 28.18, mode: 'FT4' },
+    { mhz: 50.318, mode: 'FT4' },
     // RTTY common frequencies
-    { mhz: 3.580, mode: "RTTY" },
-    { mhz: 7.035, mode: "RTTY" },
-    { mhz: 14.080, mode: "RTTY" }, // Note: overlaps FT4 — FT4 checked first
-    { mhz: 21.080, mode: "RTTY" },
-    { mhz: 28.080, mode: "RTTY" },
+    { mhz: 3.58, mode: 'RTTY' },
+    { mhz: 7.035, mode: 'RTTY' },
+    { mhz: 14.08, mode: 'RTTY' }, // Note: overlaps FT4 — FT4 checked first
+    { mhz: 21.08, mode: 'RTTY' },
+    { mhz: 28.08, mode: 'RTTY' },
   ];
 
   for (const island of DIGITAL_ISLANDS) {
@@ -146,29 +145,29 @@ export const detectMode = (comment, freq) => {
 
   // Band plan segments — CW vs SSB by frequency range
   // These are broader and lower confidence, but good enough for filtering
-  if (mhz >= 1.800 && mhz < 1.840) return "CW";
-  if (mhz >= 1.840 && mhz <= 2.000) return "SSB";
-  if (mhz >= 3.500 && mhz < 3.600) return "CW";
-  if (mhz >= 3.600 && mhz <= 4.000) return "SSB";
-  if (mhz >= 7.000 && mhz < 7.050) return "CW";
-  if (mhz >= 7.050 && mhz < 7.070) return "CW"; // CW/digital segment
-  if (mhz >= 7.150 && mhz <= 7.300) return "SSB";
-  if (mhz >= 10.100 && mhz <= 10.150) return "CW";
-  if (mhz >= 14.000 && mhz < 14.070) return "CW";
-  if (mhz >= 14.150 && mhz <= 14.350) return "SSB";
-  if (mhz >= 18.068 && mhz < 18.095) return "CW";
-  if (mhz >= 18.110 && mhz <= 18.168) return "SSB";
-  if (mhz >= 21.000 && mhz < 21.070) return "CW";
-  if (mhz >= 21.150 && mhz <= 21.450) return "SSB";
-  if (mhz >= 24.890 && mhz < 24.910) return "CW";
-  if (mhz >= 24.930 && mhz <= 24.990) return "SSB";
-  if (mhz >= 28.000 && mhz < 28.070) return "CW";
-  if (mhz >= 28.300 && mhz <= 29.000) return "SSB";
-  if (mhz >= 50.000 && mhz < 50.100) return "CW";
-  if (mhz >= 50.100 && mhz <= 50.300) return "SSB";
+  if (mhz >= 1.8 && mhz < 1.84) return 'CW';
+  if (mhz >= 1.84 && mhz <= 2.0) return 'SSB';
+  if (mhz >= 3.5 && mhz < 3.6) return 'CW';
+  if (mhz >= 3.6 && mhz <= 4.0) return 'SSB';
+  if (mhz >= 7.0 && mhz < 7.05) return 'CW';
+  if (mhz >= 7.05 && mhz < 7.07) return 'CW'; // CW/digital segment
+  if (mhz >= 7.15 && mhz <= 7.3) return 'SSB';
+  if (mhz >= 10.1 && mhz <= 10.15) return 'CW';
+  if (mhz >= 14.0 && mhz < 14.07) return 'CW';
+  if (mhz >= 14.15 && mhz <= 14.35) return 'SSB';
+  if (mhz >= 18.068 && mhz < 18.095) return 'CW';
+  if (mhz >= 18.11 && mhz <= 18.168) return 'SSB';
+  if (mhz >= 21.0 && mhz < 21.07) return 'CW';
+  if (mhz >= 21.15 && mhz <= 21.45) return 'SSB';
+  if (mhz >= 24.89 && mhz < 24.91) return 'CW';
+  if (mhz >= 24.93 && mhz <= 24.99) return 'SSB';
+  if (mhz >= 28.0 && mhz < 28.07) return 'CW';
+  if (mhz >= 28.3 && mhz <= 29.0) return 'SSB';
+  if (mhz >= 50.0 && mhz < 50.1) return 'CW';
+  if (mhz >= 50.1 && mhz <= 50.3) return 'SSB';
   // 2m/70cm FM simplex
-  if (mhz >= 144.000 && mhz <= 148.000) return "FM";
-  if (mhz >= 420.000 && mhz <= 450.000) return "FM";
+  if (mhz >= 144.0 && mhz <= 148.0) return 'FM';
+  if (mhz >= 420.0 && mhz <= 450.0) return 'FM';
 
   return null;
 };
@@ -178,152 +177,152 @@ export const detectMode = (comment, freq) => {
  */
 export const PREFIX_MAP = {
   // North America
-  W: { cq: 5, itu: 8, cont: "NA" },
-  K: { cq: 5, itu: 8, cont: "NA" },
-  N: { cq: 5, itu: 8, cont: "NA" },
-  AA: { cq: 5, itu: 8, cont: "NA" },
-  VE: { cq: 5, itu: 4, cont: "NA" },
-  VA: { cq: 5, itu: 4, cont: "NA" },
-  XE: { cq: 6, itu: 10, cont: "NA" },
-  XF: { cq: 6, itu: 10, cont: "NA" },
+  W: { cq: 5, itu: 8, cont: 'NA' },
+  K: { cq: 5, itu: 8, cont: 'NA' },
+  N: { cq: 5, itu: 8, cont: 'NA' },
+  AA: { cq: 5, itu: 8, cont: 'NA' },
+  VE: { cq: 5, itu: 4, cont: 'NA' },
+  VA: { cq: 5, itu: 4, cont: 'NA' },
+  XE: { cq: 6, itu: 10, cont: 'NA' },
+  XF: { cq: 6, itu: 10, cont: 'NA' },
   // Europe
-  G: { cq: 14, itu: 27, cont: "EU" },
-  M: { cq: 14, itu: 27, cont: "EU" },
-  F: { cq: 14, itu: 27, cont: "EU" },
-  DL: { cq: 14, itu: 28, cont: "EU" },
-  DJ: { cq: 14, itu: 28, cont: "EU" },
-  DK: { cq: 14, itu: 28, cont: "EU" },
-  PA: { cq: 14, itu: 27, cont: "EU" },
-  ON: { cq: 14, itu: 27, cont: "EU" },
-  EA: { cq: 14, itu: 37, cont: "EU" },
-  I: { cq: 15, itu: 28, cont: "EU" },
-  SP: { cq: 15, itu: 28, cont: "EU" },
-  OK: { cq: 15, itu: 28, cont: "EU" },
-  OM: { cq: 15, itu: 28, cont: "EU" },
-  HA: { cq: 15, itu: 28, cont: "EU" },
-  OE: { cq: 15, itu: 28, cont: "EU" },
-  HB: { cq: 14, itu: 28, cont: "EU" },
-  SM: { cq: 14, itu: 18, cont: "EU" },
-  LA: { cq: 14, itu: 18, cont: "EU" },
-  OH: { cq: 15, itu: 18, cont: "EU" },
-  OZ: { cq: 14, itu: 18, cont: "EU" },
-  UA: { cq: 16, itu: 29, cont: "EU" },
-  RA: { cq: 16, itu: 29, cont: "EU" },
-  RU: { cq: 16, itu: 29, cont: "EU" },
-  RW: { cq: 16, itu: 29, cont: "EU" },
-  UR: { cq: 16, itu: 29, cont: "EU" },
-  UT: { cq: 16, itu: 29, cont: "EU" },
-  YU: { cq: 15, itu: 28, cont: "EU" },
-  YT: { cq: 15, itu: 28, cont: "EU" },
-  LY: { cq: 15, itu: 29, cont: "EU" },
-  ES: { cq: 15, itu: 29, cont: "EU" },
-  YL: { cq: 15, itu: 29, cont: "EU" },
-  EI: { cq: 14, itu: 27, cont: "EU" },
-  GI: { cq: 14, itu: 27, cont: "EU" },
-  GW: { cq: 14, itu: 27, cont: "EU" },
-  GM: { cq: 14, itu: 27, cont: "EU" },
-  CT: { cq: 14, itu: 37, cont: "EU" },
-  SV: { cq: 20, itu: 28, cont: "EU" },
-  "9A": { cq: 15, itu: 28, cont: "EU" },
-  S5: { cq: 15, itu: 28, cont: "EU" },
-  LZ: { cq: 20, itu: 28, cont: "EU" },
-  YO: { cq: 20, itu: 28, cont: "EU" },
+  G: { cq: 14, itu: 27, cont: 'EU' },
+  M: { cq: 14, itu: 27, cont: 'EU' },
+  F: { cq: 14, itu: 27, cont: 'EU' },
+  DL: { cq: 14, itu: 28, cont: 'EU' },
+  DJ: { cq: 14, itu: 28, cont: 'EU' },
+  DK: { cq: 14, itu: 28, cont: 'EU' },
+  PA: { cq: 14, itu: 27, cont: 'EU' },
+  ON: { cq: 14, itu: 27, cont: 'EU' },
+  EA: { cq: 14, itu: 37, cont: 'EU' },
+  I: { cq: 15, itu: 28, cont: 'EU' },
+  SP: { cq: 15, itu: 28, cont: 'EU' },
+  OK: { cq: 15, itu: 28, cont: 'EU' },
+  OM: { cq: 15, itu: 28, cont: 'EU' },
+  HA: { cq: 15, itu: 28, cont: 'EU' },
+  OE: { cq: 15, itu: 28, cont: 'EU' },
+  HB: { cq: 14, itu: 28, cont: 'EU' },
+  SM: { cq: 14, itu: 18, cont: 'EU' },
+  LA: { cq: 14, itu: 18, cont: 'EU' },
+  OH: { cq: 15, itu: 18, cont: 'EU' },
+  OZ: { cq: 14, itu: 18, cont: 'EU' },
+  UA: { cq: 16, itu: 29, cont: 'EU' },
+  RA: { cq: 16, itu: 29, cont: 'EU' },
+  RU: { cq: 16, itu: 29, cont: 'EU' },
+  RW: { cq: 16, itu: 29, cont: 'EU' },
+  UR: { cq: 16, itu: 29, cont: 'EU' },
+  UT: { cq: 16, itu: 29, cont: 'EU' },
+  YU: { cq: 15, itu: 28, cont: 'EU' },
+  YT: { cq: 15, itu: 28, cont: 'EU' },
+  LY: { cq: 15, itu: 29, cont: 'EU' },
+  ES: { cq: 15, itu: 29, cont: 'EU' },
+  YL: { cq: 15, itu: 29, cont: 'EU' },
+  EI: { cq: 14, itu: 27, cont: 'EU' },
+  GI: { cq: 14, itu: 27, cont: 'EU' },
+  GW: { cq: 14, itu: 27, cont: 'EU' },
+  GM: { cq: 14, itu: 27, cont: 'EU' },
+  CT: { cq: 14, itu: 37, cont: 'EU' },
+  SV: { cq: 20, itu: 28, cont: 'EU' },
+  '9A': { cq: 15, itu: 28, cont: 'EU' },
+  S5: { cq: 15, itu: 28, cont: 'EU' },
+  LZ: { cq: 20, itu: 28, cont: 'EU' },
+  YO: { cq: 20, itu: 28, cont: 'EU' },
   // Asia
-  JA: { cq: 25, itu: 45, cont: "AS" },
-  JH: { cq: 25, itu: 45, cont: "AS" },
-  JR: { cq: 25, itu: 45, cont: "AS" },
-  JE: { cq: 25, itu: 45, cont: "AS" },
-  JF: { cq: 25, itu: 45, cont: "AS" },
-  JG: { cq: 25, itu: 45, cont: "AS" },
-  JI: { cq: 25, itu: 45, cont: "AS" },
-  JJ: { cq: 25, itu: 45, cont: "AS" },
-  JK: { cq: 25, itu: 45, cont: "AS" },
-  JL: { cq: 25, itu: 45, cont: "AS" },
-  JM: { cq: 25, itu: 45, cont: "AS" },
-  JN: { cq: 25, itu: 45, cont: "AS" },
-  JO: { cq: 25, itu: 45, cont: "AS" },
-  JP: { cq: 25, itu: 45, cont: "AS" },
-  JQ: { cq: 25, itu: 45, cont: "AS" },
-  JS: { cq: 25, itu: 45, cont: "AS" },
-  HL: { cq: 25, itu: 44, cont: "AS" },
-  DS: { cq: 25, itu: 44, cont: "AS" },
-  BY: { cq: 24, itu: 44, cont: "AS" },
-  BV: { cq: 24, itu: 44, cont: "AS" },
-  VU: { cq: 22, itu: 41, cont: "AS" },
-  DU: { cq: 27, itu: 50, cont: "OC" },
-  "9M": { cq: 28, itu: 54, cont: "AS" },
-  HS: { cq: 26, itu: 49, cont: "AS" },
-  XV: { cq: 26, itu: 49, cont: "AS" },
+  JA: { cq: 25, itu: 45, cont: 'AS' },
+  JH: { cq: 25, itu: 45, cont: 'AS' },
+  JR: { cq: 25, itu: 45, cont: 'AS' },
+  JE: { cq: 25, itu: 45, cont: 'AS' },
+  JF: { cq: 25, itu: 45, cont: 'AS' },
+  JG: { cq: 25, itu: 45, cont: 'AS' },
+  JI: { cq: 25, itu: 45, cont: 'AS' },
+  JJ: { cq: 25, itu: 45, cont: 'AS' },
+  JK: { cq: 25, itu: 45, cont: 'AS' },
+  JL: { cq: 25, itu: 45, cont: 'AS' },
+  JM: { cq: 25, itu: 45, cont: 'AS' },
+  JN: { cq: 25, itu: 45, cont: 'AS' },
+  JO: { cq: 25, itu: 45, cont: 'AS' },
+  JP: { cq: 25, itu: 45, cont: 'AS' },
+  JQ: { cq: 25, itu: 45, cont: 'AS' },
+  JS: { cq: 25, itu: 45, cont: 'AS' },
+  HL: { cq: 25, itu: 44, cont: 'AS' },
+  DS: { cq: 25, itu: 44, cont: 'AS' },
+  BY: { cq: 24, itu: 44, cont: 'AS' },
+  BV: { cq: 24, itu: 44, cont: 'AS' },
+  VU: { cq: 22, itu: 41, cont: 'AS' },
+  DU: { cq: 27, itu: 50, cont: 'OC' },
+  '9M': { cq: 28, itu: 54, cont: 'AS' },
+  HS: { cq: 26, itu: 49, cont: 'AS' },
+  XV: { cq: 26, itu: 49, cont: 'AS' },
   // Oceania
-  VK: { cq: 30, itu: 59, cont: "OC" },
-  ZL: { cq: 32, itu: 60, cont: "OC" },
-  FK: { cq: 32, itu: 56, cont: "OC" },
-  VK9: { cq: 30, itu: 60, cont: "OC" },
-  YB: { cq: 28, itu: 51, cont: "OC" },
-  KH6: { cq: 31, itu: 61, cont: "OC" },
-  KH2: { cq: 27, itu: 64, cont: "OC" },
+  VK: { cq: 30, itu: 59, cont: 'OC' },
+  ZL: { cq: 32, itu: 60, cont: 'OC' },
+  FK: { cq: 32, itu: 56, cont: 'OC' },
+  VK9: { cq: 30, itu: 60, cont: 'OC' },
+  YB: { cq: 28, itu: 51, cont: 'OC' },
+  KH6: { cq: 31, itu: 61, cont: 'OC' },
+  KH2: { cq: 27, itu: 64, cont: 'OC' },
   // South America
-  LU: { cq: 13, itu: 14, cont: "SA" },
-  PY: { cq: 11, itu: 15, cont: "SA" },
-  CE: { cq: 12, itu: 14, cont: "SA" },
-  CX: { cq: 13, itu: 14, cont: "SA" },
-  HK: { cq: 9, itu: 12, cont: "SA" },
-  YV: { cq: 9, itu: 12, cont: "SA" },
-  HC: { cq: 10, itu: 12, cont: "SA" },
-  OA: { cq: 10, itu: 12, cont: "SA" },
+  LU: { cq: 13, itu: 14, cont: 'SA' },
+  PY: { cq: 11, itu: 15, cont: 'SA' },
+  CE: { cq: 12, itu: 14, cont: 'SA' },
+  CX: { cq: 13, itu: 14, cont: 'SA' },
+  HK: { cq: 9, itu: 12, cont: 'SA' },
+  YV: { cq: 9, itu: 12, cont: 'SA' },
+  HC: { cq: 10, itu: 12, cont: 'SA' },
+  OA: { cq: 10, itu: 12, cont: 'SA' },
   // Africa
-  ZS: { cq: 38, itu: 57, cont: "AF" },
-  "5N": { cq: 35, itu: 46, cont: "AF" },
-  EA8: { cq: 33, itu: 36, cont: "AF" },
-  CN: { cq: 33, itu: 37, cont: "AF" },
-  "7X": { cq: 33, itu: 37, cont: "AF" },
-  SU: { cq: 34, itu: 38, cont: "AF" },
-  ST: { cq: 34, itu: 47, cont: "AF" },
-  ET: { cq: 37, itu: 48, cont: "AF" },
-  "5Z": { cq: 37, itu: 48, cont: "AF" },
-  "5H": { cq: 37, itu: 53, cont: "AF" },
+  ZS: { cq: 38, itu: 57, cont: 'AF' },
+  '5N': { cq: 35, itu: 46, cont: 'AF' },
+  EA8: { cq: 33, itu: 36, cont: 'AF' },
+  CN: { cq: 33, itu: 37, cont: 'AF' },
+  '7X': { cq: 33, itu: 37, cont: 'AF' },
+  SU: { cq: 34, itu: 38, cont: 'AF' },
+  ST: { cq: 34, itu: 47, cont: 'AF' },
+  ET: { cq: 37, itu: 48, cont: 'AF' },
+  '5Z': { cq: 37, itu: 48, cont: 'AF' },
+  '5H': { cq: 37, itu: 53, cont: 'AF' },
   // Caribbean
-  VP5: { cq: 8, itu: 11, cont: "NA" },
-  PJ: { cq: 9, itu: 11, cont: "SA" },
-  HI: { cq: 8, itu: 11, cont: "NA" },
-  CO: { cq: 8, itu: 11, cont: "NA" },
-  KP4: { cq: 8, itu: 11, cont: "NA" },
-  FG: { cq: 8, itu: 11, cont: "NA" },
+  VP5: { cq: 8, itu: 11, cont: 'NA' },
+  PJ: { cq: 9, itu: 11, cont: 'SA' },
+  HI: { cq: 8, itu: 11, cont: 'NA' },
+  CO: { cq: 8, itu: 11, cont: 'NA' },
+  KP4: { cq: 8, itu: 11, cont: 'NA' },
+  FG: { cq: 8, itu: 11, cont: 'NA' },
   // Antarctica
-  DP0: { cq: 38, itu: 67, cont: "AN" },
-  VP8: { cq: 13, itu: 73, cont: "AN" },
-  KC4: { cq: 13, itu: 67, cont: "AN" },
+  DP0: { cq: 38, itu: 67, cont: 'AN' },
+  VP8: { cq: 13, itu: 73, cont: 'AN' },
+  KC4: { cq: 13, itu: 67, cont: 'AN' },
 };
 
 /**
  * Fallback mapping based on first character
  */
 const FALLBACK_MAP = {
-  A: { cq: 21, itu: 39, cont: "AS" },
-  B: { cq: 24, itu: 44, cont: "AS" },
-  C: { cq: 14, itu: 27, cont: "EU" },
-  D: { cq: 14, itu: 28, cont: "EU" },
-  E: { cq: 14, itu: 27, cont: "EU" },
-  F: { cq: 14, itu: 27, cont: "EU" },
-  G: { cq: 14, itu: 27, cont: "EU" },
-  H: { cq: 14, itu: 27, cont: "EU" },
-  I: { cq: 15, itu: 28, cont: "EU" },
-  J: { cq: 25, itu: 45, cont: "AS" },
-  K: { cq: 5, itu: 8, cont: "NA" },
-  L: { cq: 13, itu: 14, cont: "SA" },
-  M: { cq: 14, itu: 27, cont: "EU" },
-  N: { cq: 5, itu: 8, cont: "NA" },
-  O: { cq: 15, itu: 18, cont: "EU" },
-  P: { cq: 11, itu: 15, cont: "SA" },
-  R: { cq: 16, itu: 29, cont: "EU" },
-  S: { cq: 15, itu: 28, cont: "EU" },
-  T: { cq: 37, itu: 48, cont: "AF" },
-  U: { cq: 16, itu: 29, cont: "EU" },
-  V: { cq: 5, itu: 4, cont: "NA" },
-  W: { cq: 5, itu: 8, cont: "NA" },
-  X: { cq: 6, itu: 10, cont: "NA" },
-  Y: { cq: 15, itu: 28, cont: "EU" },
-  Z: { cq: 38, itu: 57, cont: "AF" },
+  A: { cq: 21, itu: 39, cont: 'AS' },
+  B: { cq: 24, itu: 44, cont: 'AS' },
+  C: { cq: 14, itu: 27, cont: 'EU' },
+  D: { cq: 14, itu: 28, cont: 'EU' },
+  E: { cq: 14, itu: 27, cont: 'EU' },
+  F: { cq: 14, itu: 27, cont: 'EU' },
+  G: { cq: 14, itu: 27, cont: 'EU' },
+  H: { cq: 14, itu: 27, cont: 'EU' },
+  I: { cq: 15, itu: 28, cont: 'EU' },
+  J: { cq: 25, itu: 45, cont: 'AS' },
+  K: { cq: 5, itu: 8, cont: 'NA' },
+  L: { cq: 13, itu: 14, cont: 'SA' },
+  M: { cq: 14, itu: 27, cont: 'EU' },
+  N: { cq: 5, itu: 8, cont: 'NA' },
+  O: { cq: 15, itu: 18, cont: 'EU' },
+  P: { cq: 11, itu: 15, cont: 'SA' },
+  R: { cq: 16, itu: 29, cont: 'EU' },
+  S: { cq: 15, itu: 28, cont: 'EU' },
+  T: { cq: 37, itu: 48, cont: 'AF' },
+  U: { cq: 16, itu: 29, cont: 'EU' },
+  V: { cq: 5, itu: 4, cont: 'NA' },
+  W: { cq: 5, itu: 8, cont: 'NA' },
+  X: { cq: 6, itu: 10, cont: 'NA' },
+  Y: { cq: 15, itu: 28, cont: 'EU' },
+  Z: { cq: 38, itu: 57, cont: 'AF' },
 };
 
 /**

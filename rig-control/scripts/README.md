@@ -3,9 +3,11 @@
 This directory contains scripts to install the **Rig Control Daemon** as a background service on Linux, macOS, and Windows.
 
 ## Prerequisite
+
 - **Node.js** must be installed on your system.
 
 ## Linux (systemd)
+
 Installs as a user-level systemd service (`openhamclock-rig`).
 
 1. Open a terminal.
@@ -21,6 +23,7 @@ Installs as a user-level systemd service (`openhamclock-rig`).
    - Stop: `sudo systemctl stop openhamclock-rig`
 
 ## macOS (launchd)
+
 Installs as a LaunchAgent (`com.openhamclock.rig`) for the current user.
 
 1. Open Terminal.
@@ -35,6 +38,7 @@ Installs as a LaunchAgent (`com.openhamclock.rig`) for the current user.
    - Stop: `launchctl unload ~/Library/LaunchAgents/com.openhamclock.rig.plist`
 
 ## Windows (Task Scheduler)
+
 Installs as a Scheduled Task that runs at logon (hidden window).
 
 1. Open PowerShell as Administrator (optional, but recommended for task registration).
@@ -49,4 +53,5 @@ Installs as a Scheduled Task that runs at logon (hidden window).
    - You can manually Start/End the task from there.
 
 ---
+
 **Note:** The daemon listens on port **4532** by default. Ensure this port is allowed in your firewall if accessing from another machine.

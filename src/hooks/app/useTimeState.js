@@ -11,7 +11,9 @@ export default function useTimeState(configLocation, dxLocation, timezone) {
   const [use12Hour, setUse12Hour] = useState(() => {
     try {
       return localStorage.getItem('openhamclock_use12Hour') === 'true';
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   });
 
   useEffect(() => {
@@ -20,7 +22,7 @@ export default function useTimeState(configLocation, dxLocation, timezone) {
     } catch (e) {}
   }, [use12Hour]);
 
-  const handleTimeFormatToggle = useCallback(() => setUse12Hour(prev => !prev), []);
+  const handleTimeFormatToggle = useCallback(() => setUse12Hour((prev) => !prev), []);
 
   useEffect(() => {
     let timeout;
@@ -48,8 +50,14 @@ export default function useTimeState(configLocation, dxLocation, timezone) {
 
   const deGrid = useMemo(() => calculateGridSquare(configLocation.lat, configLocation.lon), [configLocation]);
   const dxGrid = useMemo(() => calculateGridSquare(dxLocation.lat, dxLocation.lon), [dxLocation]);
-  const deSunTimes = useMemo(() => calculateSunTimes(configLocation.lat, configLocation.lon, currentTime), [configLocation, currentTime]);
-  const dxSunTimes = useMemo(() => calculateSunTimes(dxLocation.lat, dxLocation.lon, currentTime), [dxLocation, currentTime]);
+  const deSunTimes = useMemo(
+    () => calculateSunTimes(configLocation.lat, configLocation.lon, currentTime),
+    [configLocation, currentTime],
+  );
+  const dxSunTimes = useMemo(
+    () => calculateSunTimes(dxLocation.lat, dxLocation.lon, currentTime),
+    [dxLocation, currentTime],
+  );
 
   const utcTime = currentTime.toISOString().substr(11, 8);
   const utcDate = currentTime.toISOString().substr(0, 10);
@@ -74,6 +82,6 @@ export default function useTimeState(configLocation, dxLocation, timezone) {
     deGrid,
     dxGrid,
     deSunTimes,
-    dxSunTimes
+    dxSunTimes,
   };
 }

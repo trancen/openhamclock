@@ -8,7 +8,9 @@ export default function useFilters() {
     try {
       const stored = localStorage.getItem('openhamclock_dxFilters');
       return stored ? JSON.parse(stored) : {};
-    } catch (e) { return {}; }
+    } catch (e) {
+      return {};
+    }
   });
 
   useEffect(() => {
@@ -22,7 +24,9 @@ export default function useFilters() {
     try {
       const stored = localStorage.getItem('openhamclock_pskFilters');
       return stored ? JSON.parse(stored) : {};
-    } catch (e) { return {}; }
+    } catch (e) {
+      return {};
+    }
   });
 
   useEffect(() => {
@@ -36,6 +40,6 @@ export default function useFilters() {
     dxFilters,
     setDxFilters,
     pskFilters,
-    setPskFilters
+    setPskFilters,
   };
 }

@@ -23,11 +23,14 @@ export const useWWFFSpots = () => {
         if (res?.ok) {
           const spots = await res.json();
           console.log(`[WWFF] Fetched ${Array.isArray(spots) ? spots.length : 0} spots`);
-          
+
           // Only mark as "updated" when data content actually changes
           let newestTime = null;
           if (Array.isArray(spots) && spots.length > 0) {
-            const times = spots.map(s => s.spot_time).filter(Boolean).sort((a, b) => b - a);
+            const times = spots
+              .map((s) => s.spot_time)
+              .filter(Boolean)
+              .sort((a, b) => b - a);
             newestTime = times[0] || null;
           }
           if (newestTime !== lastNewestSpotRef.current || lastNewestSpotRef.current === null) {
@@ -37,7 +40,7 @@ export const useWWFFSpots = () => {
 
           // Filter out QRT spots and nearly-expired spots, then sort by most recent
           const validSpots = spots
-            .filter(s => {
+            .filter((s) => {
               // Filter out QRT (operator signed off)
               const comments = (s.remarks || '').toUpperCase().trim();
               if (comments === 'QRT' || comments.startsWith('QRT ') || comments.startsWith('QRT,')) return false;
@@ -54,29 +57,31 @@ export const useWWFFSpots = () => {
               return timeB - timeA;
             });
 
-          setData(validSpots.map(s => {
-            // Use API coordinates
-            let lat = s.latitude ? parseFloat(s.latitude) : null;
-            let lon = s.longitude ? parseFloat(s.longitude) : null;
+          setData(
+            validSpots.map((s) => {
+              // Use API coordinates
+              let lat = s.latitude ? parseFloat(s.latitude) : null;
+              let lon = s.longitude ? parseFloat(s.longitude) : null;
 
-            // WWFF API returns frequency_khz as a number (e.g., 7160 or 433240)
-            // Convert to MHz for consistency with POTA/SOTA and proper rig control
-            const freqKhz = parseFloat(s.frequency_khz);
-            const freqMhz = !isNaN(freqKhz) ? freqKhz / 1000 : null;
+              // WWFF API returns frequency_khz as a number (e.g., 7160 or 433240)
+              // Convert to MHz for consistency with POTA/SOTA and proper rig control
+              const freqKhz = parseFloat(s.frequency_khz);
+              const freqMhz = !isNaN(freqKhz) ? freqKhz / 1000 : null;
 
-            return {
-              call: s.activator,
-              ref: s.reference,
-              freq: freqMhz ? freqMhz.toString() : s.frequency_khz, // Convert to MHz string
-              mode: s.mode,
-              name: s.reference_name,
-              remarks: s.remarks,
-              lat,
-              lon,
-              time: s.spot_time ? s.spot_time_formatted.substr(11, 5) + 'z' : '',
-              expire: 0
-            };
-          }));
+              return {
+                call: s.activator,
+                ref: s.reference,
+                freq: freqMhz ? freqMhz.toString() : s.frequency_khz, // Convert to MHz string
+                mode: s.mode,
+                name: s.reference_name,
+                remarks: s.remarks,
+                lat,
+                lon,
+                time: s.spot_time ? s.spot_time_formatted.substr(11, 5) + 'z' : '',
+                expire: 0,
+              };
+            }),
+          );
         } else {
           console.warn(`[WWFF] Fetch failed: ${res?.status || 'no response'} ${res?.statusText || ''}`);
         }

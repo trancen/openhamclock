@@ -144,9 +144,10 @@ node rig-daemon.js
 
 ## ✅ You're Done!
 
-Navigate to the dashboard. You should see the Rig Control panel (if enabled). 
+Navigate to the dashboard. You should see the Rig Control panel (if enabled).
 
 **Try it out:**
+
 - Click a spot on the **World Map**.
 - Click a row in the **DX Cluster** list.
 - Click a **POTA** or **SOTA** spot.

@@ -17,7 +17,7 @@
 import { apiFetch } from './apiFetch';
 
 let prefixes = null; // { PREFIX: { entity, dxcc, cq, itu, cont, lat, lon } }
-let exact = null;    // { CALLSIGN: { ... } }
+let exact = null; // { CALLSIGN: { ... } }
 let loaded = false;
 let loading = false;
 

@@ -7,7 +7,7 @@
     "dev": "npx vite",
     "electron": "electron .",
     "electron-builder": "electron-builder",
-    "build": "npx vite build",    
+    "build": "npx vite build",
     "preview": "npx vite preview",
     "prestart": "npm run build",
     "server": "node server.js",

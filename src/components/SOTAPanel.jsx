@@ -5,7 +5,8 @@
 import React from 'react';
 import CallsignLink from './CallsignLink.jsx';
 
-export const SOTAPanel = ({ data,
+export const SOTAPanel = ({
+  data,
   loading,
   lastUpdated,
   lastChecked,
@@ -13,7 +14,7 @@ export const SOTAPanel = ({ data,
   onToggleMap,
   showLabelsOnMap,
   onToggleLabelsOnMap = true,
-  onSpotClick
+  onSpotClick,
 }) => {
   const staleMinutes = lastUpdated ? Math.floor((Date.now() - lastUpdated) / 60000) : null;
   const isStale = staleMinutes !== null && staleMinutes >= 5;
@@ -26,16 +27,29 @@ export const SOTAPanel = ({ data,
   }
   return (
     <div className="panel" style={{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="panel-header" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '6px',
-        fontSize: '11px'
-      }}>
+      <div
+        className="panel-header"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '6px',
+          fontSize: '11px',
+        }}
+      >
         <span>
           ⛰ SOTA ACTIVATORS {data?.length > 0 ? `(${data.length})` : ''}
-          {checkedTime && <span style={{ color: isStale ? (staleMinutes >= 10 ? '#ff4444' : '#ffaa00') : '#666', marginLeft: '6px', fontSize: '9px' }}>{isStale ? `⚠ ${staleMinutes}m stale` : `✓${checkedTime}`}</span>}
+          {checkedTime && (
+            <span
+              style={{
+                color: isStale ? (staleMinutes >= 10 ? '#ff4444' : '#ffaa00') : '#666',
+                marginLeft: '6px',
+                fontSize: '9px',
+              }}
+            >
+              {isStale ? `⚠ ${staleMinutes}m stale` : `✓${checkedTime}`}
+            </span>
+          )}
         </span>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
@@ -49,7 +63,7 @@ export const SOTAPanel = ({ data,
               borderRadius: '3px',
               fontSize: '9px',
               fontFamily: 'JetBrains Mono',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             ⊞ Map {showOnMap ? 'ON' : 'OFF'}
@@ -67,7 +81,7 @@ export const SOTAPanel = ({ data,
                 borderRadius: '3px',
                 fontSize: '9px',
                 fontFamily: 'JetBrains Mono',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               ⊞ Calls {showLabelsOnMap ? 'ON' : 'OFF'}
@@ -93,16 +107,32 @@ export const SOTAPanel = ({ data,
                   gap: '4px',
                   padding: '3px 0',
                   borderBottom: i < data.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span style={{ color: '#ff9632', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    color: '#ff9632',
+                    fontWeight: '600',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   <CallsignLink call={spot.call} color="#ff9632" fontWeight="600" />
                 </span>
-                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  title={spot.summit ? `${spot.ref} — ${spot.summit}${spot.points ? ` (${spot.points}pt)` : ''}` : spot.ref}
+                <span
+                  style={{
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={
+                    spot.summit ? `${spot.ref} — ${spot.summit}${spot.points ? ` (${spot.points}pt)` : ''}` : spot.ref
+                  }
                 >
                   {spot.ref}
                 </span>
@@ -119,9 +149,7 @@ export const SOTAPanel = ({ data,
                     }
                   })()}
                 </span>
-                <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '9px' }}>
-                  {spot.time}
-                </span>
+                <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '9px' }}>{spot.time}</span>
               </div>
             ))}
           </div>

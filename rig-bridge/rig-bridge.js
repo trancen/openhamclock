@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
  * OpenHamClock Rig Bridge v1.0.0
- * 
+ *
  * Standalone bridge that talks DIRECTLY to your radio via USB serial.
  * No flrig, no rigctld, no Node.js install needed (when compiled with pkg).
- * 
+ *
  * Supports: Yaesu (FT-991A, FT-891, FT-710, FT-DX10, FT-DX101, etc.)
  *           Kenwood (TS-890, TS-590, TS-2000, etc.)
  *           Icom (IC-7300, IC-7610, IC-9700, IC-705, etc.)
  *           + Legacy flrig/rigctld backends
- * 
+ *
  * Usage:  node rig-bridge.js          (then open http://localhost:5555 to configure)
  *         ohc-rig-bridge-win.exe      (compiled standalone)
  */
@@ -21,22 +21,20 @@ const path = require('path');
 const net = require('net');
 
 // ─── Portable config path (works in pkg snapshots too) ───
-const CONFIG_DIR = process.pkg
-  ? path.dirname(process.execPath)
-  : __dirname;
+const CONFIG_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
 const CONFIG_PATH = path.join(CONFIG_DIR, 'rig-bridge-config.json');
 
 // ─── Defaults ───
 const DEFAULT_CONFIG = {
   port: 5555,
   radio: {
-    type: 'none',          // none | yaesu | kenwood | icom | flrig | rigctld
-    serialPort: '',        // COM3, /dev/ttyUSB0, etc.
+    type: 'none', // none | yaesu | kenwood | icom | flrig | rigctld
+    serialPort: '', // COM3, /dev/ttyUSB0, etc.
     baudRate: 38400,
     dataBits: 8,
-    stopBits: 2,           // Yaesu default; Icom/Kenwood typically 1
+    stopBits: 2, // Yaesu default; Icom/Kenwood typically 1
     parity: 'none',
-    icomAddress: '0x94',   // Default CI-V address for IC-7300
+    icomAddress: '0x94', // Default CI-V address for IC-7300
     pollInterval: 500,
     pttEnabled: false,
     // Legacy backend settings
@@ -44,7 +42,7 @@ const DEFAULT_CONFIG = {
     rigctldPort: 4532,
     flrigHost: '127.0.0.1',
     flrigPort: 12345,
-  }
+  },
 };
 
 // ─── Load / save config ───
@@ -56,7 +54,7 @@ function loadConfig() {
       config = {
         ...DEFAULT_CONFIG,
         ...raw,
-        radio: { ...DEFAULT_CONFIG.radio, ...(raw.radio || {}) }
+        radio: { ...DEFAULT_CONFIG.radio, ...(raw.radio || {}) },
       };
       console.log(`[Config] Loaded from ${CONFIG_PATH}`);
     }
@@ -94,7 +92,7 @@ const state = {
 let sseClients = [];
 function broadcast(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
-  sseClients.forEach(c => c.res.write(msg));
+  sseClients.forEach((c) => c.res.write(msg));
 }
 function updateState(prop, value) {
   if (state[prop] !== value) {
@@ -131,7 +129,7 @@ async function listPorts() {
   try {
     const { SerialPort: SP } = require('serialport');
     const ports = await SP.list();
-    return ports.map(p => ({
+    return ports.map((p) => ({
       path: p.path,
       manufacturer: p.manufacturer || '',
       serialNumber: p.serialNumber || '',
@@ -153,7 +151,7 @@ function connectSerial() {
   disconnectSerial();
 
   console.log(`[Serial] Opening ${config.radio.serialPort} at ${config.radio.baudRate} baud...`);
-  
+
   serialConnection = new SP({
     path: config.radio.serialPort,
     baudRate: config.radio.baudRate,
@@ -207,7 +205,9 @@ function connectSerial() {
 function disconnectSerial() {
   stopPolling();
   if (serialConnection && serialConnection.isOpen) {
-    try { serialConnection.close(); } catch (e) {}
+    try {
+      serialConnection.close();
+    } catch (e) {}
   }
   serialConnection = null;
 }
@@ -223,11 +223,17 @@ function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => {
     if (!serialConnection || !serialConnection.isOpen) return;
-    
+
     switch (config.radio.type) {
-      case 'yaesu':   pollYaesu(); break;
-      case 'kenwood':  pollKenwood(); break;
-      case 'icom':     pollIcom(); break;
+      case 'yaesu':
+        pollYaesu();
+        break;
+      case 'kenwood':
+        pollKenwood();
+        break;
+      case 'icom':
+        pollIcom();
+        break;
     }
   }, config.radio.pollInterval || 500);
 }
@@ -246,7 +252,7 @@ function stopPolling() {
 // ═══════════════════════════════════════════════════════
 
 function pollYaesu() {
-  // FA = read VFO-A freq, MD0 = read main mode  
+  // FA = read VFO-A freq, MD0 = read main mode
   // More reliable across models than IF which varies in format
   serialWrite('FA;');
   // Stagger mode query slightly to avoid buffer collisions
@@ -258,7 +264,7 @@ function processAsciiBuffer() {
   while ((idx = rxBuffer.indexOf(';')) !== -1) {
     const response = rxBuffer.substring(0, idx);
     rxBuffer = rxBuffer.substring(idx + 1);
-    
+
     if (config.radio.type === 'yaesu') {
       parseYaesuResponse(response);
     } else if (config.radio.type === 'kenwood') {
@@ -319,14 +325,26 @@ function parseYaesuResponse(resp) {
 }
 
 const YAESU_MODES = {
-  '1': 'LSB', '2': 'USB', '3': 'CW', '4': 'FM',
-  '5': 'AM', '6': 'RTTY-LSB', '7': 'CW-R', '8': 'DATA-LSB',
-  '9': 'RTTY-USB', 'A': 'DATA-FM', 'B': 'FM-N', 'C': 'DATA-USB',
-  'D': 'AM-N', 'E': 'C4FM'
+  1: 'LSB',
+  2: 'USB',
+  3: 'CW',
+  4: 'FM',
+  5: 'AM',
+  6: 'RTTY-LSB',
+  7: 'CW-R',
+  8: 'DATA-LSB',
+  9: 'RTTY-USB',
+  A: 'DATA-FM',
+  B: 'FM-N',
+  C: 'DATA-USB',
+  D: 'AM-N',
+  E: 'C4FM',
 };
 
 const YAESU_MODE_REVERSE = {};
-Object.entries(YAESU_MODES).forEach(([k, v]) => { YAESU_MODE_REVERSE[v] = k; });
+Object.entries(YAESU_MODES).forEach(([k, v]) => {
+  YAESU_MODE_REVERSE[v] = k;
+});
 
 function yaesuSetFreq(hz) {
   const padded = String(Math.round(hz)).padStart(9, '0');
@@ -339,10 +357,22 @@ function yaesuSetMode(mode) {
   // Try common aliases
   if (!digit) {
     const aliases = {
-      'USB': '2', 'LSB': '1', 'CW': '3', 'CW-R': '7',
-      'FM': '4', 'AM': '5', 'DATA-USB': 'C', 'DATA-LSB': '8',
-      'RTTY': '6', 'RTTY-R': '9', 'FT8': 'C', 'FT4': 'C',
-      'DIGI': 'C', 'SSB': '2', 'PSK': 'C', 'JT65': 'C',
+      USB: '2',
+      LSB: '1',
+      CW: '3',
+      'CW-R': '7',
+      FM: '4',
+      AM: '5',
+      'DATA-USB': 'C',
+      'DATA-LSB': '8',
+      RTTY: '6',
+      'RTTY-R': '9',
+      FT8: 'C',
+      FT4: 'C',
+      DIGI: 'C',
+      SSB: '2',
+      PSK: 'C',
+      JT65: 'C',
     };
     digit = aliases[mode.toUpperCase()];
   }
@@ -405,13 +435,22 @@ function parseKenwoodResponse(resp) {
 }
 
 const KENWOOD_MODES = {
-  '1': 'LSB', '2': 'USB', '3': 'CW', '4': 'FM',
-  '5': 'AM', '6': 'FSK', '7': 'CW-R', '8': 'DATA-LSB',
-  '9': 'FSK-R', 'A': 'DATA-USB'
+  1: 'LSB',
+  2: 'USB',
+  3: 'CW',
+  4: 'FM',
+  5: 'AM',
+  6: 'FSK',
+  7: 'CW-R',
+  8: 'DATA-LSB',
+  9: 'FSK-R',
+  A: 'DATA-USB',
 };
 
 const KENWOOD_MODE_REVERSE = {};
-Object.entries(KENWOOD_MODES).forEach(([k, v]) => { KENWOOD_MODE_REVERSE[v] = k; });
+Object.entries(KENWOOD_MODES).forEach(([k, v]) => {
+  KENWOOD_MODE_REVERSE[v] = k;
+});
 
 function kenwoodSetFreq(hz) {
   const padded = String(Math.round(hz)).padStart(11, '0');
@@ -422,9 +461,18 @@ function kenwoodSetMode(mode) {
   let digit = KENWOOD_MODE_REVERSE[mode];
   if (!digit) {
     const aliases = {
-      'USB': '2', 'LSB': '1', 'CW': '3', 'CW-R': '7',
-      'FM': '4', 'AM': '5', 'DATA-USB': 'A', 'DATA-LSB': '8',
-      'FT8': 'A', 'FT4': 'A', 'DIGI': 'A', 'PSK': 'A',
+      USB: '2',
+      LSB: '1',
+      CW: '3',
+      'CW-R': '7',
+      FM: '4',
+      AM: '5',
+      'DATA-USB': 'A',
+      'DATA-LSB': '8',
+      FT8: 'A',
+      FT4: 'A',
+      DIGI: 'A',
+      PSK: 'A',
     };
     digit = aliases[mode.toUpperCase()];
   }
@@ -441,7 +489,7 @@ function kenwoodSetPTT(on) {
 // Binary protocol: FE FE [to] [from] [cmd] [sub] [data...] FD
 // ═══════════════════════════════════════════════════════
 
-const ICOM_CONTROLLER = 0xE0; // Our address (controller)
+const ICOM_CONTROLLER = 0xe0; // Our address (controller)
 
 function getIcomAddress() {
   const addr = config.radio.icomAddress || '0x94';
@@ -450,10 +498,10 @@ function getIcomAddress() {
 
 function icomBuildCmd(cmd, sub, data = []) {
   const to = getIcomAddress();
-  const packet = [0xFE, 0xFE, to, ICOM_CONTROLLER, cmd];
+  const packet = [0xfe, 0xfe, to, ICOM_CONTROLLER, cmd];
   if (sub !== undefined && sub !== null) packet.push(sub);
   packet.push(...data);
-  packet.push(0xFD);
+  packet.push(0xfd);
   return Buffer.from(packet);
 }
 
@@ -469,12 +517,15 @@ function handleIcomData(data) {
 
   while (true) {
     // Find start of frame
-    const start = rxBinaryBuffer.indexOf(0xFE);
-    if (start === -1) { rxBinaryBuffer = Buffer.alloc(0); return; }
+    const start = rxBinaryBuffer.indexOf(0xfe);
+    if (start === -1) {
+      rxBinaryBuffer = Buffer.alloc(0);
+      return;
+    }
     if (start > 0) rxBinaryBuffer = rxBinaryBuffer.slice(start);
 
     // Need at least FE FE ... FD
-    const end = rxBinaryBuffer.indexOf(0xFD, 2);
+    const end = rxBinaryBuffer.indexOf(0xfd, 2);
     if (end === -1) return; // Wait for more data
 
     const frame = rxBinaryBuffer.slice(0, end + 1);
@@ -482,7 +533,7 @@ function handleIcomData(data) {
 
     // Skip preamble FE FE
     if (frame.length < 6) continue;
-    if (frame[0] !== 0xFE || frame[1] !== 0xFE) continue;
+    if (frame[0] !== 0xfe || frame[1] !== 0xfe) continue;
 
     const to = frame[2];
     const from = frame[3];
@@ -493,7 +544,8 @@ function handleIcomData(data) {
 
     switch (cmd) {
       case 0x03: // Frequency response
-      case 0x00: { // Freq update (unsolicited)
+      case 0x00: {
+        // Freq update (unsolicited)
         if (frame.length >= 10) {
           const freq = icomBCDToFreq(frame.slice(5, 10));
           if (freq > 0) updateState('freq', freq);
@@ -501,7 +553,8 @@ function handleIcomData(data) {
         break;
       }
       case 0x04: // Mode response
-      case 0x01: { // Mode update
+      case 0x01: {
+        // Mode update
         if (frame.length >= 7) {
           const mode = ICOM_MODES[frame[5]] || state.mode;
           updateState('mode', mode);
@@ -511,10 +564,12 @@ function handleIcomData(data) {
         }
         break;
       }
-      case 0xFB: { // OK acknowledgment
+      case 0xfb: {
+        // OK acknowledgment
         break;
       }
-      case 0xFA: { // NG (error)
+      case 0xfa: {
+        // NG (error)
         console.warn('[Icom] Command rejected (NG)');
         break;
       }
@@ -527,8 +582,8 @@ function icomBCDToFreq(bytes) {
   let freq = 0;
   let mult = 1;
   for (let i = 0; i < bytes.length; i++) {
-    const lo = bytes[i] & 0x0F;
-    const hi = (bytes[i] >> 4) & 0x0F;
+    const lo = bytes[i] & 0x0f;
+    const hi = (bytes[i] >> 4) & 0x0f;
     freq += lo * mult;
     mult *= 10;
     freq += hi * mult;
@@ -541,22 +596,34 @@ function icomFreqToBCD(freq) {
   const bytes = [];
   let f = Math.round(freq);
   for (let i = 0; i < 5; i++) {
-    const lo = f % 10; f = Math.floor(f / 10);
-    const hi = f % 10; f = Math.floor(f / 10);
+    const lo = f % 10;
+    f = Math.floor(f / 10);
+    const hi = f % 10;
+    f = Math.floor(f / 10);
     bytes.push((hi << 4) | lo);
   }
   return bytes;
 }
 
 const ICOM_MODES = {
-  0x00: 'LSB', 0x01: 'USB', 0x02: 'AM', 0x03: 'CW',
-  0x04: 'RTTY', 0x05: 'FM', 0x06: 'WFM', 0x07: 'CW-R',
-  0x08: 'RTTY-R', 0x11: 'DATA-LSB', 0x12: 'DATA-USB',
+  0x00: 'LSB',
+  0x01: 'USB',
+  0x02: 'AM',
+  0x03: 'CW',
+  0x04: 'RTTY',
+  0x05: 'FM',
+  0x06: 'WFM',
+  0x07: 'CW-R',
+  0x08: 'RTTY-R',
+  0x11: 'DATA-LSB',
+  0x12: 'DATA-USB',
   0x17: 'DATA-FM',
 };
 
 const ICOM_MODE_REVERSE = {};
-Object.entries(ICOM_MODES).forEach(([k, v]) => { ICOM_MODE_REVERSE[v] = parseInt(k); });
+Object.entries(ICOM_MODES).forEach(([k, v]) => {
+  ICOM_MODE_REVERSE[v] = parseInt(k);
+});
 
 function icomSetFreq(hz) {
   const bcd = icomFreqToBCD(hz);
@@ -567,10 +634,20 @@ function icomSetMode(mode) {
   let code = ICOM_MODE_REVERSE[mode];
   if (code === undefined) {
     const aliases = {
-      'USB': 0x01, 'LSB': 0x00, 'CW': 0x03, 'CW-R': 0x07,
-      'FM': 0x05, 'AM': 0x02, 'DATA-USB': 0x12, 'DATA-LSB': 0x11,
-      'FT8': 0x12, 'FT4': 0x12, 'DIGI': 0x12, 'PSK': 0x12,
-      'RTTY': 0x04, 'RTTY-R': 0x08,
+      USB: 0x01,
+      LSB: 0x00,
+      CW: 0x03,
+      'CW-R': 0x07,
+      FM: 0x05,
+      AM: 0x02,
+      'DATA-USB': 0x12,
+      'DATA-LSB': 0x11,
+      FT8: 0x12,
+      FT4: 0x12,
+      DIGI: 0x12,
+      PSK: 0x12,
+      RTTY: 0x04,
+      'RTTY-R': 0x08,
     };
     code = aliases[mode.toUpperCase()];
   }
@@ -581,7 +658,7 @@ function icomSetMode(mode) {
 }
 
 function icomSetPTT(on) {
-  serialWrite(icomBuildCmd(0x1C, 0x00, [on ? 0x01 : 0x00]));
+  serialWrite(icomBuildCmd(0x1c, 0x00, [on ? 0x01 : 0x00]));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -636,7 +713,10 @@ function startRigctldPoll() {
 }
 
 function rigctldSend(cmd, cb) {
-  if (!rigctldSocket) { if (cb) cb(new Error('Not connected')); return; }
+  if (!rigctldSocket) {
+    if (cb) cb(new Error('Not connected'));
+    return;
+  }
   rigctldQueue.push({ cmd, cb });
   rigctldProcess();
 }
@@ -716,10 +796,18 @@ function startFlrigPoll() {
 
 function setFreq(hz) {
   switch (config.radio.type) {
-    case 'yaesu':   yaesuSetFreq(hz); break;
-    case 'kenwood':  kenwoodSetFreq(hz); break;
-    case 'icom':     icomSetFreq(hz); break;
-    case 'rigctld':  rigctldSend(`F ${hz}`); break;
+    case 'yaesu':
+      yaesuSetFreq(hz);
+      break;
+    case 'kenwood':
+      kenwoodSetFreq(hz);
+      break;
+    case 'icom':
+      icomSetFreq(hz);
+      break;
+    case 'rigctld':
+      rigctldSend(`F ${hz}`);
+      break;
     case 'flrig':
       if (flrigClient) flrigClient.methodCall('rig.set_frequency', [parseFloat(hz) + 0.1], () => {});
       break;
@@ -728,10 +816,18 @@ function setFreq(hz) {
 
 function setModeCmd(mode) {
   switch (config.radio.type) {
-    case 'yaesu':   yaesuSetMode(mode); break;
-    case 'kenwood':  kenwoodSetMode(mode); break;
-    case 'icom':     icomSetMode(mode); break;
-    case 'rigctld':  rigctldSend(`M ${mode} 0`); break;
+    case 'yaesu':
+      yaesuSetMode(mode);
+      break;
+    case 'kenwood':
+      kenwoodSetMode(mode);
+      break;
+    case 'icom':
+      icomSetMode(mode);
+      break;
+    case 'rigctld':
+      rigctldSend(`M ${mode} 0`);
+      break;
     case 'flrig':
       if (flrigClient) flrigClient.methodCall('rig.set_mode', [mode], () => {});
       break;
@@ -744,10 +840,18 @@ function setPTTCmd(on) {
     return false;
   }
   switch (config.radio.type) {
-    case 'yaesu':   yaesuSetPTT(on); break;
-    case 'kenwood':  kenwoodSetPTT(on); break;
-    case 'icom':     icomSetPTT(on); break;
-    case 'rigctld':  rigctldSend(on ? 'T 1' : 'T 0'); break;
+    case 'yaesu':
+      yaesuSetPTT(on);
+      break;
+    case 'kenwood':
+      kenwoodSetPTT(on);
+      break;
+    case 'icom':
+      icomSetPTT(on);
+      break;
+    case 'rigctld':
+      rigctldSend(on ? 'T 1' : 'T 0');
+      break;
     case 'flrig':
       if (flrigClient) flrigClient.methodCall('rig.set_ptt', [on ? 1 : 0], () => {});
       break;
@@ -762,7 +866,7 @@ function setPTTCmd(on) {
 function startConnection() {
   stopConnection();
   console.log(`[Bridge] Starting connection, type: ${config.radio.type}`);
-  
+
   switch (config.radio.type) {
     case 'yaesu':
     case 'kenwood':
@@ -785,7 +889,12 @@ function startConnection() {
 function stopConnection() {
   stopPolling();
   disconnectSerial();
-  if (rigctldSocket) { try { rigctldSocket.destroy(); } catch(e) {} rigctldSocket = null; }
+  if (rigctldSocket) {
+    try {
+      rigctldSocket.destroy();
+    } catch (e) {}
+    rigctldSocket = null;
+  }
   flrigClient = null;
   rigctldQueue = [];
   rigctldPending = null;
@@ -828,10 +937,10 @@ app.post('/api/config', (req, res) => {
     config.radio = { ...config.radio, ...newConfig.radio };
   }
   saveConfig();
-  
+
   // Restart connection with new config
   startConnection();
-  
+
   res.json({ success: true, config });
 });
 
@@ -840,7 +949,7 @@ app.post('/api/test', async (req, res) => {
   // Quick serial port test
   const testPort = req.body.serialPort || config.radio.serialPort;
   const testBaud = req.body.baudRate || config.radio.baudRate;
-  
+
   const SP = getSerialPort();
   if (!SP) return res.json({ success: false, error: 'serialport module not available' });
 
@@ -850,7 +959,7 @@ app.post('/api/test', async (req, res) => {
       baudRate: testBaud,
       autoOpen: false,
     });
-    
+
     testConn.open((err) => {
       if (err) {
         return res.json({ success: false, error: err.message });
@@ -880,7 +989,7 @@ app.get('/stream', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'Access-Control-Allow-Origin': '*',
   });
 
@@ -898,7 +1007,7 @@ app.get('/stream', (req, res) => {
   sseClients.push({ id: clientId, res });
 
   req.on('close', () => {
-    sseClients = sseClients.filter(c => c.id !== clientId);
+    sseClients = sseClients.filter((c) => c.id !== clientId);
   });
 });
 

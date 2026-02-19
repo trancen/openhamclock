@@ -574,9 +574,7 @@ describe('dxClusterFilters', () => {
     });
 
     it('should return original array when filters is null', () => {
-      const paths = [
-        { dxCall: 'W1AW', spotter: 'K2ABC', freq: '14.074', comment: 'FT8' },
-      ];
+      const paths = [{ dxCall: 'W1AW', spotter: 'K2ABC', freq: '14.074', comment: 'FT8' }];
       const result = filterDXPaths(paths, null);
       expect(result).toEqual(paths);
     });

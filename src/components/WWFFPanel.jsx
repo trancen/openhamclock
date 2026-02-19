@@ -22,16 +22,29 @@ export const WWFFPanel = ({
 
   return (
     <div className="panel" style={{ padding: '8px', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="panel-header" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '6px',
-        fontSize: '11px'
-      }}>
+      <div
+        className="panel-header"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '6px',
+          fontSize: '11px',
+        }}
+      >
         <span>
           ▲ WWFF ACTIVATORS {data?.length > 0 ? `(${data.length})` : ''}
-          {checkedTime && <span style={{ color: isStale ? (staleMinutes >= 10 ? '#ff4444' : '#ffaa00') : '#666', marginLeft: '6px', fontSize: '9px' }}>{isStale ? `⚠ ${staleMinutes}m stale` : `✓${checkedTime}`}</span>}
+          {checkedTime && (
+            <span
+              style={{
+                color: isStale ? (staleMinutes >= 10 ? '#ff4444' : '#ffaa00') : '#666',
+                marginLeft: '6px',
+                fontSize: '9px',
+              }}
+            >
+              {isStale ? `⚠ ${staleMinutes}m stale` : `✓${checkedTime}`}
+            </span>
+          )}
         </span>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
@@ -45,7 +58,7 @@ export const WWFFPanel = ({
               borderRadius: '3px',
               fontSize: '9px',
               fontFamily: 'JetBrains Mono',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             ⊞ Map {showOnMap ? 'ON' : 'OFF'}
@@ -63,7 +76,7 @@ export const WWFFPanel = ({
                 borderRadius: '3px',
                 fontSize: '9px',
                 fontFamily: 'JetBrains Mono',
-                cursor: 'pointer'
+                cursor: 'pointer',
               }}
             >
               ⊞ Calls {showLabelsOnMap ? 'ON' : 'OFF'}
@@ -89,13 +102,28 @@ export const WWFFPanel = ({
                   gap: '4px',
                   padding: '3px 0',
                   borderBottom: i < data.length - 1 ? '1px solid var(--border-color)' : 'none',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
                 }}
               >
-                <span style={{ color: '#44cc44', fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    color: '#44cc44',
+                    fontWeight: '600',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   <CallsignLink call={spot.call} color="#44cc44" fontWeight="600" />
                 </span>
-                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    color: 'var(--text-muted)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {spot.ref}
                 </span>
                 <span style={{ color: 'var(--accent-cyan)', textAlign: 'right' }}>
@@ -111,9 +139,7 @@ export const WWFFPanel = ({
                     }
                   })()}
                 </span>
-                <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '9px' }}>
-                  {spot.time}
-                </span>
+                <span style={{ color: 'var(--text-muted)', textAlign: 'right', fontSize: '9px' }}>{spot.time}</span>
               </div>
             ))}
           </div>

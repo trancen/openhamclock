@@ -1,6 +1,6 @@
 /**
  * OpenHamClock Electron Main Process
- * 
+ *
  * Creates a native desktop application wrapper for OpenHamClock
  * Supports Windows, macOS, Linux, and Raspberry Pi
  */
@@ -21,13 +21,13 @@ if (!isDev) {
   const express = require('express');
   const serverApp = express();
   const PORT = 3847; // Use a unique port for embedded server
-  
+
   const staticDir = path.join(__dirname, '..', 'dist');
   serverApp.use(express.static(staticDir));
   serverApp.get('*', (req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));
   });
-  
+
   server = serverApp.listen(PORT, () => {
     console.log(`Embedded server running on port ${PORT}`);
   });
@@ -35,14 +35,10 @@ if (!isDev) {
 
 function createWindow() {
   // Determine the URL to load
-  const loadURL = isDev 
-    ? 'http://localhost:3000' 
-    : `http://localhost:3847`;
+  const loadURL = isDev ? 'http://localhost:3000' : `http://localhost:3847`;
 
   // Create the browser window
-  const assetDir = isDev
-    ? path.join(__dirname, '..', 'public')
-    : path.join(__dirname, '..', 'dist');
+  const assetDir = isDev ? path.join(__dirname, '..', 'public') : path.join(__dirname, '..', 'dist');
 
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -105,7 +101,7 @@ function createMenu() {
             if (mainWindow) {
               mainWindow.webContents.reload();
             }
-          }
+          },
         },
         { type: 'separator' },
         {
@@ -115,11 +111,11 @@ function createMenu() {
             if (mainWindow) {
               mainWindow.setFullScreen(!mainWindow.isFullScreen());
             }
-          }
+          },
         },
         { type: 'separator' },
-        { role: 'quit' }
-      ]
+        { role: 'quit' },
+      ],
     },
     {
       label: 'View',
@@ -131,8 +127,8 @@ function createMenu() {
         { role: 'zoomIn' },
         { role: 'zoomOut' },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
-      ]
+        { role: 'togglefullscreen' },
+      ],
     },
     {
       label: 'Map',
@@ -140,44 +136,44 @@ function createMenu() {
         {
           label: 'Dark Theme',
           accelerator: '1',
-          click: () => sendMapStyle('dark')
+          click: () => sendMapStyle('dark'),
         },
         {
           label: 'Satellite',
           accelerator: '2',
-          click: () => sendMapStyle('satellite')
+          click: () => sendMapStyle('satellite'),
         },
         {
           label: 'Terrain',
           accelerator: '3',
-          click: () => sendMapStyle('terrain')
+          click: () => sendMapStyle('terrain'),
         },
         {
           label: 'Streets',
           accelerator: '4',
-          click: () => sendMapStyle('streets')
+          click: () => sendMapStyle('streets'),
         },
         {
           label: 'Topographic',
           accelerator: '5',
-          click: () => sendMapStyle('topo')
+          click: () => sendMapStyle('topo'),
         },
         {
           label: 'Ocean',
           accelerator: '6',
-          click: () => sendMapStyle('ocean')
+          click: () => sendMapStyle('ocean'),
         },
         {
           label: 'National Geographic',
           accelerator: '7',
-          click: () => sendMapStyle('natgeo')
+          click: () => sendMapStyle('natgeo'),
         },
         {
           label: 'Gray',
           accelerator: '8',
-          click: () => sendMapStyle('gray')
-        }
-      ]
+          click: () => sendMapStyle('gray'),
+        },
+      ],
     },
     {
       label: 'Help',
@@ -190,22 +186,23 @@ function createMenu() {
               type: 'info',
               title: 'About OpenHamClock',
               message: 'OpenHamClock v3.0.0',
-              detail: 'An open-source amateur radio dashboard.\n\nIn memory of Elwood Downey, WB0OEW, creator of the original HamClock.\n\n73 de the OpenHamClock community!'
+              detail:
+                'An open-source amateur radio dashboard.\n\nIn memory of Elwood Downey, WB0OEW, creator of the original HamClock.\n\n73 de the OpenHamClock community!',
             });
-          }
+          },
         },
         {
           label: 'GitHub Repository',
           click: () => {
             shell.openExternal('https://github.com/accius/openhamclock');
-          }
+          },
         },
         { type: 'separator' },
         {
           label: 'Report Issue',
           click: () => {
             shell.openExternal('https://github.com/accius/openhamclock/issues/new');
-          }
+          },
         },
         { type: 'separator' },
         {
@@ -215,10 +212,10 @@ function createMenu() {
             if (mainWindow) {
               mainWindow.webContents.toggleDevTools();
             }
-          }
-        }
-      ]
-    }
+          },
+        },
+      ],
+    },
   ];
 
   // macOS specific menu adjustments
@@ -234,8 +231,8 @@ function createMenu() {
         { role: 'hideOthers' },
         { role: 'unhide' },
         { type: 'separator' },
-        { role: 'quit' }
-      ]
+        { role: 'quit' },
+      ],
     });
   }
 

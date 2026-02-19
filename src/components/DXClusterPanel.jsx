@@ -34,19 +34,10 @@ export const DXClusterPanel = ({
 
     const hh = parseInt(m[1], 10);
     const mm = parseInt(m[2], 10);
-    if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh > 23 || mm > 59)
-      return null;
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh > 23 || mm > 59) return null;
 
     const now = new Date();
-    let ts = Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      hh,
-      mm,
-      0,
-      0,
-    );
+    let ts = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hh, mm, 0, 0);
 
     // Handle day rollover near UTC midnight.
     if (ts - Date.now() > 5 * 60 * 1000) {
@@ -93,7 +84,7 @@ export const DXClusterPanel = ({
 
   return (
     <div
-      className='panel'
+      className="panel"
       style={{
         padding: '10px',
         display: 'flex',
@@ -115,14 +106,9 @@ export const DXClusterPanel = ({
         }}
       >
         <span>
-          <IconGlobe
-            size={12}
-            style={{ verticalAlign: 'middle', marginRight: '4px' }}
-          />
+          <IconGlobe size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
           {t('dxClusterPanel.title')}{' '}
-          <span style={{ color: 'var(--accent-green)', fontSize: '10px' }}>
-            ● {t('dxClusterPanel.live')}
-          </span>
+          <span style={{ color: 'var(--accent-green)', fontSize: '10px' }}>● {t('dxClusterPanel.live')}</span>
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
@@ -132,10 +118,7 @@ export const DXClusterPanel = ({
             onClick={onOpenFilters}
             title={t('dxClusterPanel.filterTooltip')}
             style={{
-              background:
-                filterCount > 0
-                  ? 'rgba(255, 170, 0, 0.3)'
-                  : 'rgba(100, 100, 100, 0.3)',
+              background: filterCount > 0 ? 'rgba(255, 170, 0, 0.3)' : 'rgba(100, 100, 100, 0.3)',
               border: `1px solid ${filterCount > 0 ? '#ffaa00' : '#666'}`,
               color: filterCount > 0 ? '#ffaa00' : '#888',
               padding: '2px 8px',
@@ -145,23 +128,14 @@ export const DXClusterPanel = ({
               cursor: 'pointer',
             }}
           >
-            <IconSearch
-              size={10}
-              style={{ verticalAlign: 'middle', marginRight: '3px' }}
-            />
+            <IconSearch size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
             {t('dxClusterPanel.filtersButton')}
           </button>
           <button
             onClick={onToggleMap}
-            title={
-              showOnMap
-                ? t('dxClusterPanel.mapToggleHide')
-                : t('dxClusterPanel.mapToggleShow')
-            }
+            title={showOnMap ? t('dxClusterPanel.mapToggleHide') : t('dxClusterPanel.mapToggleShow')}
             style={{
-              background: showOnMap
-                ? 'rgba(68, 136, 255, 0.3)'
-                : 'rgba(100, 100, 100, 0.3)',
+              background: showOnMap ? 'rgba(68, 136, 255, 0.3)' : 'rgba(100, 100, 100, 0.3)',
               border: `1px solid ${showOnMap ? '#4488ff' : '#666'}`,
               color: showOnMap ? '#4488ff' : '#888',
               padding: '2px 8px',
@@ -171,13 +145,8 @@ export const DXClusterPanel = ({
               cursor: 'pointer',
             }}
           >
-            <IconMap
-              size={10}
-              style={{ verticalAlign: 'middle', marginRight: '3px' }}
-            />
-            {showOnMap
-              ? t('dxClusterPanel.mapToggleOn')
-              : t('dxClusterPanel.mapToggleOff')}
+            <IconMap size={10} style={{ verticalAlign: 'middle', marginRight: '3px' }} />
+            {showOnMap ? t('dxClusterPanel.mapToggleOn') : t('dxClusterPanel.mapToggleOff')}
           </button>
         </div>
       </div>
@@ -185,7 +154,7 @@ export const DXClusterPanel = ({
       {/* Quick search */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
         <input
-          type='text'
+          type="text"
           placeholder={t('dxClusterPanel.quickSearch')}
           value={filters?.callsign || ''}
           onChange={(e) =>
@@ -209,10 +178,8 @@ export const DXClusterPanel = ({
 
       {/* Spots list */}
       {loading ? (
-        <div
-          style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}
-        >
-          <div className='loading-spinner' />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+          <div className="loading-spinner" />
         </div>
       ) : spots.length === 0 ? (
         <div
@@ -223,9 +190,7 @@ export const DXClusterPanel = ({
             fontSize: '12px',
           }}
         >
-          {filterCount > 0
-            ? t('dxClusterPanel.noSpotsFiltered')
-            : t('dxClusterPanel.noSpots')}
+          {filterCount > 0 ? t('dxClusterPanel.noSpotsFiltered') : t('dxClusterPanel.noSpots')}
         </div>
       ) : (
         <div
@@ -279,9 +244,7 @@ export const DXClusterPanel = ({
                       : 'transparent',
                   cursor: 'pointer',
                   transition: 'background 0.15s',
-                  borderLeft: isHovered
-                    ? '2px solid #4488ff'
-                    : '2px solid transparent',
+                  borderLeft: isHovered ? '2px solid #4488ff' : '2px solid transparent',
                 }}
               >
                 <div style={{ color, fontWeight: '600' }}>{freqDisplay}</div>
@@ -294,11 +257,7 @@ export const DXClusterPanel = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  <CallsignLink
-                    call={spot.call}
-                    color='var(--text-primary)'
-                    fontWeight='700'
-                  />
+                  <CallsignLink call={spot.call} color="var(--text-primary)" fontWeight="700" />
                 </div>
                 <div
                   style={{
@@ -310,12 +269,7 @@ export const DXClusterPanel = ({
                     alignSelf: 'center',
                   }}
                 >
-                  de{' '}
-                  <CallsignLink
-                    call={spot.spotter || '?'}
-                    color='var(--text-muted)'
-                    fontSize='10px'
-                  />
+                  de <CallsignLink call={spot.spotter || '?'} color="var(--text-muted)" fontSize="10px" />
                 </div>
                 <div
                   style={{
