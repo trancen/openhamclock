@@ -1099,6 +1099,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     const pathData = filteredData.filter(
       (spot) => spot.isPath || (!spot.isAggregated && spot.receiverLat && spot.receiverLon),
     );
+    console.log('[WSPR DEBUG] pathData count:', pathData.length, 'filteredData:', filteredData.length);
 
     // Debug: Log grid squares when filter is enabled
     if (filterByGrid && gridFilter && filteredData.length > 0) {
