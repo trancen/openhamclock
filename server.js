@@ -6282,6 +6282,7 @@ app.get('/api/pskreporter/all', (req, res) => {
   
   // Filter by grids if specified (OR logic: senderGrid OR receiverGrid)
   if (senderGrid || receiverGrid) {
+    console.log(`[PSK-DEBUG] Filtering by senderGrid=${senderGrid}, receiverGrid=${receiverGrid}, total spots before=${allSpots.length}`);
     allSpots = allSpots.filter(spot => {
       const sGrid = spot.senderGrid?.substring(0, senderGrid?.length || 4)?.toUpperCase();
       const rGrid = spot.receiverGrid?.substring(0, receiverGrid?.length || 4)?.toUpperCase();
@@ -6296,6 +6297,7 @@ app.get('/api/pskreporter/all', (req, res) => {
       }
       return matches;
     });
+    console.log(`[PSK-DEBUG] Filtering by grids, spots after=${allSpots.length}`);
   }
   
   // Sort by timestamp descending
