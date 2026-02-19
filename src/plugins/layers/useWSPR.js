@@ -1366,6 +1366,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     if (filterByGrid && gridFilter && gridFilter.length >= 2) {
       const gridLoc = gridToLatLon(gridFilter);
       const gridBounds = gridToBounds(gridFilter);
+      console.log('[WSPR] Grid filter enabled:', gridFilter, 'bounds:', gridBounds);
 
       if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
         // Draw grid boundary rectangle
