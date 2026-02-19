@@ -1057,6 +1057,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         // Match prefix: FN matches FN03, FN02, FN21, etc.
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
+        console.log(
+          '[WSPR DEBUG] Grid:',
+          gridUpper,
+          'sender:',
+          senderGrid,
+          'rx:',
+          receiverGrid,
+          'match:',
+          senderMatch || receiverMatch,
+        );
 
         // Show if either TX or RX matches the grid prefix
         return senderMatch || receiverMatch;
