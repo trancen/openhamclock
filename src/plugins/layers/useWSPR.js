@@ -1079,6 +1079,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     console.log(
       `[WSPR Paths] Filtering: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", callsign="${callsign}", input=${wsprData.length}, output=${filteredData.length}`,
     );
+    console.log('[WSPR] About to render, filterByGrid:', filterByGrid, 'gridFilter:', gridFilter);
 
     // For aggregated data, only render actual paths (items with both sender and receiver coords)
     const pathData = filteredData.filter(
@@ -1369,7 +1370,8 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       console.log('[WSPR] Grid filter enabled:', gridFilter, 'bounds:', gridBounds);
 
       if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
-        // Draw grid boundary rectangle
+        console.log('[WSPR] Creating rectangle for bounds:', gridBounds);
+        // Draw grid boundary rectangle - make it more visible
         const gridRect = L.rectangle(
           [
             [gridBounds.minLat, gridBounds.minLon],
@@ -1377,23 +1379,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           ],
           {
             color: '#ff00ff',
-            weight: 2,
+            weight: 4,
             fillColor: '#ff00ff',
-            fillOpacity: 0.1,
-            dashArray: '5, 5',
+            fillOpacity: 0.25,
+            dashArray: null,
           },
         );
-        gridRect.bindPopup(`
-          <div style="font-family: 'JetBrains Mono', monospace; text-align: center;">
-            <b style="color: #ff00ff; font-size: 12px;">WSPR Grid</b><br>
-            <span style="font-size: 11px;">${gridFilter.toUpperCase()}</span><br>
-            <span style="font-size: 10px; opacity: 0.7;">
-              ${gridBounds.maxLat - gridBounds.minLat}° x ${gridBounds.maxLon - gridBounds.minLon}°
-            </span>
-          </div>
-        `);
+        console.log('[WSPR] Rectangle created, adding to map');
         gridRect.addTo(map);
         newPaths.push(gridRect);
+        console.log('[WSPR] Rectangle added to newPaths');
 
         // Larger marker with WSPR overlay
         const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
