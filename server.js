@@ -6249,8 +6249,10 @@ app.get('/api/pskreporter/all', (req, res) => {
     if (pskMqtt.connected && pskMqtt.client && gridsToSubscribe.length > 0) {
       const topics = [];
       for (const grid of gridsToSubscribe) {
-        topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);
-        topics.push(`pskr/filter/v2/+/WSPR/+/${grid}/#`);
+        // Topic: pskr/filter/v2/{band}/{mode}/{sendercall}/{receivercall}/{senderlocator}/{receiverlocator}/...
+        // Match spots where senderlocator (pos 8) OR receiverlocator (pos 9) starts with grid
+        topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);   // senderlocator = grid
+        topics.push(`pskr/filter/v2/+/WSPR/+/+/+/${grid}/#`); // receiverlocator = grid
       }
       pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
         if (!err) {
