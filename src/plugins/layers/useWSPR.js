@@ -1080,6 +1080,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       `[WSPR Paths] Filtering: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", callsign="${callsign}", input=${wsprData.length}, output=${filteredData.length}`,
     );
     console.log('[WSPR] About to render, filterByGrid:', filterByGrid, 'gridFilter:', gridFilter);
+    console.log('[WSPR] DEBUG: This is the NEW code with rectangle - please show me!');
 
     // For aggregated data, only render actual paths (items with both sender and receiver coords)
     const pathData = filteredData.filter(
