@@ -7243,7 +7243,7 @@ function aggregateWSPRByGrid(spots) {
       bands: p.bands,
     }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 200);
+    .slice(0, 1000);
 
   // Band activity summary
   const bandActivity = {};
