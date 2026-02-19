@@ -66,6 +66,45 @@ function gridToLatLon(grid) {
   return { lat: latitude, lon: longitude };
 }
 
+// Get grid boundary coordinates (min/max lat/lon)
+function gridToBounds(grid) {
+  if (!grid || grid.length < 4) return null;
+
+  grid = grid.toUpperCase();
+  // Field (first letter): 20° x 10°
+  const lon = (grid.charCodeAt(0) - 65) * 20 - 180;
+  const lat = (grid.charCodeAt(1) - 65) * 10 - 90;
+
+  // Square (2 digits): 2° x 1°
+  const lon2 = parseInt(grid[2]) * 2;
+  const lat2 = parseInt(grid[3]);
+
+  let minLon, maxLon, minLat, maxLat;
+
+  if (grid.length >= 6) {
+    // Subsquare (2 letters): 5' x 2.5'
+    const lon3 = (grid.charCodeAt(4) - 65) * (5 / 60); // 5 minutes
+    const lat3 = (grid.charCodeAt(5) - 65) * (2.5 / 60); // 2.5 minutes
+
+    minLon = lon + lon2 + lon3;
+    maxLon = minLon + 5 / 60;
+    minLat = lat + lat2 + lat3;
+    maxLat = minLat + 2.5 / 60;
+  } else {
+    minLon = lon + lon2;
+    maxLon = minLon + 2;
+    minLat = lat + lat2;
+    maxLat = minLat + 1;
+  }
+
+  return {
+    minLat,
+    maxLat,
+    minLon,
+    maxLon,
+  };
+}
+
 // Format distance using global units preference
 function fmtDist(km) {
   try {
@@ -402,7 +441,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [markerLayers, setMarkerLayers] = useState([]);
   const [heatmapLayer, setHeatmapLayer] = useState(null);
   const [wsprData, setWsprData] = useState([]);
-  const [filterByGrid, setFilterByGrid] = useState(true); // Default ON - shows activity in your grid area
+  const [filterByGrid, setFilterByGrid] = useState(false); // Default OFF
   const [gridFilter, setGridFilter] = useState('');
 
   // v1.2.0 - Advanced Filters
@@ -777,8 +816,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             gridInput.disabled = !e.target.checked;
             gridInput.style.opacity = e.target.checked ? '1' : '0.5';
           }
-          console.log('[WSPR] Grid filter toggle:', e.target.checked);
         });
+
+      // Sync initial checkbox state
+      if (gridFilterCheck && gridInput) {
+        gridInput.disabled = !gridFilterCheck.checked;
+        gridInput.style.opacity = gridFilterCheck.checked ? '1' : '0.5';
+      }
       if (gridInput) {
         gridInput.addEventListener('input', (e) => {
           const value = e.target.value.toUpperCase().substring(0, 6);
@@ -1013,6 +1057,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         // Match prefix: FN matches FN03, FN02, FN21, etc.
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
+        console.log(
+          '[WSPR DEBUG] Grid:',
+          gridUpper,
+          'sender:',
+          senderGrid,
+          'rx:',
+          receiverGrid,
+          'match:',
+          senderMatch || receiverMatch,
+        );
 
         // Show if either TX or RX matches the grid prefix
         return senderMatch || receiverMatch;
@@ -1085,19 +1139,29 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
     const bestPathSet = new Set(bestPaths.map((p) => `${p.sender}-${p.receiver}`));
 
+    // Use actual sender coordinates (don't force to grid center)
+    const gridCenterLat = null;
+    const gridCenterLon = null;
+
     limitedData.forEach((spot) => {
       // Validate coordinates
       if (!spot.senderLat || !spot.senderLon || !spot.receiverLat || !spot.receiverLon) {
         return;
       }
 
-      const sLat = parseFloat(spot.senderLat);
-      const sLon = parseFloat(spot.senderLon);
+      let sLat = parseFloat(spot.senderLat);
+      let sLon = parseFloat(spot.senderLon);
       const rLat = parseFloat(spot.receiverLat);
       const rLon = parseFloat(spot.receiverLon);
 
       if (!isFinite(sLat) || !isFinite(sLon) || !isFinite(rLat) || !isFinite(rLon)) {
         return;
+      }
+
+      // If grid filter is enabled, use grid center as sender position
+      if (gridCenterLat !== null && gridCenterLon !== null) {
+        sLat = gridCenterLat;
+        sLon = gridCenterLon;
       }
 
       // Calculate great circle path
@@ -1174,10 +1238,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (!txStations.has(txKey)) {
         txStations.add(txKey);
         const txMarker = L.circleMarker([sLat, sLon], {
-          radius: 5,
+          radius: 8,
           fillColor: '#ff6600',
           color: '#ffffff',
-          weight: 1.5,
+          weight: 2,
           fillOpacity: pathOpacity * 0.9,
           opacity: pathOpacity,
         });
@@ -1241,10 +1305,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (!rxStations.has(rxKey)) {
         rxStations.add(rxKey);
         const rxMarker = L.circleMarker([rLat, rLon], {
-          radius: 5,
+          radius: 8,
           fillColor: '#0088ff',
           color: '#ffffff',
-          weight: 1.5,
+          weight: 2,
           fillOpacity: pathOpacity * 0.9,
           opacity: pathOpacity,
         });
@@ -1308,24 +1372,60 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Add marker for filtered grid location (only when grid filter is enabled)
     if (filterByGrid && gridFilter && gridFilter.length >= 2) {
       const gridLoc = gridToLatLon(gridFilter);
-      if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon)) {
+      const gridBounds = gridToBounds(gridFilter);
+
+      if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
+        // Draw grid boundary rectangle - very light opacity
+        const gridRect = L.rectangle(
+          [
+            [gridBounds.minLat, gridBounds.minLon],
+            [gridBounds.maxLat, gridBounds.maxLon],
+          ],
+          {
+            color: '#ff00ff',
+            weight: 2,
+            fillColor: '#ff00ff',
+            fillOpacity: 0.03,
+            dashArray: '5, 5',
+          },
+        );
+        gridRect.addTo(map);
+        newPaths.push(gridRect);
+
+        // Larger marker at grid center
         const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
-          radius: 8,
+          radius: 10,
           fillColor: '#ff00ff',
           color: '#ffffff',
           weight: 2,
           opacity: 1,
           fillOpacity: 0.8,
         });
+        gridMarker.addTo(map);
+        newMarkers.push(gridMarker);
+
+        // Add WSPR label directly on the marker (like DX labels)
+        const labelIcon = L.divIcon({
+          className: '',
+          html: `<span style="display:inline-block;background:#ff00ff;color:#fff;padding:2px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.1;">WSPR</span>`,
+          iconSize: null,
+          iconAnchor: [0, 0],
+        });
+        const gridLabel = L.marker([gridLoc.lat, gridLoc.lon], {
+          icon: labelIcon,
+          interactive: false,
+          zIndexOffset: 10000,
+        });
+        gridLabel.addTo(map);
+        newMarkers.push(gridLabel);
+
         gridMarker.bindPopup(`
           <div style="font-family: 'JetBrains Mono', monospace; text-align: center;">
-            <b style="color: #ff00ff; font-size: 12px;">WSPR</b><br>
+            <b style="color: #ff00ff; font-size: 12px;">WSPR Filter</b><br>
             <span style="font-size: 11px;">Grid: ${gridFilter.toUpperCase()}</span><br>
             <span style="font-size: 10px; opacity: 0.7;">${gridLoc.lat.toFixed(2)}°, ${gridLoc.lon.toFixed(2)}°</span>
           </div>
         `);
-        gridMarker.addTo(map);
-        newMarkers.push(gridMarker);
       }
     }
 
