@@ -6226,10 +6226,39 @@ app.get('/api/pskreporter/config', (req, res) => {
   });
 });
 
-// New endpoint to get recent spots, optionally filtered by grid
+// Endpoint to get spots - supports filtering by senderGrid and/or receiverGrid via query params
+// Example: /api/pskreporter/all?senderGrid=FN03&receiverGrid=FN03
+// This will subscribe to MQTT topics for the specified grids if not already subscribed
 app.get('/api/pskreporter/all', (req, res) => {
   const senderGrid = req.query.senderGrid?.toUpperCase();
   const receiverGrid = req.query.receiverGrid?.toUpperCase();
+  
+  // If grid filters specified, ensure we're subscribed to them
+  if (senderGrid || receiverGrid) {
+    const gridsToSubscribe = [];
+    if (senderGrid && senderGrid.length >= 4 && !pskMqtt.subscribedGrids.has(senderGrid)) {
+      pskMqtt.subscribedGrids.add(senderGrid);
+      gridsToSubscribe.push(senderGrid);
+    }
+    if (receiverGrid && receiverGrid.length >= 4 && !pskMqtt.subscribedGrids.has(receiverGrid)) {
+      pskMqtt.subscribedGrids.add(receiverGrid);
+      gridsToSubscribe.push(receiverGrid);
+    }
+    
+    // Subscribe to MQTT topics for new grids
+    if (pskMqtt.connected && pskMqtt.client && gridsToSubscribe.length > 0) {
+      const topics = [];
+      for (const grid of gridsToSubscribe) {
+        topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);
+        topics.push(`pskr/filter/v2/+/WSPR/+/${grid}/#`);
+      }
+      pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
+        if (!err) {
+          console.log(`[PSK-MQTT] Subscribed to grids: ${gridsToSubscribe.join(', ')}`);
+        }
+      });
+    }
+  }
   
   let allSpots = [];
   
@@ -6249,18 +6278,19 @@ app.get('/api/pskreporter/all', (req, res) => {
     }
   }
   
-  // Filter by grids if specified
+  // Filter by grids if specified (OR logic: senderGrid OR receiverGrid)
   if (senderGrid || receiverGrid) {
     allSpots = allSpots.filter(spot => {
       const sGrid = spot.senderGrid?.substring(0, senderGrid?.length || 4)?.toUpperCase();
       const rGrid = spot.receiverGrid?.substring(0, receiverGrid?.length || 4)?.toUpperCase();
       
-      let matches = true;
+      // OR logic: match if EITHER grid matches
+      let matches = false;
       if (senderGrid) {
-        matches = matches && sGrid?.startsWith(senderGrid);
+        matches = matches || sGrid?.startsWith(senderGrid);
       }
       if (receiverGrid) {
-        matches = matches && rGrid?.startsWith(receiverGrid);
+        matches = matches || rGrid?.startsWith(receiverGrid);
       }
       return matches;
     });
@@ -6275,7 +6305,7 @@ app.get('/api/pskreporter/all', (req, res) => {
     spots: allSpots.slice(0, limit),
     total: allSpots.length,
     mqttConnected: pskMqtt.connected,
-    filters: { senderGrid, receiverGrid },
+    subscribedGrids: [...pskMqtt.subscribedGrids],
     timestamp: new Date().toISOString(),
   });
 });

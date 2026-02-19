@@ -498,8 +498,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         
         if (usePskReporter) {
           const gridUpper = gridFilter.toUpperCase().substring(0, 4);
-          // Fetch from PSKReporter grid-specific MQTT stream
-          const response = await fetch(`/api/pskreporter/grid/${gridUpper}?limit=2000`);
+          // Fetch from PSKReporter - filter by both sender and receiver grid
+          // This will auto-subscribe to the grid MQTT topics
+          const response = await fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=2000`);
           if (response.ok) {
             const data = await response.json();
             console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots for grid ${gridUpper}`);
