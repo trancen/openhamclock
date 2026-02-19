@@ -441,7 +441,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [markerLayers, setMarkerLayers] = useState([]);
   const [heatmapLayer, setHeatmapLayer] = useState(null);
   const [wsprData, setWsprData] = useState([]);
-  const [filterByGrid, setFilterByGrid] = useState(true); // Default ON - shows activity in your grid area
+  const [filterByGrid, setFilterByGrid] = useState(false); // Default OFF
   const [gridFilter, setGridFilter] = useState('');
 
   // v1.2.0 - Advanced Filters
