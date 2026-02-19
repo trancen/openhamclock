@@ -1049,12 +1049,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if ((spot.snr || -30) < snrThreshold) return false;
 
       // Grid square filter (if enabled AND grid is set) - show spots in/around that grid
-      if (filterByGrid && gridFilter && gridFilter.length >= 2) {
+      if (filterByGrid && gridFilter && gridFilter.length >= 4) {
         const gridUpper = gridFilter.toUpperCase();
         const senderGrid = spot.senderGrid ? spot.senderGrid.toUpperCase() : '';
         const receiverGrid = spot.receiverGrid ? spot.receiverGrid.toUpperCase() : '';
 
-        // Match prefix: FN matches FN03, FN02, FN21, etc.
+        // 4-char prefix matching (like 'FN03%'):
+        // TX: Show paths FROM grids starting with this grid (senderGrid like 'FN03%')
+        // RX: Show paths TO grids starting with this grid (receiverGrid like 'FN03%')
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
         console.log(
@@ -1068,7 +1070,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           senderMatch || receiverMatch,
         );
 
-        // Show if either TX or RX matches the grid prefix
+        // Show if either TX or RX matches
         return senderMatch || receiverMatch;
       }
 
@@ -1558,16 +1560,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if ((spot.snr || -30) < snrThreshold) return false;
 
       // Grid square filter (if enabled AND grid is set) - show spots in/around that grid
-      if (filterByGrid && gridFilter && gridFilter.length >= 2) {
+      if (filterByGrid && gridFilter && gridFilter.length >= 4) {
         const gridUpper = gridFilter.toUpperCase();
         const senderGrid = spot.senderGrid ? spot.senderGrid.toUpperCase() : '';
         const receiverGrid = spot.receiverGrid ? spot.receiverGrid.toUpperCase() : '';
 
-        // Match prefix: FN matches FN03, FN02, FN21, etc.
+        // 4-char prefix matching (like 'FN03%'):
+        // TX: Show paths FROM grids starting with this grid (senderGrid like 'FN03%')
+        // RX: Show paths TO grids starting with this grid (receiverGrid like 'FN03%')
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
 
-        // Show if either TX or RX matches the grid prefix
+        // Show if either TX or RX matches
         return senderMatch || receiverMatch;
       }
 
