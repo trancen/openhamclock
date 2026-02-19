@@ -66,6 +66,45 @@ function gridToLatLon(grid) {
   return { lat: latitude, lon: longitude };
 }
 
+// Get grid boundary coordinates (min/max lat/lon)
+function gridToBounds(grid) {
+  if (!grid || grid.length < 4) return null;
+
+  grid = grid.toUpperCase();
+  // Field (first letter): 20° x 10°
+  const lon = (grid.charCodeAt(0) - 65) * 20 - 180;
+  const lat = (grid.charCodeAt(1) - 65) * 10 - 90;
+
+  // Square (2 digits): 2° x 1°
+  const lon2 = parseInt(grid[2]) * 2;
+  const lat2 = parseInt(grid[3]);
+
+  let minLon, maxLon, minLat, maxLat;
+
+  if (grid.length >= 6) {
+    // Subsquare (2 letters): 5' x 2.5'
+    const lon3 = (grid.charCodeAt(4) - 65) * (5 / 60); // 5 minutes
+    const lat3 = (grid.charCodeAt(5) - 65) * (2.5 / 60); // 2.5 minutes
+
+    minLon = lon + lon2 + lon3;
+    maxLon = minLon + 5 / 60;
+    minLat = lat + lat2 + lat3;
+    maxLat = minLat + 2.5 / 60;
+  } else {
+    minLon = lon + lon2;
+    maxLon = minLon + 2;
+    minLat = lat + lat2;
+    maxLat = minLat + 1;
+  }
+
+  return {
+    minLat,
+    maxLat,
+    minLon,
+    maxLon,
+  };
+}
+
 // Format distance using global units preference
 function fmtDist(km) {
   try {
@@ -1326,7 +1365,35 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Add marker for filtered grid location (only when grid filter is enabled)
     if (filterByGrid && gridFilter && gridFilter.length >= 2) {
       const gridLoc = gridToLatLon(gridFilter);
-      if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon)) {
+      const gridBounds = gridToBounds(gridFilter);
+
+      if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
+        // Draw grid boundary rectangle
+        const gridRect = L.rectangle(
+          [
+            [gridBounds.minLat, gridBounds.minLon],
+            [gridBounds.maxLat, gridBounds.maxLon],
+          ],
+          {
+            color: '#ff00ff',
+            weight: 2,
+            fillColor: '#ff00ff',
+            fillOpacity: 0.1,
+            dashArray: '5, 5',
+          },
+        );
+        gridRect.bindPopup(`
+          <div style="font-family: 'JetBrains Mono', monospace; text-align: center;">
+            <b style="color: #ff00ff; font-size: 12px;">WSPR Grid</b><br>
+            <span style="font-size: 11px;">${gridFilter.toUpperCase()}</span><br>
+            <span style="font-size: 10px; opacity: 0.7;">
+              ${gridBounds.maxLat - gridBounds.minLat}° x ${gridBounds.maxLon - gridBounds.minLon}°
+            </span>
+          </div>
+        `);
+        gridRect.addTo(map);
+        newPaths.push(gridRect);
+
         // Larger marker with WSPR overlay
         const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
           radius: 12,
