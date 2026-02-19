@@ -6331,8 +6331,8 @@ app.get('/api/pskreporter/grid/:grid', (req, res) => {
   // Subscribe to MQTT topics for this grid if connected
   if (pskMqtt.connected && pskMqtt.client) {
     const topics = [
-      `pskr/filter/v2/+/WSPR/+/+/${grid}/#`,
-      `pskr/filter/v2/+/WSPR/+/${grid}/#`,
+      `pskr/filter/v2/+/WSPR/+/+/${grid}/#`,   // senderlocator = grid
+      `pskr/filter/v2/+/WSPR/+/+/+/${grid}/#`, // receiverlocator = grid
     ];
     pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
       if (err) {
@@ -6460,8 +6460,8 @@ function pskMqttConnect() {
       if (pskMqtt.subscribedGrids) {
         for (const grid of pskMqtt.subscribedGrids) {
           // Filter by sender grid or receiver grid starting with this grid
-          topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);
-          topics.push(`pskr/filter/v2/+/WSPR/+/${grid}/#`);
+          topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);   // senderlocator = grid
+          topics.push(`pskr/filter/v2/+/WSPR/+/+/+/${grid}/#`); // receiverlocator = grid
         }
       }
       pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
