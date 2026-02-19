@@ -1099,7 +1099,6 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     const pathData = filteredData.filter(
       (spot) => spot.isPath || (!spot.isAggregated && spot.receiverLat && spot.receiverLon),
     );
-    console.log('[WSPR DEBUG] pathData count:', pathData.length, 'filteredData:', filteredData.length);
 
     // Debug: Log grid squares when filter is enabled
     if (filterByGrid && gridFilter && filteredData.length > 0) {
@@ -1140,17 +1139,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
     const bestPathSet = new Set(bestPaths.map((p) => `${p.sender}-${p.receiver}`));
 
-    // Get grid center if filter is enabled
-    let gridCenterLat = null;
-    let gridCenterLon = null;
-    if (filterByGrid && gridFilter && gridFilter.length >= 2) {
-      const gridLoc = gridToLatLon(gridFilter);
-      if (gridLoc) {
-        gridCenterLat = gridLoc.lat;
-        gridCenterLon = gridLoc.lon;
-        console.log('[WSPR] Using grid center for paths:', gridFilter, gridCenterLat, gridCenterLon);
-      }
-    }
+    // Use actual sender coordinates (don't force to grid center)
+    const gridCenterLat = null;
+    const gridCenterLon = null;
 
     limitedData.forEach((spot) => {
       // Validate coordinates
