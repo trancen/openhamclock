@@ -1085,19 +1085,37 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
     const bestPathSet = new Set(bestPaths.map((p) => `${p.sender}-${p.receiver}`));
 
+    // Get grid center if filter is enabled
+    let gridCenterLat = null;
+    let gridCenterLon = null;
+    if (filterByGrid && gridFilter && gridFilter.length >= 2) {
+      const gridLoc = gridToLatLon(gridFilter);
+      if (gridLoc) {
+        gridCenterLat = gridLoc.lat;
+        gridCenterLon = gridLoc.lon;
+        console.log('[WSPR] Using grid center for paths:', gridFilter, gridCenterLat, gridCenterLon);
+      }
+    }
+
     limitedData.forEach((spot) => {
       // Validate coordinates
       if (!spot.senderLat || !spot.senderLon || !spot.receiverLat || !spot.receiverLon) {
         return;
       }
 
-      const sLat = parseFloat(spot.senderLat);
-      const sLon = parseFloat(spot.senderLon);
+      let sLat = parseFloat(spot.senderLat);
+      let sLon = parseFloat(spot.senderLon);
       const rLat = parseFloat(spot.receiverLat);
       const rLon = parseFloat(spot.receiverLon);
 
       if (!isFinite(sLat) || !isFinite(sLon) || !isFinite(rLat) || !isFinite(rLon)) {
         return;
+      }
+
+      // If grid filter is enabled, use grid center as sender position
+      if (gridCenterLat !== null && gridCenterLon !== null) {
+        sLat = gridCenterLat;
+        sLon = gridCenterLon;
       }
 
       // Calculate great circle path
@@ -1181,13 +1199,6 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           fillOpacity: pathOpacity * 0.9,
           opacity: pathOpacity,
         });
-        // Add WSPR label icon
-        txMarker.bindTooltip('📡 WSPR', {
-          permanent: true,
-          direction: 'top',
-          className: 'wspr-marker-label',
-          offset: [0, -8],
-        });
         // Build detailed tooltip for TX
         let txDetails = `
           <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 220px;">
@@ -1254,13 +1265,6 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           weight: 2,
           fillOpacity: pathOpacity * 0.9,
           opacity: pathOpacity,
-        });
-        // Add WSPR label icon
-        rxMarker.bindTooltip('📻 WSPR', {
-          permanent: true,
-          direction: 'top',
-          className: 'wspr-marker-label',
-          offset: [0, -8],
         });
         // Build detailed tooltip for RX
         let rxDetails = `
