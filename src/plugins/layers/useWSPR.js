@@ -1124,7 +1124,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           
           // Grid center marker
           const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
-            radius: 10,
+            radius: 6,
             fillColor: '#ff00ff',
             color: '#ffffff',
             weight: 2,
@@ -1362,8 +1362,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       const txKey = `${spot.sender}-${spot.senderGrid}`;
       if (!txStations.has(txKey)) {
         txStations.add(txKey);
+        console.log('[WSPR] Creating TX marker:', spot.sender, spot.senderGrid);
         const txMarker = L.circleMarker([sLat, sLon], {
-          radius: 8,
+          radius: 5,
           fillColor: '#ff6600',
           color: '#ffffff',
           weight: 2,
@@ -1421,6 +1422,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         }
 
         txDetails += `</div>`;
+        console.log('[WSPR] Binding TX popup for:', spot.sender);
         txMarker.bindPopup(txDetails);
         txMarker.addTo(map);
         newMarkers.push(txMarker);
@@ -1430,7 +1432,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (!rxStations.has(rxKey)) {
         rxStations.add(rxKey);
         const rxMarker = L.circleMarker([rLat, rLon], {
-          radius: 8,
+          radius: 5,
           fillColor: '#0088ff',
           color: '#ffffff',
           weight: 2,
