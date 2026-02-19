@@ -1079,21 +1079,53 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   useEffect(() => {
     if (!map || typeof L === 'undefined') return;
 
-    // Clear old layers
-    pathLayers.forEach((layer) => {
-      try {
-        map.removeLayer(layer);
-      } catch (e) {}
-    });
-    markerLayers.forEach((layer) => {
-      try {
-        map.removeLayer(layer);
-      } catch (e) {}
-    });
-    setPathLayers([]);
-    setMarkerLayers([]);
+    // Always draw grid box when filter is enabled, even with no data
+    const hasGridFilter = filterByGrid && gridFilter && gridFilter.length >= 2;
+    
+    if (!enabled && !hasGridFilter) return;
 
-    if (!enabled || wsprData.length === 0) return;
+    // Clear old layers (only if we have layers to clear)
+    if (pathLayers.length > 0 || markerLayers.length > 0) {
+      pathLayers.forEach((layer) => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {}
+      });
+      markerLayers.forEach((layer) => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {}
+      });
+      setPathLayers([]);
+      setMarkerLayers([]);
+    }
+
+    // If no data and grid filter not set, skip rendering
+    if (!enabled || wsprData.length === 0) {
+      // But still draw grid box if filter is set
+      if (hasGridFilter) {
+        const gridLoc = gridToLatLon(gridFilter);
+        const gridBounds = gridToBounds(gridFilter);
+        if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
+          const gridRect = L.rectangle(
+            [
+              [gridBounds.minLat, gridBounds.minLon],
+              [gridBounds.maxLat, gridBounds.maxLon],
+            ],
+            {
+              color: '#ff00ff',
+              weight: 2,
+              fillColor: '#ff00ff',
+              fillOpacity: 0.03,
+              dashArray: '5, 5',
+            },
+          );
+          gridRect.addTo(map);
+          setPathLayers([gridRect]);
+        }
+      }
+      return;
+    }
 
     const newPaths = [];
     const newMarkers = [];
