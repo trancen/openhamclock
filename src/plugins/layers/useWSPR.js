@@ -124,14 +124,14 @@ function getSNRColor(snr) {
   return '#00cc00'; // Dark green
 }
 
-// Get line weight based on SNR (doubled for better visibility)
+// Get line weight based on SNR (halved for less clutter)
 function getLineWeight(snr) {
-  if (snr === null || snr === undefined) return 4;
-  if (snr < -20) return 4;
-  if (snr < -10) return 5;
-  if (snr < 0) return 6;
-  if (snr < 5) return 7;
-  return 8;
+  if (snr === null || snr === undefined) return 2;
+  if (snr < -20) return 2;
+  if (snr < -10) return 2;
+  if (snr < 0) return 3;
+  if (snr < 5) return 3;
+  return 4;
 }
 
 // Calculate great circle path between two points
@@ -1267,7 +1267,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       const path = L.polyline(pathCoords, {
         color: isBestPath ? '#00ffff' : getSNRColor(spot.snr),
-        weight: isBestPath ? 4 : getLineWeight(spot.snr),
+        weight: isBestPath ? 3 : getLineWeight(spot.snr),
         opacity: pathOpacity * (isBestPath ? 0.9 : 0.6),
         smoothFactor: 1,
         className: showAnimation ? 'wspr-animated-path' : '',
