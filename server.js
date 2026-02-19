@@ -6226,20 +6226,98 @@ app.get('/api/pskreporter/config', (req, res) => {
   });
 });
 
-// New endpoint to get all recent spots from MQTT cache (no callsign required)
+// New endpoint to get recent spots, optionally filtered by grid
 app.get('/api/pskreporter/all', (req, res) => {
-  const allSpots = [];
+  const senderGrid = req.query.senderGrid?.toUpperCase();
+  const receiverGrid = req.query.receiverGrid?.toUpperCase();
+  
+  let allSpots = [];
+  
+  // Collect all spots from callsign subscriptions
   for (const [call, spots] of pskMqtt.recentSpots) {
     allSpots.push(...spots);
   }
-  // Sort by timestamp descending and limit
+  
+  // Also include spots from grid subscriptions
+  if (pskMqtt.gridSpots && pskMqtt.gridSpots.size > 0) {
+    for (const [grid, spots] of pskMqtt.gridSpots) {
+      for (const spot of spots) {
+        if (!allSpots.find(s => s.timestamp === spot.timestamp && s.sender === spot.sender)) {
+          allSpots.push(spot);
+        }
+      }
+    }
+  }
+  
+  // Filter by grids if specified
+  if (senderGrid || receiverGrid) {
+    allSpots = allSpots.filter(spot => {
+      const sGrid = spot.senderGrid?.substring(0, senderGrid?.length || 4)?.toUpperCase();
+      const rGrid = spot.receiverGrid?.substring(0, receiverGrid?.length || 4)?.toUpperCase();
+      
+      let matches = true;
+      if (senderGrid) {
+        matches = matches && sGrid?.startsWith(senderGrid);
+      }
+      if (receiverGrid) {
+        matches = matches && rGrid?.startsWith(receiverGrid);
+      }
+      return matches;
+    });
+  }
+  
+  // Sort by timestamp descending
   allSpots.sort((a, b) => b.timestamp - a.timestamp);
+  
   const limit = parseInt(req.query.limit) || 2000;
+  
   res.json({
     spots: allSpots.slice(0, limit),
     total: allSpots.length,
     mqttConnected: pskMqtt.connected,
+    filters: { senderGrid, receiverGrid },
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Endpoint to get spots for a specific grid - subscribes to MQTT for that grid
+app.get('/api/pskreporter/grid/:grid', (req, res) => {
+  const grid = req.params.grid?.toUpperCase();
+  if (!grid || grid.length < 4) {
+    return res.status(400).json({ error: 'Grid must be at least 4 characters' });
+  }
+  
+  // Add to subscribed grids
+  pskMqtt.subscribedGrids.add(grid);
+  
+  // Initialize grid spot buffer if needed
+  if (!pskMqtt.gridSpots) pskMqtt.gridSpots = new Map();
+  if (!pskMqtt.gridSpots.has(grid)) {
+    pskMqtt.gridSpots.set(grid, []);
+  }
+  
+  // Subscribe to MQTT topics for this grid if connected
+  if (pskMqtt.connected && pskMqtt.client) {
+    const topics = [
+      `pskr/filter/v2/+/WSPR/+/+/${grid}/#`,
+      `pskr/filter/v2/+/WSPR/+/${grid}/#`,
+    ];
+    pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
+      if (err) {
+        console.error(`[PSK-MQTT] Grid subscribe error:`, err.message);
+      } else {
+        console.log(`[PSK-MQTT] Subscribed to grid: ${grid}`);
+      }
+    });
+  }
+  
+  // Return current spots for this grid
+  const spots = pskMqtt.gridSpots.get(grid) || [];
+  res.json({ 
+    grid,
+    spots: spots.slice(-200),
+    count: spots.length,
+    subscribedGrids: [...pskMqtt.subscribedGrids]
   });
 });
 
@@ -6281,8 +6359,12 @@ const pskMqtt = {
   spotBuffer: new Map(),
   // Map<callsign, Array<spot>> — recent spots (last 60 min) for late-joiners
   recentSpots: new Map(),
+  // Global buffer for all WSPR spots (for /api/pskreporter/all endpoint)
+  allSpots: [],
   // Track subscribed topics to avoid double-subscribe
   subscribedCalls: new Set(),
+  // Track grid filters for MQTT subscriptions
+  subscribedGrids: new Set(),
   reconnectAttempts: 0,
   maxReconnectDelay: 120000, // 2 min max
   reconnectTimer: null, // guards against multiple pending reconnects
@@ -6332,13 +6414,23 @@ function pskMqttConnect() {
     pskMqtt.reconnectAttempts = 0;
 
     const count = pskMqtt.subscribedCalls.size;
-    if (count > 0) {
-      console.log(`[PSK-MQTT] Connected — subscribing ${count} callsigns`);
+    const gridCount = pskMqtt.subscribedGrids?.size || 0;
+    if (count > 0 || gridCount > 0) {
+      console.log(`[PSK-MQTT] Connected — subscribing ${count} callsigns, ${gridCount} grids`);
       // Batch all topic subscriptions into a single subscribe call
       const topics = [];
+      // Subscribe to specific callsigns
       for (const call of pskMqtt.subscribedCalls) {
         topics.push(`pskr/filter/v2/+/+/${call}/#`);
         topics.push(`pskr/filter/v2/+/+/+/${call}/#`);
+      }
+      // Subscribe to specific grids
+      if (pskMqtt.subscribedGrids) {
+        for (const grid of pskMqtt.subscribedGrids) {
+          // Filter by sender grid or receiver grid starting with this grid
+          topics.push(`pskr/filter/v2/+/WSPR/+/+/${grid}/#`);
+          topics.push(`pskr/filter/v2/+/WSPR/+/${grid}/#`);
+        }
       }
       pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
         if (err) {
@@ -6348,12 +6440,12 @@ function pskMqttConnect() {
           console.error(`[PSK-MQTT] Batch subscribe error:`, err.message);
         } else {
           console.log(
-            `[PSK-MQTT] Subscribed ${count} callsigns (${topics.length} topics)`,
+            `[PSK-MQTT] Subscribed ${count} callsigns, ${gridCount} grids (${topics.length} topics)`,
           );
         }
       });
     } else {
-      console.log('[PSK-MQTT] Connected (no active callsigns)');
+      console.log('[PSK-MQTT] Connected (no active subscriptions)');
     }
   });
 
@@ -6425,6 +6517,28 @@ function pskMqttConnect() {
         rcRecent.push(rxSpot);
         if (rcRecent.length > 250)
           pskMqtt.recentSpots.set(rcUpper, rcRecent.slice(-200));
+      }
+
+      // Also store in grid-specific buffers for grid subscriptions
+      if (pskMqtt.subscribedGrids && pskMqtt.subscribedGrids.size > 0) {
+        const senderGrid4 = sl?.substring(0, 4)?.toUpperCase();
+        const receiverGrid4 = rl?.substring(0, 4)?.toUpperCase();
+        
+        for (const grid of pskMqtt.subscribedGrids) {
+          // Check if spot matches this grid (as sender or receiver)
+          if ((senderGrid4 && senderGrid4.startsWith(grid)) || 
+              (receiverGrid4 && receiverGrid4.startsWith(grid))) {
+            if (!pskMqtt.gridSpots) pskMqtt.gridSpots = new Map();
+            if (!pskMqtt.gridSpots.has(grid)) pskMqtt.gridSpots.set(grid, []);
+            const gridBuf = pskMqtt.gridSpots.get(grid);
+            gridBuf.push({
+              ...spot,
+              direction: receiverGrid4?.startsWith(grid) ? 'rx' : 'tx',
+            });
+            // Limit buffer size
+            if (gridBuf.length > 250) gridBuf.shift();
+          }
+        }
       }
     } catch {
       pskMqtt.stats.messagesDropped++;

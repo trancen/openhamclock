@@ -493,16 +493,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       try {
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
-        // Use PSKReporter MQTT stream when grid filtering is enabled for more reliable data with callsigns
+        // Use PSKReporter MQTT stream when grid filtering is enabled (4+ chars)
         const usePskReporter = filterByGrid && gridFilter && gridFilter.length >= 4;
         
-        let data;
         if (usePskReporter) {
-          // Fetch from PSKReporter MQTT stream (more reliable, includes callsigns)
-          const response = await fetch(`/api/pskreporter/all?limit=2000`);
+          const gridUpper = gridFilter.toUpperCase().substring(0, 4);
+          // Fetch from PSKReporter grid-specific MQTT stream
+          const response = await fetch(`/api/pskreporter/grid/${gridUpper}?limit=2000`);
           if (response.ok) {
-            data = await response.json();
-            console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots from PSKReporter MQTT`);
+            const data = await response.json();
+            console.log(`[WSPR Plugin] Loaded ${data.spots?.length || 0} spots for grid ${gridUpper}`);
             
             // Transform PSKReporter spots to add lat/lon from grids
             const spots = (data.spots || []).map((spot) => {
