@@ -811,6 +811,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         if (data.spots && data.spots.length > 0) {
           console.log(`[WSPR] Processing ${data.spots.length} initial spots from SSE`);
           setWsprData(data.spots);
+        } else {
+          // No cached spots - fetch from HTTP as fallback
+          console.log('[WSPR] No cached spots, fetching from HTTP...');
+          fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=1000`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.spots && data.spots.length > 0) {
+                console.log(`[WSPR] HTTP fallback got ${data.spots.length} spots`);
+                setWsprData(data.spots);
+              }
+            })
+            .catch(err => console.error('[WSPR] HTTP fallback error:', err));
         }
       });
       
