@@ -759,8 +759,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Set up SSE for real-time updates when grid filter is enabled
     let eventSource = null;
     
-    // Clear old data when grid changes
+    // Clear old data when grid changes - ALWAYS clear when grid filter is on
     if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+      console.log('[WSPR] Grid filter active, clearing data');
       setWsprData([]); // Clear before getting new data
       
       // Skip HTTP fetch - SSE will provide initial spots
