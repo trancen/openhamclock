@@ -492,10 +492,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Skip fetch when grid filter is enabled but less than 4 chars
     // Also skip when checkbox is checked but grid is empty (show nothing in that case)
     const shouldFetch = !(filterByGrid && (!gridFilter || gridFilter.length < 4));
+    console.log(`[WSPR] Effect: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", shouldFetch=${shouldFetch}`);
     
     const fetchWSPR = async () => {
       try {
-        if (!shouldFetch) return;
+        if (!shouldFetch) {
+          console.log('[WSPR] Skipping fetch - shouldFetch is false');
+          return;
+        }
         
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
