@@ -770,14 +770,26 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       eventSource.addEventListener('connected', (e) => {
         console.log('[WSPR] SSE connected:', e.data);
         const data = JSON.parse(e.data);
-        if (data.spots) {
-          processGridSpots(data.spots);
+        if (data.spots && data.spots.length > 0) {
+          console.log(`[WSPR] Processing ${data.spots.length} initial spots from SSE`);
+          setWsprData(data.spots);
         }
       });
       
       eventSource.addEventListener('spot', (e) => {
-        const spot = JSON.parse(e.data);
-        console.log('[WSPR] SSE spot received:', spot);
+        const newSpot = JSON.parse(e.data);
+        console.log('[WSPR] SSE spot received:', newSpot.sender, '->', newSpot.receiver, 'time:', newSpot.timestamp);
+        
+        // Filter by time window
+        const now = Date.now();
+        const timeCutoff = now - timeWindow * 60 * 1000;
+        if (newSpot.timestamp && newSpot.timestamp < timeCutoff) {
+          console.log('[WSPR] Spot older than time window, skipping');
+          return;
+        }
+        
+        // Add new spot to existing data
+        setWsprData(prev => [newSpot, ...prev].slice(0, 200));
       });
       
       eventSource.onerror = (err) => {
