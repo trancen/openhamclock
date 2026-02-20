@@ -277,16 +277,16 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
     }
   };
 
-  element.addEventListener('mouseenter', updateCursor);
-  element.addEventListener('mousemove', updateCursor);
-  document.addEventListener('keydown', (e) => {
+  // Drag event handlers - store references for cleanup
+  const handleMouseEnter = updateCursor;
+  const handleMouseMove = updateCursor;
+  const handleKeyDown = (e) => {
     if (e.key === 'Control') updateCursor(e);
-  });
-  document.addEventListener('keyup', (e) => {
+  };
+  const handleKeyUp = (e) => {
     if (e.key === 'Control') updateCursor(e);
-  });
-
-  element.addEventListener('mousedown', function (e) {
+  };
+  const handleMouseDown = function (e) {
     // Only allow dragging with CTRL key
     if (!e.ctrlKey) return;
 
@@ -304,9 +304,8 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
     element.style.cursor = 'grabbing';
     element.style.opacity = '0.8';
     e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', function (e) {
+  };
+  const handleMouseMoveDrag = function (e) {
     if (!isDragging) return;
 
     const dx = e.clientX - startX;
@@ -314,9 +313,8 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
 
     element.style.left = startLeft + dx + 'px';
     element.style.top = startTop + dy + 'px';
-  });
-
-  document.addEventListener('mouseup', function (e) {
+  };
+  const handleMouseUp = function (e) {
     if (isDragging) {
       isDragging = false;
       element.style.opacity = '1';
@@ -335,7 +333,26 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
       };
       localStorage.setItem(storageKey, JSON.stringify(position));
     }
-  });
+  };
+
+  element.addEventListener('mouseenter', handleMouseEnter);
+  element.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  element.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mousemove', handleMouseMoveDrag);
+  document.addEventListener('mouseup', handleMouseUp);
+
+  // Return cleanup function to remove event listeners
+  return function cleanup() {
+    element.removeEventListener('mouseenter', handleMouseEnter);
+    element.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keyup', handleKeyUp);
+    element.removeEventListener('mousedown', handleMouseDown);
+    document.removeEventListener('mousemove', handleMouseMoveDrag);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
 }
 
 // Add minimize/maximize functionality to control panels
@@ -380,12 +397,16 @@ function addMinimizeToggle(element, storageKey) {
   `;
   minimizeBtn.title = 'Minimize/Maximize';
 
-  minimizeBtn.addEventListener('mouseenter', () => {
+  // Store handler references for cleanup
+  const handleMouseEnter = () => {
     minimizeBtn.style.opacity = '1';
-  });
-  minimizeBtn.addEventListener('mouseleave', () => {
+  };
+  const handleMouseLeave = () => {
     minimizeBtn.style.opacity = '0.7';
-  });
+  };
+
+  minimizeBtn.addEventListener('mouseenter', handleMouseEnter);
+  minimizeBtn.addEventListener('mouseleave', handleMouseLeave);
 
   header.style.display = 'flex';
   header.style.justifyContent = 'space-between';
@@ -422,18 +443,30 @@ function addMinimizeToggle(element, storageKey) {
     }
   };
 
-  // Click header to toggle (except on button itself)
-  header.addEventListener('click', (e) => {
+  // Store handler references for cleanup
+  const handleHeaderClick = (e) => {
     if (e.target === header || e.target.tagName === 'DIV') {
       toggle(e);
     }
-  });
-
-  // Click button to toggle
-  minimizeBtn.addEventListener('click', (e) => {
+  };
+  const handleMinimizeBtnClick = (e) => {
     e.stopPropagation();
     toggle(e);
-  });
+  };
+
+  // Click header to toggle (except on button itself)
+  header.addEventListener('click', handleHeaderClick);
+
+  // Click button to toggle
+  minimizeBtn.addEventListener('click', handleMinimizeBtnClick);
+
+  // Return cleanup function to remove event listeners
+  return function cleanup() {
+    minimizeBtn.removeEventListener('mouseenter', handleMouseEnter);
+    minimizeBtn.removeEventListener('mouseleave', handleMouseLeave);
+    header.removeEventListener('click', handleHeaderClick);
+    minimizeBtn.removeEventListener('click', handleMinimizeBtnClick);
+  };
 }
 
 export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign, locator, lowMemoryMode = false }) {
@@ -471,6 +504,22 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [chartControl, setChartControl] = useState(null);
 
   const animationFrameRef = useRef(null);
+
+  // Refs for cleanup functions (event listeners from makeDraggable and addMinimizeToggle)
+  const cleanupFnsRef = useRef({
+    filter: [],
+    stats: [],
+    legend: [],
+    chart: [],
+  });
+
+  // Refs for setTimeout IDs to allow cancellation on cleanup
+  const timeoutIdsRef = useRef({
+    filter: [],
+    stats: [],
+    legend: [],
+    chart: [],
+  });
 
   // Fetch WSPR data with dynamic time window and band filter
 
@@ -744,7 +793,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     setFilterControl(control);
 
     // Make control draggable after it's added to DOM
-    setTimeout(() => {
+    const filterTimeout1 = setTimeout(() => {
       const container = document.querySelector('.wspr-filter-control');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -760,13 +809,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-filter-position');
-        addMinimizeToggle(container, 'wspr-filter-position');
+        const dragCleanup = makeDraggable(container, 'wspr-filter-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-filter-position');
+        if (dragCleanup) cleanupFnsRef.current.filter.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.filter.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.filter.push(filterTimeout1);
 
     // Add event listeners after control is added
-    setTimeout(() => {
+    const filterTimeout2 = setTimeout(() => {
       const bandSelect = document.getElementById('wspr-band-filter');
       const timeSelect = document.getElementById('wspr-time-filter');
       const snrSlider = document.getElementById('wspr-snr-filter');
@@ -843,6 +895,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         });
       }
     }, 100);
+    timeoutIdsRef.current.filter.push(filterTimeout2);
 
     // Create stats control
     const StatsControl = L.Control.extend({
@@ -886,7 +939,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     statsControlRef.current = stats;
     setStatsControl(stats);
 
-    setTimeout(() => {
+    const statsTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-stats');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -902,10 +955,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-stats-position');
-        addMinimizeToggle(container, 'wspr-stats-position');
+        const dragCleanup = makeDraggable(container, 'wspr-stats-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-stats-position');
+        if (dragCleanup) cleanupFnsRef.current.stats.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.stats.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.stats.push(statsTimeout);
 
     // Create legend control
     const LegendControl = L.Control.extend({
@@ -941,7 +997,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     legendControlRef.current = legend;
     setLegendControl(legend);
 
-    setTimeout(() => {
+    const legendTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-legend');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -957,10 +1013,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-legend-position');
-        addMinimizeToggle(container, 'wspr-legend-position');
+        const dragCleanup = makeDraggable(container, 'wspr-legend-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-legend-position');
+        if (dragCleanup) cleanupFnsRef.current.legend.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.legend.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.legend.push(legendTimeout);
 
     // Create band chart control
     const ChartControl = L.Control.extend({
@@ -994,7 +1053,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     chartControlRef.current = chart;
     setChartControl(chart);
 
-    setTimeout(() => {
+    const chartTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-chart');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -1010,10 +1069,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-chart-position');
-        addMinimizeToggle(container, 'wspr-chart-position');
+        const dragCleanup = makeDraggable(container, 'wspr-chart-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-chart-position');
+        if (dragCleanup) cleanupFnsRef.current.chart.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.chart.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.chart.push(chartTimeout);
 
     console.log('[WSPR] All controls created once');
   }, [enabled, map]);
@@ -1754,6 +1816,26 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       }
 
       console.log('[WSPR] Plugin disabled - cleaning up all controls and layers');
+
+      // Clear any pending timeouts to prevent DOM manipulation on cleaned up elements
+      Object.values(timeoutIdsRef.current).forEach((timeoutIds) => {
+        timeoutIds.forEach((id) => clearTimeout(id));
+      });
+      timeoutIdsRef.current = { filter: [], stats: [], legend: [], chart: [] };
+
+      // Run cleanup functions to remove event listeners
+      Object.values(cleanupFnsRef.current).forEach((cleanupFns) => {
+        cleanupFns.forEach((cleanup) => {
+          if (typeof cleanup === 'function') {
+            try {
+              cleanup();
+            } catch (e) {
+              console.error('[WSPR] Error running cleanup function:', e);
+            }
+          }
+        });
+      });
+      cleanupFnsRef.current = { filter: [], stats: [], legend: [], chart: [] };
 
       // Remove filter control
       if (filterControlRef.current) {
