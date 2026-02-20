@@ -756,11 +756,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       }
     };
 
-    fetchWSPR();
-    
     // Set up SSE for real-time updates when grid filter is enabled
     let eventSource = null;
     
+    if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+      // Skip HTTP fetch - SSE will provide initial spots
+      console.log('[WSPR] Using SSE, skipping HTTP fetch');
+    } else {
+      // Use HTTP fetch (non-grid filter mode)
+      fetchWSPR();
+    }
+    
+    // SSE connection for grid filter mode
     if (filterByGrid && gridFilter && gridFilter.length >= 4) {
       const gridUpper = gridFilter.toUpperCase().substring(0, 4);
       console.log(`[WSPR] Connecting SSE for grid: ${gridUpper}`);
