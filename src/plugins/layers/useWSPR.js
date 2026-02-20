@@ -796,11 +796,11 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           <div style="margin-bottom: 8px;">
             <label style="display: block; margin-bottom: 3px;">Time Window:</label>
             <select id="wspr-time-filter" style="width: 100%; padding: 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;">
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
               <option value="15">15 minutes</option>
               <option value="30" selected>30 minutes</option>
               <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="360">6 hours</option>
             </select>
           </div>
           
@@ -940,6 +940,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           // Clear grid filter when checkbox is unchecked
           if (!e.target.checked) {
             setGridFilter('');
+            // Also clear the input element's value
+            if (gridInput) {
+              gridInput.value = '';
+            }
           }
           // Enable/disable grid input based on checkbox state
           if (gridInput) {
