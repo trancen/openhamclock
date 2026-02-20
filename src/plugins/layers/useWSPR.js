@@ -1035,11 +1035,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           setGridFilter(value);
           console.log('[WSPR] Grid filter change:', value);
         });
-        gridInput.addEventListener('blur', (e) => {
-          const value = e.target.value.toUpperCase().substring(0, 6);
-          setGridFilter(value);
-          console.log('[WSPR] Grid filter blur:', value);
-        });
+        // Don't use blur - it clears the filter when clicking elsewhere
       }
     }, 100);
     timeoutIdsRef.current.filter.push(filterTimeout2);
@@ -1237,6 +1233,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     if (!enabled && !hasGridFilter) return;
 
     // Clear old layers (only if we have layers to clear)
+    console.log(`[WSPR Render] wsprData.length=${wsprData.length}, filterByGrid=${filterByGrid}, gridFilter="${gridFilter}"`);
     if (pathLayers.length > 0 || markerLayers.length > 0) {
       pathLayers.forEach((layer) => {
         try {
