@@ -558,6 +558,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       sseModeRef.current = { active: false, grid: '' };
     }
     
+    // When time window changes, immediately clean up old spots
+    const cleanupOldSpots = () => {
+      const now = Date.now();
+      const timeCutoff = now - timeWindow * 60 * 1000;
+      setWsprData(prev => prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff));
+    };
+    
+    // Clean up immediately on time window change
+    cleanupOldSpots();
+    
     // Bail if in SSE mode - don't fetch anything
     if (sseModeRef.current.active) {
       console.log('[WSPR] Skipping effect - SSE mode active');
