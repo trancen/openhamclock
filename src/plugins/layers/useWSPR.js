@@ -839,7 +839,26 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         const data = JSON.parse(e.data);
         if (data.spots && data.spots.length > 0) {
           console.log(`[WSPR] Processing ${data.spots.length} initial spots from SSE`);
-          setWsprData(data.spots);
+          // Convert grids to coordinates for all spots
+          const processedSpots = data.spots.map(spot => {
+            const updated = { ...spot };
+            if (updated.senderGrid && !updated.senderLat) {
+              const loc = gridToLatLon(updated.senderGrid);
+              if (loc) {
+                updated.senderLat = loc.lat;
+                updated.senderLon = loc.lon;
+              }
+            }
+            if (updated.receiverGrid && !updated.receiverLat) {
+              const loc = gridToLatLon(updated.receiverGrid);
+              if (loc) {
+                updated.receiverLat = loc.lat;
+                updated.receiverLon = loc.lon;
+              }
+            }
+            return updated;
+          });
+          setWsprData(processedSpots);
         } else {
           // No cached spots - fetch from HTTP as fallback
           console.log('[WSPR] No cached spots, fetching from HTTP...');
@@ -864,6 +883,22 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       eventSource.addEventListener('spot', (e) => {
         const newSpot = JSON.parse(e.data);
         console.log('[WSPR] SSE spot received:', newSpot.sender, '->', newSpot.receiver, 'time:', newSpot.timestamp);
+        
+        // Convert grids to coordinates
+        if (newSpot.senderGrid && !newSpot.senderLat) {
+          const loc = gridToLatLon(newSpot.senderGrid);
+          if (loc) {
+            newSpot.senderLat = loc.lat;
+            newSpot.senderLon = loc.lon;
+          }
+        }
+        if (newSpot.receiverGrid && !newSpot.receiverLat) {
+          const loc = gridToLatLon(newSpot.receiverGrid);
+          if (loc) {
+            newSpot.receiverLat = loc.lat;
+            newSpot.receiverLon = loc.lon;
+          }
+        }
         
         // Add new spot and filter out old ones based on time window
         setWsprData(prev => {
