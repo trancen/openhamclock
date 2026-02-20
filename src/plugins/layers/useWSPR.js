@@ -476,6 +476,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [wsprData, setWsprData] = useState([]);
   const [filterByGrid, setFilterByGrid] = useState(false); // Default OFF
   const [gridFilter, setGridFilter] = useState('');
+  
+  // Use ref to track if SSE mode is active (to block stale HTTP responses)
+  const sseModeRef = useRef(false);
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -556,6 +559,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           return;
         }
         
+        // Check if we should process response (not in SSE mode)
+        const inSseMode = sseModeRef.current;
+        console.log(`[WSPR] FetchWSPR: inSseMode=${inSseMode}, filterByGrid=${filterByGrid}`);
+        
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
         // Use PSKReporter MQTT stream when grid filtering is enabled (4+ chars)
@@ -608,12 +615,24 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             return updated;
           });
           
+          // Block if SSE mode is active
+          if (sseModeRef.current) {
+            console.log('[WSPR] Blocking PSKReporter response - SSE mode active');
+            return;
+          }
           setWsprData(spots);
           return;
         }
         
         // Default: fetch aggregated data from WSPR heatmap endpoint
         const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
+        
+        // Block if SSE mode is active
+        if (sseModeRef.current) {
+          console.log('[WSPR] Blocking heatmap response - SSE mode active');
+          return;
+        }
+        
         if (response.ok) {
           const data = await response.json();
 
@@ -765,14 +784,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Set up SSE for real-time updates when grid filter is enabled
     let eventSource = null;
     
-    // Clear old data when grid changes - ALWAYS clear when grid filter is on
+    // Clear old data and enable SSE mode when grid filter is on
     if (filterByGrid && gridFilter && gridFilter.length >= 4) {
       console.log('[WSPR] Grid filter active, clearing data');
+      sseModeRef.current = true; // Block HTTP responses
       setWsprData([]); // Clear before getting new data
       
       // Skip HTTP fetch - SSE will provide initial spots
       console.log('[WSPR] Using SSE, skipping HTTP fetch');
     } else {
+      sseModeRef.current = false; // Allow HTTP responses
       // Use HTTP fetch (non-grid filter mode)
       fetchWSPR();
     }
