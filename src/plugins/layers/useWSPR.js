@@ -485,6 +485,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   
   // Use ref to store cleanup interval
   const cleanupIntervalRef = useRef(null);
+  
+  // Use ref to track previous timeWindow to detect changes
+  const prevTimeWindowRef = useRef(null);
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -558,15 +561,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       sseModeRef.current = { active: false, grid: '' };
     }
     
-    // When time window changes, immediately clean up old spots
-    const cleanupOldSpots = () => {
+    // Check if timeWindow changed (not during initial mount)
+    const timeWindowChanged = prevTimeWindowRef.current !== null && prevTimeWindowRef.current !== timeWindow;
+    if (timeWindowChanged) {
+      console.log(`[WSPR] Time window changed from ${prevTimeWindowRef.current} to ${timeWindow}, cleaning up old spots`);
       const now = Date.now();
       const timeCutoff = now - timeWindow * 60 * 1000;
       setWsprData(prev => prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff));
-    };
-    
-    // Clean up immediately on time window change
-    cleanupOldSpots();
+    }
+    // Update the ref for next time
+    prevTimeWindowRef.current = timeWindow;
     
     // Bail if in SSE mode - don't fetch anything
     if (sseModeRef.current.active) {
