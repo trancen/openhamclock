@@ -124,14 +124,14 @@ function getSNRColor(snr) {
   return '#00cc00'; // Dark green
 }
 
-// Get line weight based on SNR (doubled for better visibility)
+// Get line weight based on SNR (halved for less clutter)
 function getLineWeight(snr) {
-  if (snr === null || snr === undefined) return 4;
-  if (snr < -20) return 4;
-  if (snr < -10) return 5;
-  if (snr < 0) return 6;
-  if (snr < 5) return 7;
-  return 8;
+  if (snr === null || snr === undefined) return 2;
+  if (snr < -20) return 2;
+  if (snr < -10) return 2;
+  if (snr < 0) return 3;
+  if (snr < 5) return 3;
+  return 4;
 }
 
 // Calculate great circle path between two points
@@ -277,16 +277,16 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
     }
   };
 
-  element.addEventListener('mouseenter', updateCursor);
-  element.addEventListener('mousemove', updateCursor);
-  document.addEventListener('keydown', (e) => {
+  // Drag event handlers - store references for cleanup
+  const handleMouseEnter = updateCursor;
+  const handleMouseMove = updateCursor;
+  const handleKeyDown = (e) => {
     if (e.key === 'Control') updateCursor(e);
-  });
-  document.addEventListener('keyup', (e) => {
+  };
+  const handleKeyUp = (e) => {
     if (e.key === 'Control') updateCursor(e);
-  });
-
-  element.addEventListener('mousedown', function (e) {
+  };
+  const handleMouseDown = function (e) {
     // Only allow dragging with CTRL key
     if (!e.ctrlKey) return;
 
@@ -304,9 +304,8 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
     element.style.cursor = 'grabbing';
     element.style.opacity = '0.8';
     e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', function (e) {
+  };
+  const handleMouseMoveDrag = function (e) {
     if (!isDragging) return;
 
     const dx = e.clientX - startX;
@@ -314,9 +313,8 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
 
     element.style.left = startLeft + dx + 'px';
     element.style.top = startTop + dy + 'px';
-  });
-
-  document.addEventListener('mouseup', function (e) {
+  };
+  const handleMouseUp = function (e) {
     if (isDragging) {
       isDragging = false;
       element.style.opacity = '1';
@@ -335,7 +333,26 @@ function makeDraggable(element, storageKey, skipPositionLoad = false) {
       };
       localStorage.setItem(storageKey, JSON.stringify(position));
     }
-  });
+  };
+
+  element.addEventListener('mouseenter', handleMouseEnter);
+  element.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  element.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mousemove', handleMouseMoveDrag);
+  document.addEventListener('mouseup', handleMouseUp);
+
+  // Return cleanup function to remove event listeners
+  return function cleanup() {
+    element.removeEventListener('mouseenter', handleMouseEnter);
+    element.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keyup', handleKeyUp);
+    element.removeEventListener('mousedown', handleMouseDown);
+    document.removeEventListener('mousemove', handleMouseMoveDrag);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
 }
 
 // Add minimize/maximize functionality to control panels
@@ -380,12 +397,16 @@ function addMinimizeToggle(element, storageKey) {
   `;
   minimizeBtn.title = 'Minimize/Maximize';
 
-  minimizeBtn.addEventListener('mouseenter', () => {
+  // Store handler references for cleanup
+  const handleMouseEnter = () => {
     minimizeBtn.style.opacity = '1';
-  });
-  minimizeBtn.addEventListener('mouseleave', () => {
+  };
+  const handleMouseLeave = () => {
     minimizeBtn.style.opacity = '0.7';
-  });
+  };
+
+  minimizeBtn.addEventListener('mouseenter', handleMouseEnter);
+  minimizeBtn.addEventListener('mouseleave', handleMouseLeave);
 
   header.style.display = 'flex';
   header.style.justifyContent = 'space-between';
@@ -422,18 +443,30 @@ function addMinimizeToggle(element, storageKey) {
     }
   };
 
-  // Click header to toggle (except on button itself)
-  header.addEventListener('click', (e) => {
+  // Store handler references for cleanup
+  const handleHeaderClick = (e) => {
     if (e.target === header || e.target.tagName === 'DIV') {
       toggle(e);
     }
-  });
-
-  // Click button to toggle
-  minimizeBtn.addEventListener('click', (e) => {
+  };
+  const handleMinimizeBtnClick = (e) => {
     e.stopPropagation();
     toggle(e);
-  });
+  };
+
+  // Click header to toggle (except on button itself)
+  header.addEventListener('click', handleHeaderClick);
+
+  // Click button to toggle
+  minimizeBtn.addEventListener('click', handleMinimizeBtnClick);
+
+  // Return cleanup function to remove event listeners
+  return function cleanup() {
+    minimizeBtn.removeEventListener('mouseenter', handleMouseEnter);
+    minimizeBtn.removeEventListener('mouseleave', handleMouseLeave);
+    header.removeEventListener('click', handleHeaderClick);
+    minimizeBtn.removeEventListener('click', handleMinimizeBtnClick);
+  };
 }
 
 export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign, locator, lowMemoryMode = false }) {
@@ -443,6 +476,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [wsprData, setWsprData] = useState([]);
   const [filterByGrid, setFilterByGrid] = useState(false); // Default OFF
   const [gridFilter, setGridFilter] = useState('');
+  
+  // Use ref to track if SSE mode is active (to block stale HTTP responses)
+  const sseModeRef = useRef({ active: false, grid: '' });
+  
+  // Use ref to store current SSE connection
+  const eventSourceRef = useRef(null);
+  
+  // Use ref to store cleanup interval
+  const cleanupIntervalRef = useRef(null);
+  
+  // Use ref to track previous timeWindow to detect changes
+  const prevTimeWindowRef = useRef(null);
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -472,6 +517,22 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
   const animationFrameRef = useRef(null);
 
+  // Refs for cleanup functions (event listeners from makeDraggable and addMinimizeToggle)
+  const cleanupFnsRef = useRef({
+    filter: [],
+    stats: [],
+    legend: [],
+    chart: [],
+  });
+
+  // Refs for setTimeout IDs to allow cancellation on cleanup
+  const timeoutIdsRef = useRef({
+    filter: [],
+    stats: [],
+    legend: [],
+    chart: [],
+  });
+
   // Fetch WSPR data with dynamic time window and band filter
 
   const stripCallsign = (call) => {
@@ -486,16 +547,140 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     }
   }, [locator]);
 
+  // Main data fetching effect
   useEffect(() => {
     if (!enabled) return;
+    
+    // Get previous grid from ref to detect changes
+    const prevGrid = sseModeRef.current.grid || '';
+    const currentGrid = filterByGrid && gridFilter && gridFilter.length >= 4 ? gridFilter : '';
+    
+    // If grid changed, reset SSE mode to force reconnection
+    if (prevGrid && currentGrid && prevGrid !== currentGrid) {
+      console.log(`[WSPR] Grid changed from ${prevGrid} to ${currentGrid}, resetting SSE mode`);
+      sseModeRef.current = { active: false, grid: '' };
+    }
+    
+    // Check if timeWindow changed (not during initial mount)
+    const timeWindowChanged = prevTimeWindowRef.current !== null && prevTimeWindowRef.current !== timeWindow;
+    if (timeWindowChanged) {
+      console.log(`[WSPR] Time window changed from ${prevTimeWindowRef.current} to ${timeWindow}, cleaning up old spots`);
+      const now = Date.now();
+      const timeCutoff = now - timeWindow * 60 * 1000;
+      setWsprData(prev => prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff));
+    }
+    // Update the ref for next time
+    prevTimeWindowRef.current = timeWindow;
+    
+    // Bail if in SSE mode - don't fetch anything
+    if (sseModeRef.current.active) {
+      console.log('[WSPR] Skipping effect - SSE mode active');
+      return;
+    }
 
+    // Skip fetch when grid filter is enabled but less than 4 chars
+    // Also skip when checkbox is checked but grid is empty (show nothing in that case)
+    const shouldFetch = !(filterByGrid && (!gridFilter || gridFilter.length < 4));
+    console.log(`[WSPR] Effect: filterByGrid=${filterByGrid}, gridFilter="${gridFilter}", shouldFetch=${shouldFetch}`);
+    
     const fetchWSPR = async () => {
       try {
+        // Skip if grid filter is active (SSE handles it)
+        if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+          console.log('[WSPR] Skipping fetch - grid filter is active');
+          return;
+        }
+        
+        if (!shouldFetch) {
+          console.log('[WSPR] Skipping fetch - shouldFetch is false');
+          return;
+        }
+        
+        // Check if we should process response (not in SSE mode)
+        const inSseMode = sseModeRef.current.active;
+        console.log(`[WSPR] FetchWSPR: inSseMode=${inSseMode}, filterByGrid=${filterByGrid}`);
+        
         const timestamp = new Date().toLocaleTimeString();
         console.log(`[WSPR] Fetching data at ${timestamp}...`);
+        // Use PSKReporter MQTT stream when grid filtering is enabled (4+ chars)
+        const usePskReporter = filterByGrid && gridFilter && gridFilter.length >= 4;
+        
+        if (usePskReporter) {
+          const gridUpper = gridFilter.toUpperCase().substring(0, 4);
+          
+          // Fetch from PSKReporter with retry logic
+          // First fetch may return 0 spots if MQTT hasn't collected data yet
+          let data = null;
+          let attempts = 0;
+          const maxAttempts = 3;
+          
+          while (attempts < maxAttempts && (!data || data.spots?.length === 0)) {
+            const response = await fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=2000`);
+            if (response.ok) {
+              data = await response.json();
+            }
+            attempts++;
+            if (!data || data.spots?.length === 0) {
+              await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
+            }
+          }
+          
+          console.log(`[WSPR Plugin] Loaded ${data?.spots?.length || 0} spots for grid ${gridUpper} (attempts: ${attempts})`);
+          
+          // Transform PSKReporter spots to add lat/lon from grids
+          const spots = (data?.spots || []).map((spot) => {
+            const updated = { ...spot };
+            // Convert sender grid to lat/lon if missing
+            if ((!updated.senderLat || !updated.senderLon) && updated.senderGrid) {
+              const loc = gridToLatLon(updated.senderGrid);
+              if (loc) {
+                updated.senderLat = loc.lat;
+                updated.senderLon = loc.lon;
+              }
+            }
+            // Use sender lat/lon if available (PSKReporter sends sender location)
+            if (!updated.senderLat && spot.lat) updated.senderLat = spot.lat;
+            if (!updated.senderLon && spot.lon) updated.senderLon = spot.lon;
+            // Convert receiver grid to lat/lon if missing
+            if ((!updated.receiverLat || !updated.receiverLon) && updated.receiverGrid) {
+              const loc = gridToLatLon(updated.receiverGrid);
+              if (loc) {
+                updated.receiverLat = loc.lat;
+                updated.receiverLon = loc.lon;
+              }
+            }
+            return updated;
+          });
+          
+          // Block if SSE mode is active
+          if (sseModeRef.current) {
+            console.log('[WSPR] Blocking PSKReporter response - SSE mode active');
+            return;
+          }
+          setWsprData(spots);
+          return;
+        }
+        
+        // Default: fetch aggregated data from WSPR heatmap endpoint
         const response = await fetch(`/api/wspr/heatmap?minutes=${timeWindow}&band=${bandFilter}`);
+        
+        // Block if SSE mode is active
+        if (sseModeRef.current) {
+          console.log('[WSPR] Blocking heatmap response - SSE mode active');
+          return;
+        }
+        
         if (response.ok) {
           const data = await response.json();
+
+          // Handle raw format (individual spots with callsigns)
+          if (data.format === 'raw' && data.spots) {
+            console.log(
+              `[WSPR Plugin] Loaded raw data: ${data.spots.length} spots`,
+            );
+            setWsprData(data.spots);
+            return;
+          }
 
           // Handle new aggregated format
           if (data.format === 'aggregated' && data.grids) {
@@ -588,6 +773,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             console.log(`[WSPR] Grid filter ON - fetching ALL spots (${spots.length} total)`);
           }
 
+          // Filter by time window on client side (extra safety)
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          const beforeFilter = spots.length;
+          spots = spots.filter((spot) => {
+            const spotTime = spot.timestamp || 0;
+            return spotTime >= timeCutoff;
+          });
+          if (spots.length < beforeFilter) {
+            console.log(`[WSPR] Filtered ${beforeFilter - spots.length} spots older than ${timeWindow}min`);
+          }
+
           // Convert grid squares to lat/lon if coordinates are missing
           spots = spots.map((spot) => {
             let updated = { ...spot };
@@ -621,10 +818,145 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       }
     };
 
-    fetchWSPR();
-    const interval = setInterval(fetchWSPR, 300000); // Poll every 5 minutes (server caches for 10)
+    // Set up SSE for real-time updates when grid filter is enabled
+    let eventSource = null;
+    
+    // Clear old data and enable SSE mode when grid filter is on
+    if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+      console.log('[WSPR] Grid filter active, clearing data');
+      sseModeRef.current = { active: true, grid: gridFilter }; // Block HTTP responses
+      setWsprData([]); // Clear before getting new data
+      
+      // Skip HTTP fetch - SSE will provide initial spots
+      console.log('[WSPR] Using SSE, skipping HTTP fetch');
+    } else {
+      sseModeRef.current = { active: false, grid: '' }; // Allow HTTP responses
+      // Use HTTP fetch (non-grid filter mode)
+      fetchWSPR();
+    }
+    
+    // SSE connection for grid filter mode
+    if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+      const gridUpper = gridFilter.toUpperCase().substring(0, 4);
+      
+      // Close old SSE if grid changed
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        console.log('[WSPR] Closed old SSE connection');
+      }
+      
+      console.log(`[WSPR] Connecting SSE for grid: ${gridUpper}`);
+      
+      eventSource = new EventSource(`/api/pskreporter/grid/stream/${gridUpper}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.addEventListener('connected', (e) => {
+        console.log('[WSPR] SSE connected:', e.data);
+        const data = JSON.parse(e.data);
+        if (data.spots && data.spots.length > 0) {
+          console.log(`[WSPR] Processing ${data.spots.length} initial spots from SSE`);
+          // Convert grids to coordinates for all spots
+          const processedSpots = data.spots.map(spot => {
+            const updated = { ...spot };
+            if (updated.senderGrid && !updated.senderLat) {
+              const loc = gridToLatLon(updated.senderGrid);
+              if (loc) {
+                updated.senderLat = loc.lat;
+                updated.senderLon = loc.lon;
+              }
+            }
+            if (updated.receiverGrid && !updated.receiverLat) {
+              const loc = gridToLatLon(updated.receiverGrid);
+              if (loc) {
+                updated.receiverLat = loc.lat;
+                updated.receiverLon = loc.lon;
+              }
+            }
+            return updated;
+          });
+          setWsprData(processedSpots);
+        } else {
+          // No cached spots - fetch from HTTP as fallback
+          console.log('[WSPR] No cached spots, fetching from HTTP...');
+          fetch(`/api/pskreporter/all?senderGrid=${gridUpper}&receiverGrid=${gridUpper}&limit=1000`)
+            .then(r => {
+              console.log('[WSPR] HTTP response status:', r.status);
+              return r.json();
+            })
+            .then(data => {
+              console.log('[WSPR] HTTP response data:', data);
+              if (data.spots && data.spots.length > 0) {
+                console.log(`[WSPR] HTTP fallback got ${data.spots.length} spots`);
+                setWsprData(data.spots);
+              } else {
+                console.log('[WSPR] HTTP fallback got no spots');
+              }
+            })
+            .catch(err => console.error('[WSPR] HTTP fallback error:', err));
+        }
+      });
+      
+      eventSource.addEventListener('spot', (e) => {
+        const newSpot = JSON.parse(e.data);
+        console.log('[WSPR] SSE spot received:', newSpot.sender, '->', newSpot.receiver, 'time:', newSpot.timestamp);
+        
+        // Convert grids to coordinates
+        if (newSpot.senderGrid && !newSpot.senderLat) {
+          const loc = gridToLatLon(newSpot.senderGrid);
+          if (loc) {
+            newSpot.senderLat = loc.lat;
+            newSpot.senderLon = loc.lon;
+          }
+        }
+        if (newSpot.receiverGrid && !newSpot.receiverLat) {
+          const loc = gridToLatLon(newSpot.receiverGrid);
+          if (loc) {
+            newSpot.receiverLat = loc.lat;
+            newSpot.receiverLon = loc.lon;
+          }
+        }
+        
+        // Add new spot and filter out old ones based on time window
+        setWsprData(prev => {
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          
+          // Filter out old spots
+          const filtered = prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff);
+          
+          // Add new spot if within time window
+          if (newSpot.timestamp && newSpot.timestamp >= timeCutoff) {
+            return [newSpot, ...filtered].slice(0, 200);
+          }
+          return filtered;
+        });
+      });
+      
+      // Periodic cleanup of old spots
+      cleanupIntervalRef.current = setInterval(() => {
+        setWsprData(prev => {
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          return prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff);
+        });
+      }, 10000); // Cleanup every 10 seconds
+      
+      eventSource.onerror = (err) => {
+        console.error('[WSPR] SSE error:', err);
+      };
+    }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+        console.log('[WSPR] SSE disconnected');
+      }
+      if (cleanupIntervalRef.current) {
+        clearInterval(cleanupIntervalRef.current);
+        cleanupIntervalRef.current = null;
+      }
+    };
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid, gridFilter, locator]);
 
   // Create UI controls once (v1.2.0+)
@@ -673,11 +1005,11 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           <div style="margin-bottom: 8px;">
             <label style="display: block; margin-bottom: 3px;">Time Window:</label>
             <select id="wspr-time-filter" style="width: 100%; padding: 4px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;">
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
               <option value="15">15 minutes</option>
               <option value="30" selected>30 minutes</option>
               <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="360">6 hours</option>
             </select>
           </div>
           
@@ -744,7 +1076,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     setFilterControl(control);
 
     // Make control draggable after it's added to DOM
-    setTimeout(() => {
+    const filterTimeout1 = setTimeout(() => {
       const container = document.querySelector('.wspr-filter-control');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -760,13 +1092,16 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-filter-position');
-        addMinimizeToggle(container, 'wspr-filter-position');
+        const dragCleanup = makeDraggable(container, 'wspr-filter-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-filter-position');
+        if (dragCleanup) cleanupFnsRef.current.filter.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.filter.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.filter.push(filterTimeout1);
 
     // Add event listeners after control is added
-    setTimeout(() => {
+    const filterTimeout2 = setTimeout(() => {
       const bandSelect = document.getElementById('wspr-band-filter');
       const timeSelect = document.getElementById('wspr-time-filter');
       const snrSlider = document.getElementById('wspr-snr-filter');
@@ -811,6 +1146,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (gridFilterCheck)
         gridFilterCheck.addEventListener('change', (e) => {
           setFilterByGrid(e.target.checked);
+          // Clear grid filter when checkbox is unchecked
+          if (!e.target.checked) {
+            setGridFilter('');
+            // Also clear the input element's value
+            if (gridInput) {
+              gridInput.value = '';
+            }
+          }
           // Enable/disable grid input based on checkbox state
           if (gridInput) {
             gridInput.disabled = !e.target.checked;
@@ -836,13 +1179,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           setGridFilter(value);
           console.log('[WSPR] Grid filter change:', value);
         });
-        gridInput.addEventListener('blur', (e) => {
-          const value = e.target.value.toUpperCase().substring(0, 6);
-          setGridFilter(value);
-          console.log('[WSPR] Grid filter blur:', value);
-        });
+        // Don't use blur - it clears the filter when clicking elsewhere
       }
     }, 100);
+    timeoutIdsRef.current.filter.push(filterTimeout2);
 
     // Create stats control
     const StatsControl = L.Control.extend({
@@ -886,7 +1226,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     statsControlRef.current = stats;
     setStatsControl(stats);
 
-    setTimeout(() => {
+    const statsTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-stats');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -902,10 +1242,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-stats-position');
-        addMinimizeToggle(container, 'wspr-stats-position');
+        const dragCleanup = makeDraggable(container, 'wspr-stats-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-stats-position');
+        if (dragCleanup) cleanupFnsRef.current.stats.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.stats.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.stats.push(statsTimeout);
 
     // Create legend control
     const LegendControl = L.Control.extend({
@@ -941,7 +1284,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     legendControlRef.current = legend;
     setLegendControl(legend);
 
-    setTimeout(() => {
+    const legendTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-legend');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -957,10 +1300,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-legend-position');
-        addMinimizeToggle(container, 'wspr-legend-position');
+        const dragCleanup = makeDraggable(container, 'wspr-legend-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-legend-position');
+        if (dragCleanup) cleanupFnsRef.current.legend.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.legend.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.legend.push(legendTimeout);
 
     // Create band chart control
     const ChartControl = L.Control.extend({
@@ -994,7 +1340,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     chartControlRef.current = chart;
     setChartControl(chart);
 
-    setTimeout(() => {
+    const chartTimeout = setTimeout(() => {
       const container = document.querySelector('.wspr-chart');
       if (container) {
         // Apply saved position IMMEDIATELY before making draggable
@@ -1010,10 +1356,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           } catch (e) {}
         }
 
-        makeDraggable(container, 'wspr-chart-position');
-        addMinimizeToggle(container, 'wspr-chart-position');
+        const dragCleanup = makeDraggable(container, 'wspr-chart-position');
+        const minimizeCleanup = addMinimizeToggle(container, 'wspr-chart-position');
+        if (dragCleanup) cleanupFnsRef.current.chart.push(dragCleanup);
+        if (minimizeCleanup) cleanupFnsRef.current.chart.push(minimizeCleanup);
       }
     }, 150);
+    timeoutIdsRef.current.chart.push(chartTimeout);
 
     console.log('[WSPR] All controls created once');
   }, [enabled, map]);
@@ -1022,21 +1371,88 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   useEffect(() => {
     if (!map || typeof L === 'undefined') return;
 
-    // Clear old layers
-    pathLayers.forEach((layer) => {
-      try {
-        map.removeLayer(layer);
-      } catch (e) {}
-    });
-    markerLayers.forEach((layer) => {
-      try {
-        map.removeLayer(layer);
-      } catch (e) {}
-    });
-    setPathLayers([]);
-    setMarkerLayers([]);
+    // Always draw grid box when filter is enabled, even with no data
+    const hasGridFilter = filterByGrid && gridFilter && gridFilter.length >= 2;
+    
+    if (!enabled && !hasGridFilter) return;
 
-    if (!enabled || wsprData.length === 0) return;
+    // Clear old layers (only if we have layers to clear)
+    console.log(`[WSPR Render] wsprData.length=${wsprData.length}, filterByGrid=${filterByGrid}, gridFilter="${gridFilter}"`);
+    if (pathLayers.length > 0 || markerLayers.length > 0) {
+      pathLayers.forEach((layer) => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {}
+      });
+      markerLayers.forEach((layer) => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {}
+      });
+      setPathLayers([]);
+      setMarkerLayers([]);
+    }
+
+    // If no data and grid filter not set, skip rendering
+    if (!enabled || wsprData.length === 0) {
+      // But still draw grid box if filter is set
+      if (hasGridFilter) {
+        const gridLoc = gridToLatLon(gridFilter);
+        const gridBounds = gridToBounds(gridFilter);
+        if (gridLoc && isFinite(gridLoc.lat) && isFinite(gridLoc.lon) && gridBounds) {
+          const gridRect = L.rectangle(
+            [
+              [gridBounds.minLat, gridBounds.minLon],
+              [gridBounds.maxLat, gridBounds.maxLon],
+            ],
+            {
+              color: '#ff00ff',
+              weight: 2,
+              fillColor: '#ff00ff',
+              fillOpacity: 0.03,
+              dashArray: '5, 5',
+            },
+          );
+          gridRect.addTo(map);
+          
+          // Grid center marker
+          const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
+            radius: 6,
+            fillColor: '#ff00ff',
+            color: '#ffffff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8,
+          });
+          gridMarker.addTo(map);
+          gridMarker.bindPopup(`
+            <div style="font-family: 'JetBrains Mono', monospace; text-align: center;">
+              <b style="color: #ff00ff; font-size: 12px;">WSPR Filter</b><br>
+              <span style="font-size: 11px;">Grid: ${gridFilter.toUpperCase()}</span><br>
+              <span style="font-size: 10px; opacity: 0.7;">${gridLoc.lat.toFixed(2)}°, ${gridLoc.lon.toFixed(2)}°</span>
+            </div>
+          `);
+          
+          // WSPR label
+          const labelIcon = L.divIcon({
+            className: '',
+            html: `<span style="display:inline-block;background:#ff00ff;color:#fff;padding:2px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;white-space:nowrap;border:1px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);line-height:1.1;">WSPR</span>`,
+            iconSize: null,
+            iconAnchor: [0, 0],
+          });
+          const gridLabel = L.marker([gridLoc.lat, gridLoc.lon], {
+            icon: labelIcon,
+            interactive: false,
+            zIndexOffset: 10000,
+          });
+          gridLabel.addTo(map);
+          
+          setPathLayers([gridRect]);
+          setMarkerLayers([gridMarker, gridLabel]);
+        }
+      }
+      return;
+    }
 
     const newPaths = [];
     const newMarkers = [];
@@ -1049,12 +1465,14 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if ((spot.snr || -30) < snrThreshold) return false;
 
       // Grid square filter (if enabled AND grid is set) - show spots in/around that grid
-      if (filterByGrid && gridFilter && gridFilter.length >= 2) {
+      if (filterByGrid && gridFilter && gridFilter.length >= 4) {
         const gridUpper = gridFilter.toUpperCase();
         const senderGrid = spot.senderGrid ? spot.senderGrid.toUpperCase() : '';
         const receiverGrid = spot.receiverGrid ? spot.receiverGrid.toUpperCase() : '';
 
-        // Match prefix: FN matches FN03, FN02, FN21, etc.
+        // 4-char prefix matching (like 'FN03%'):
+        // TX: Show paths FROM grids starting with this grid (senderGrid like 'FN03%')
+        // RX: Show paths TO grids starting with this grid (receiverGrid like 'FN03%')
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
         console.log(
@@ -1068,13 +1486,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
           senderMatch || receiverMatch,
         );
 
-        // Show if either TX or RX matches the grid prefix
+        // Show if either TX or RX matches
         return senderMatch || receiverMatch;
       }
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
@@ -1176,7 +1594,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       const path = L.polyline(pathCoords, {
         color: isBestPath ? '#00ffff' : getSNRColor(spot.snr),
-        weight: isBestPath ? 4 : getLineWeight(spot.snr),
+        weight: isBestPath ? 3 : getLineWeight(spot.snr),
         opacity: pathOpacity * (isBestPath ? 0.9 : 0.6),
         smoothFactor: 1,
         className: showAnimation ? 'wspr-animated-path' : '',
@@ -1237,8 +1655,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       const txKey = `${spot.sender}-${spot.senderGrid}`;
       if (!txStations.has(txKey)) {
         txStations.add(txKey);
+        console.log('[WSPR] Creating TX marker:', spot.sender, spot.senderGrid);
         const txMarker = L.circleMarker([sLat, sLon], {
-          radius: 8,
+          radius: 5,
           fillColor: '#ff6600',
           color: '#ffffff',
           weight: 2,
@@ -1296,6 +1715,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         }
 
         txDetails += `</div>`;
+        console.log('[WSPR] Binding TX popup for:', spot.sender);
         txMarker.bindPopup(txDetails);
         txMarker.addTo(map);
         newMarkers.push(txMarker);
@@ -1305,7 +1725,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (!rxStations.has(rxKey)) {
         rxStations.add(rxKey);
         const rxMarker = L.circleMarker([rLat, rLon], {
-          radius: 8,
+          radius: 5,
           fillColor: '#0088ff',
           color: '#ffffff',
           weight: 2,
@@ -1394,7 +1814,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
         // Larger marker at grid center
         const gridMarker = L.circleMarker([gridLoc.lat, gridLoc.lon], {
-          radius: 10,
+          radius: 6,
           fillColor: '#ff00ff',
           color: '#ffffff',
           weight: 2,
@@ -1558,22 +1978,24 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if ((spot.snr || -30) < snrThreshold) return false;
 
       // Grid square filter (if enabled AND grid is set) - show spots in/around that grid
-      if (filterByGrid && gridFilter && gridFilter.length >= 2) {
+      if (filterByGrid && gridFilter && gridFilter.length >= 4) {
         const gridUpper = gridFilter.toUpperCase();
         const senderGrid = spot.senderGrid ? spot.senderGrid.toUpperCase() : '';
         const receiverGrid = spot.receiverGrid ? spot.receiverGrid.toUpperCase() : '';
 
-        // Match prefix: FN matches FN03, FN02, FN21, etc.
+        // 4-char prefix matching (like 'FN03%'):
+        // TX: Show paths FROM grids starting with this grid (senderGrid like 'FN03%')
+        // RX: Show paths TO grids starting with this grid (receiverGrid like 'FN03%')
         const senderMatch = senderGrid.startsWith(gridUpper);
         const receiverMatch = receiverGrid.startsWith(gridUpper);
 
-        // Show if either TX or RX matches the grid prefix
+        // Show if either TX or RX matches
         return senderMatch || receiverMatch;
       }
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
@@ -1754,6 +2176,26 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       }
 
       console.log('[WSPR] Plugin disabled - cleaning up all controls and layers');
+
+      // Clear any pending timeouts to prevent DOM manipulation on cleaned up elements
+      Object.values(timeoutIdsRef.current).forEach((timeoutIds) => {
+        timeoutIds.forEach((id) => clearTimeout(id));
+      });
+      timeoutIdsRef.current = { filter: [], stats: [], legend: [], chart: [] };
+
+      // Run cleanup functions to remove event listeners
+      Object.values(cleanupFnsRef.current).forEach((cleanupFns) => {
+        cleanupFns.forEach((cleanup) => {
+          if (typeof cleanup === 'function') {
+            try {
+              cleanup();
+            } catch (e) {
+              console.error('[WSPR] Error running cleanup function:', e);
+            }
+          }
+        });
+      });
+      cleanupFnsRef.current = { filter: [], stats: [], legend: [], chart: [] };
 
       // Remove filter control
       if (filterControlRef.current) {
