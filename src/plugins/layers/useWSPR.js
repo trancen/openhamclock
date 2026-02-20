@@ -489,8 +489,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   useEffect(() => {
     if (!enabled) return;
 
-    // Skip fetch when grid filter is enabled but less than 4 chars (wait for complete grid)
-    const shouldFetch = !(filterByGrid && gridFilter && gridFilter.length > 0 && gridFilter.length < 4);
+    // Skip fetch when grid filter is enabled but less than 4 chars
+    // Also skip when checkbox is checked but grid is empty (show nothing in that case)
+    const shouldFetch = !(filterByGrid && (!gridFilter || gridFilter.length < 4));
     
     const fetchWSPR = async () => {
       try {
@@ -1211,7 +1212,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
@@ -1714,7 +1715,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
 
       // If grid filter is ON but no grid set, show ALL spots (don't filter)
       if (filterByGrid && (!gridFilter || gridFilter.length < 2)) {
-        return true;
+        return false;
       }
 
       // If grid filter is OFF, filter by callsign (TX/RX involving your station)
