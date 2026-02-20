@@ -538,8 +538,15 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     }
   }, [locator]);
 
+  // Main data fetching effect
   useEffect(() => {
     if (!enabled) return;
+    
+    // Bail if in SSE mode - don't fetch anything
+    if (sseModeRef.current) {
+      console.log('[WSPR] Skipping effect - SSE mode active');
+      return;
+    }
 
     // Skip fetch when grid filter is enabled but less than 4 chars
     // Also skip when checkbox is checked but grid is empty (show nothing in that case)
