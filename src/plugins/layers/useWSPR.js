@@ -482,6 +482,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   
   // Use ref to store current SSE connection
   const eventSourceRef = useRef(null);
+  
+  // Use ref to store cleanup interval
+  const cleanupIntervalRef = useRef(null);
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -916,6 +919,15 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         });
       });
       
+      // Periodic cleanup of old spots
+      cleanupIntervalRef.current = setInterval(() => {
+        setWsprData(prev => {
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          return prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff);
+        });
+      }, 10000); // Cleanup every 10 seconds
+      
       eventSource.onerror = (err) => {
         console.error('[WSPR] SSE error:', err);
       };
@@ -925,6 +937,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (eventSource) {
         eventSource.close();
         console.log('[WSPR] SSE disconnected');
+      }
+      if (cleanupIntervalRef.current) {
+        clearInterval(cleanupIntervalRef.current);
+        cleanupIntervalRef.current = null;
       }
     };
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid, gridFilter, locator]);
