@@ -853,16 +853,20 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         const newSpot = JSON.parse(e.data);
         console.log('[WSPR] SSE spot received:', newSpot.sender, '->', newSpot.receiver, 'time:', newSpot.timestamp);
         
-        // Filter by time window
-        const now = Date.now();
-        const timeCutoff = now - timeWindow * 60 * 1000;
-        if (newSpot.timestamp && newSpot.timestamp < timeCutoff) {
-          console.log('[WSPR] Spot older than time window, skipping');
-          return;
-        }
-        
-        // Add new spot to existing data
-        setWsprData(prev => [newSpot, ...prev].slice(0, 200));
+        // Add new spot and filter out old ones based on time window
+        setWsprData(prev => {
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          
+          // Filter out old spots
+          const filtered = prev.filter(spot => !spot.timestamp || spot.timestamp >= timeCutoff);
+          
+          // Add new spot if within time window
+          if (newSpot.timestamp && newSpot.timestamp >= timeCutoff) {
+            return [newSpot, ...filtered].slice(0, 200);
+          }
+          return filtered;
+        });
       });
       
       eventSource.onerror = (err) => {
