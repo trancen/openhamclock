@@ -545,6 +545,12 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     
     const fetchWSPR = async () => {
       try {
+        // Skip if grid filter is active (SSE handles it)
+        if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+          console.log('[WSPR] Skipping fetch - grid filter is active');
+          return;
+        }
+        
         if (!shouldFetch) {
           console.log('[WSPR] Skipping fetch - shouldFetch is false');
           return;
