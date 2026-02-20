@@ -6238,10 +6238,12 @@ app.get('/api/pskreporter/all', (req, res) => {
     const gridsToSubscribe = [];
     if (senderGrid && senderGrid.length >= 4 && !pskMqtt.subscribedGrids.has(senderGrid)) {
       pskMqtt.subscribedGrids.add(senderGrid);
+      pskMqtt.gridLastActivity.set(senderGrid, Date.now());
       gridsToSubscribe.push(senderGrid);
     }
     if (receiverGrid && receiverGrid.length >= 4 && !pskMqtt.subscribedGrids.has(receiverGrid)) {
       pskMqtt.subscribedGrids.add(receiverGrid);
+      pskMqtt.gridLastActivity.set(receiverGrid, Date.now());
       gridsToSubscribe.push(receiverGrid);
     }
     
@@ -6323,6 +6325,7 @@ app.get('/api/pskreporter/grid/:grid', (req, res) => {
   
   // Add to subscribed grids
   pskMqtt.subscribedGrids.add(grid);
+  pskMqtt.gridLastActivity.set(grid, Date.now());
   
   // Initialize grid spot buffer if needed
   if (!pskMqtt.gridSpots) pskMqtt.gridSpots = new Map();
@@ -6399,6 +6402,7 @@ const pskMqtt = {
   subscribedCalls: new Set(),
   // Track grid filters for MQTT subscriptions
   subscribedGrids: new Set(),
+  gridLastActivity: new Map(), // Track last API request time per grid
   reconnectAttempts: 0,
   maxReconnectDelay: 120000, // 2 min max
   reconnectTimer: null, // guards against multiple pending reconnects
@@ -6714,6 +6718,27 @@ pskMqtt.cleanupInterval = setInterval(
         pskMqtt.subscribedCalls.delete(call);
         unsubscribeCallsign(call);
         console.log(`[PSK-MQTT] Cleaned up empty subscriber set for ${call}`);
+      }
+    }
+
+    // Clean grid subscriptions that are no longer active
+    // Grids are considered inactive if not requested via API for 15 minutes
+    if (pskMqtt.subscribedGrids && pskMqtt.gridSpots) {
+      const now = Date.now();
+      for (const grid of pskMqtt.subscribedGrids) {
+        const lastActivity = pskMqtt.gridLastActivity?.get(grid) || 0;
+        if (now - lastActivity > 15 * 60 * 1000) {
+          // Unsubscribe from MQTT topics for this grid
+          const topics = [
+            `pskr/filter/v2/+/WSPR/+/+/${grid}/#`,
+            `pskr/filter/v2/+/WSPR/+/+/+/${grid}/#`
+          ];
+          pskMqtt.client.unsubscribe(topics);
+          pskMqtt.subscribedGrids.delete(grid);
+          pskMqtt.gridSpots.delete(grid);
+          pskMqtt.gridLastActivity?.delete(grid);
+          console.log(`[PSK-MQTT] Cleaned up inactive grid ${grid}`);
+        }
       }
     }
   },
