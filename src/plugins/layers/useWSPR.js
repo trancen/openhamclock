@@ -478,7 +478,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   const [gridFilter, setGridFilter] = useState('');
   
   // Use ref to track if SSE mode is active (to block stale HTTP responses)
-  const sseModeRef = useRef(false);
+  const sseModeRef = useRef({ active: false, grid: '' });
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -542,8 +542,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   useEffect(() => {
     if (!enabled) return;
     
+    // Get previous grid from ref to detect changes
+    const prevGrid = sseModeRef.current.grid || '';
+    const currentGrid = filterByGrid && gridFilter && gridFilter.length >= 4 ? gridFilter : '';
+    
+    // If grid changed, reset SSE mode to force reconnection
+    if (prevGrid && currentGrid && prevGrid !== currentGrid) {
+      console.log(`[WSPR] Grid changed from ${prevGrid} to ${currentGrid}, resetting SSE mode`);
+      sseModeRef.current = { active: false, grid: '' };
+    }
+    
     // Bail if in SSE mode - don't fetch anything
-    if (sseModeRef.current) {
+    if (sseModeRef.current.active) {
       console.log('[WSPR] Skipping effect - SSE mode active');
       return;
     }
@@ -567,7 +577,7 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
         }
         
         // Check if we should process response (not in SSE mode)
-        const inSseMode = sseModeRef.current;
+        const inSseMode = sseModeRef.current.active;
         console.log(`[WSPR] FetchWSPR: inSseMode=${inSseMode}, filterByGrid=${filterByGrid}`);
         
         const timestamp = new Date().toLocaleTimeString();
@@ -794,13 +804,13 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // Clear old data and enable SSE mode when grid filter is on
     if (filterByGrid && gridFilter && gridFilter.length >= 4) {
       console.log('[WSPR] Grid filter active, clearing data');
-      sseModeRef.current = true; // Block HTTP responses
+      sseModeRef.current = { active: true, grid: gridFilter }; // Block HTTP responses
       setWsprData([]); // Clear before getting new data
       
       // Skip HTTP fetch - SSE will provide initial spots
       console.log('[WSPR] Using SSE, skipping HTTP fetch');
     } else {
-      sseModeRef.current = false; // Allow HTTP responses
+      sseModeRef.current = { active: false, grid: '' }; // Allow HTTP responses
       // Use HTTP fetch (non-grid filter mode)
       fetchWSPR();
     }
