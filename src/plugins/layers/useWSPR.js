@@ -937,6 +937,10 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
       if (gridFilterCheck)
         gridFilterCheck.addEventListener('change', (e) => {
           setFilterByGrid(e.target.checked);
+          // Clear grid filter when checkbox is unchecked
+          if (!e.target.checked) {
+            setGridFilter('');
+          }
           // Enable/disable grid input based on checkbox state
           if (gridInput) {
             gridInput.disabled = !e.target.checked;
