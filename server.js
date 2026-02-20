@@ -6358,6 +6358,73 @@ app.get('/api/pskreporter/grid/:grid', (req, res) => {
   });
 });
 
+// SSE endpoint for grid-based real-time updates
+app.get('/api/pskreporter/grid/stream/:grid', (req, res) => {
+  const grid = req.params.grid?.toUpperCase();
+  if (!grid || grid.length < 4) {
+    return res.status(400).json({ error: 'Grid must be at least 4 characters' });
+  }
+
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Content-Encoding': 'identity',
+  });
+  res.flushHeaders();
+
+  // Initialize grid subscription if needed
+  pskMqtt.subscribedGrids.add(grid);
+  pskMqtt.gridLastActivity.set(grid, Date.now());
+  if (!pskMqtt.gridSpots) pskMqtt.gridSpots = new Map();
+  if (!pskMqtt.gridSpots.has(grid)) pskMqtt.gridSpots.set(grid, []);
+  if (!pskMqtt.gridSubscribers) pskMqtt.gridSubscribers = new Map();
+  if (!pskMqtt.gridSubscribers.has(grid)) pskMqtt.gridSubscribers.set(grid, new Set());
+  pskMqtt.gridSubscribers.get(grid).add(res);
+
+  // Subscribe to MQTT topics for this grid
+  if (pskMqtt.connected && pskMqtt.client) {
+    const topics = [
+      `pskr/filter/v2/+/WSPR/+/+/${grid}/#`,
+      `pskr/filter/v2/+/WSPR/+/+/+/${grid}/#`,
+    ];
+    pskMqtt.client.subscribe(topics, { qos: 0 }, (err) => {
+      if (err) console.error(`[PSK-MQTT] Grid SSE subscribe error:`, err.message);
+    });
+  }
+
+  // Send initial spots
+  const initialSpots = pskMqtt.gridSpots.get(grid) || [];
+  res.write(`event: connected\ndata: ${JSON.stringify({ grid, spots: initialSpots.slice(-200), count: initialSpots.length })}\n\n`);
+  if (typeof res.flush === 'function') res.flush();
+
+  console.log(`[PSK-MQTT] SSE client connected for grid ${grid} (${pskMqtt.gridSubscribers.get(grid).size} clients)`);
+
+  // Keepalive
+  const keepalive = setInterval(() => {
+    try {
+      res.write(`: keepalive ${Date.now()}\n\n`);
+      if (typeof res.flush === 'function') res.flush();
+    } catch {
+      clearInterval(keepalive);
+    }
+  }, 30000);
+
+  // Cleanup on close
+  req.on('close', () => {
+    clearInterval(keepalive);
+    const clients = pskMqtt.gridSubscribers.get(grid);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) {
+        console.log(`[PSK-MQTT] All SSE clients disconnected for grid ${grid}`);
+      }
+    }
+  });
+});
+
 // Combined endpoint - returns stream info (live spots via SSE, no HTTP backfill)
 app.get('/api/pskreporter/:callsign', async (req, res) => {
   const callsign = req.params.callsign.toUpperCase();
@@ -6403,6 +6470,7 @@ const pskMqtt = {
   // Track grid filters for MQTT subscriptions
   subscribedGrids: new Set(),
   gridLastActivity: new Map(), // Track last API request time per grid
+  gridSubscribers: new Map(), // Track SSE clients per grid
   reconnectAttempts: 0,
   maxReconnectDelay: 120000, // 2 min max
   reconnectTimer: null, // guards against multiple pending reconnects
@@ -6569,12 +6637,24 @@ function pskMqttConnect() {
             if (!pskMqtt.gridSpots) pskMqtt.gridSpots = new Map();
             if (!pskMqtt.gridSpots.has(grid)) pskMqtt.gridSpots.set(grid, []);
             const gridBuf = pskMqtt.gridSpots.get(grid);
-            gridBuf.push({
+            const gridSpot = {
               ...spot,
               direction: receiverGrid4?.startsWith(grid) ? 'rx' : 'tx',
-            });
+            };
+            gridBuf.push(gridSpot);
             // Limit buffer size
             if (gridBuf.length > 250) gridBuf.shift();
+            
+            // Emit to SSE clients for this grid
+            if (pskMqtt.gridSubscribers && pskMqtt.gridSubscribers.has(grid)) {
+              for (const client of pskMqtt.gridSubscribers.get(grid)) {
+                try {
+                  client.write(`event: spot\ndata: ${JSON.stringify(gridSpot)}\n\n`);
+                } catch (e) {
+                  // Client may have disconnected
+                }
+              }
+            }
           }
         }
       }

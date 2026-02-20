@@ -757,9 +757,40 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     };
 
     fetchWSPR();
-    const interval = setInterval(fetchWSPR, 300000); // Poll every 5 minutes (server caches for 10)
+    
+    // Set up SSE for real-time updates when grid filter is enabled
+    let eventSource = null;
+    
+    if (filterByGrid && gridFilter && gridFilter.length >= 4) {
+      const gridUpper = gridFilter.toUpperCase().substring(0, 4);
+      console.log(`[WSPR] Connecting SSE for grid: ${gridUpper}`);
+      
+      eventSource = new EventSource(`/api/pskreporter/grid/stream/${gridUpper}`);
+      
+      eventSource.addEventListener('connected', (e) => {
+        console.log('[WSPR] SSE connected:', e.data);
+        const data = JSON.parse(e.data);
+        if (data.spots) {
+          processGridSpots(data.spots);
+        }
+      });
+      
+      eventSource.addEventListener('spot', (e) => {
+        const spot = JSON.parse(e.data);
+        console.log('[WSPR] SSE spot received:', spot);
+      });
+      
+      eventSource.onerror = (err) => {
+        console.error('[WSPR] SSE error:', err);
+      };
+    }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+        console.log('[WSPR] SSE disconnected');
+      }
+    };
   }, [enabled, bandFilter, timeWindow, callsign, filterByGrid, gridFilter, locator]);
 
   // Create UI controls once (v1.2.0+)
