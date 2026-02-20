@@ -711,6 +711,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
             console.log(`[WSPR] Grid filter ON - fetching ALL spots (${spots.length} total)`);
           }
 
+          // Filter by time window on client side (extra safety)
+          const now = Date.now();
+          const timeCutoff = now - timeWindow * 60 * 1000;
+          const beforeFilter = spots.length;
+          spots = spots.filter((spot) => {
+            const spotTime = spot.timestamp || 0;
+            return spotTime >= timeCutoff;
+          });
+          if (spots.length < beforeFilter) {
+            console.log(`[WSPR] Filtered ${beforeFilter - spots.length} spots older than ${timeWindow}min`);
+          }
+
           // Convert grid squares to lat/lon if coordinates are missing
           spots = spots.map((spot) => {
             let updated = { ...spot };

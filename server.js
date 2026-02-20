@@ -6688,7 +6688,9 @@ pskMqtt.flushInterval = setInterval(() => {
 // Clean old recent spots every 5 minutes
 pskMqtt.cleanupInterval = setInterval(
   () => {
-    const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour
+    const now = Date.now();
+    const cutoff = now - 60 * 60 * 1000; // 1 hour
+    
     for (const [call, spots] of pskMqtt.recentSpots) {
       // Delete entries for unsubscribed callsigns immediately
       if (!pskMqtt.subscribedCalls.has(call)) {
@@ -6738,6 +6740,16 @@ pskMqtt.cleanupInterval = setInterval(
           pskMqtt.gridSpots.delete(grid);
           pskMqtt.gridLastActivity?.delete(grid);
           console.log(`[PSK-MQTT] Cleaned up inactive grid ${grid}`);
+        } else {
+          // Also clean old spots from active grid buffers (keep only 1 hour)
+          const spots = pskMqtt.gridSpots.get(grid);
+          if (spots && spots.length > 0) {
+            const hourAgo = now - 60 * 60 * 1000;
+            const filtered = spots.filter((s) => s.timestamp > hourAgo);
+            if (filtered.length < spots.length) {
+              pskMqtt.gridSpots.set(grid, filtered);
+            }
+          }
         }
       }
     }
