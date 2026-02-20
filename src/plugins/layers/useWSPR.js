@@ -479,6 +479,9 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
   
   // Use ref to track if SSE mode is active (to block stale HTTP responses)
   const sseModeRef = useRef({ active: false, grid: '' });
+  
+  // Use ref to store current SSE connection
+  const eventSourceRef = useRef(null);
 
   // v1.2.0 - Advanced Filters
   const [bandFilter, setBandFilter] = useState('all');
@@ -818,9 +821,18 @@ export function useLayer({ enabled = false, opacity = 0.7, map = null, callsign,
     // SSE connection for grid filter mode
     if (filterByGrid && gridFilter && gridFilter.length >= 4) {
       const gridUpper = gridFilter.toUpperCase().substring(0, 4);
+      
+      // Close old SSE if grid changed
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        console.log('[WSPR] Closed old SSE connection');
+      }
+      
       console.log(`[WSPR] Connecting SSE for grid: ${gridUpper}`);
       
       eventSource = new EventSource(`/api/pskreporter/grid/stream/${gridUpper}`);
+      eventSourceRef.current = eventSource;
       
       eventSource.addEventListener('connected', (e) => {
         console.log('[WSPR] SSE connected:', e.data);
