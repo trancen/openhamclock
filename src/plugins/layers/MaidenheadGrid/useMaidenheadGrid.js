@@ -126,8 +126,8 @@ export function useLayer({ map, enabled, opacity }) {
           
           // Add label - using exact formula from reference
           if (showLabels) {
-            var labelLon = lon + unit - (unit / lcor);
-            var labelLat = lat + (unit / 2) + (unit / lcor * c);
+            var labelLon = lon + unit; // Center of cell
+            var labelLat = lat + unit / 2; // Center of cell
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
             var fontSize = title_size[Math.round(zoom)] || 12;
