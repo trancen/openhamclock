@@ -32,7 +32,8 @@ function getMaidenheadGrid(lon, lat, zoom) {
   var locator = "";
   var x = lon;
   var y = lat;
-  var p = Math.min(d4[Math.round(zoom)] || 1, 2); // Cap at 4 chars (2 pairs)
+  // Cap at 2 pairs (4 chars) to prevent overlap
+  var p = Math.min(d4[Math.round(zoom)] || 1, 2);
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
@@ -125,19 +126,25 @@ export function useLayer({ map, enabled, opacity }) {
             interactive: false
           }));
           
-          // Add label - exactly like reference code
+          // Add label - centered in cell
           if (showLabels) {
-            var labelLon = lon + unit; // Center
-            var labelLat = lat + unit/2; // Center
+            var labelLon = lon + unit;
+            var labelLat = lat + unit/2;
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
-            var size = (title_size[Math.round(zoom)] || 12) + 'px';
+            var fontSize = (title_size[Math.round(zoom)] || 12) + 'px';
+            
+            // Calculate icon size based on text length
+            var charWidth = 8;
+            var textWidth = gridSquare.length * charWidth;
+            var iconWidth = Math.max(textWidth + 10, 50);
+            var iconHeight = 20;
             
             var myIcon = L.divIcon({
               className: 'maidenhead-label',
-              html: '<span style="color: white; font-size: ' + size + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
-              iconSize: [80, 30],
-              iconAnchor: [40, 15]
+              html: '<span style="color: white; font-size: ' + fontSize + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
+              iconSize: [iconWidth, iconHeight],
+              iconAnchor: [iconWidth / 2, iconHeight / 2]
             });
             
             gridLayer.addLayer(L.marker([labelLat, labelLon], {
