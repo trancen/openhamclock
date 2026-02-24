@@ -56,13 +56,14 @@ function getMaidenheadGrid(lon, lat, precision) {
   return locator;
 }
 
-// Determine precision based on zoom
+// Determine precision based on zoom - DEBUG: lower thresholds to test
 function getPrecisionForZoom(zoom) {
-  // Zoom 0-4: 2 chars (fields only) - FN
-  // Zoom 5-10: 4 chars (fields + squares) - FN03
-  // Zoom 11+: 6 chars (fields + squares + subsquares) - FN03cq, cap here
-  if (zoom <= 4) return 1;  // 2 chars
-  if (zoom <= 10) return 2; // 4 chars
+  console.log('DEBUG: Zoom level = ' + zoom);
+  // Zoom 0-3: 2 chars (fields only) - FN
+  // Zoom 4-7: 4 chars (fields + squares) - FN03
+  // Zoom 8+: 6 chars (fields + squares + subsquares) - FN03cq
+  if (zoom <= 3) return 1;  // 2 chars
+  if (zoom <= 7) return 2; // 4 chars
   return 3; // 6 chars, max
 }
 
@@ -71,6 +72,7 @@ export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
   const layerRef = useRef(null);
+  const debugRef = useRef(null);
 
   // Load saved preferences
   useEffect(() => {
@@ -102,6 +104,8 @@ export function useLayer({ map, enabled, opacity }) {
       var bounds = map.getBounds();
       var zoom = map.getZoom();
       var p = getPrecisionForZoom(zoom);
+      console.log('DEBUG: Precision set to ' + p + ' chars');
+      
       var unit = d3[Math.round(zoom)];
       var lcor = lat_cor[Math.round(zoom)];
       
@@ -122,6 +126,11 @@ export function useLayer({ map, enabled, opacity }) {
       var top = Math.ceil(n / unit) * unit;
       var bottom = Math.floor(s / unit) * unit;
       
+      // Update debug display
+      if (debugRef.current) {
+        debugRef.current.innerHTML = 'Zoom: ' + zoom + ' | Precision: ' + p + ' chars (' + (p===1?'FN':p===2?'FN03':'FN03cq') + ')';
+      }
+      
       for (var lon = left; lon < right; lon += (unit * 2)) {
         for (var lat = bottom; lat < top; lat += unit) {
           var rectBounds = [[lat, lon], [lat + unit, lon + (unit * 2)]];
@@ -135,10 +144,11 @@ export function useLayer({ map, enabled, opacity }) {
             interactive: false
           }));
           
-          // Add label - exactly like reference code
+          // Add label - CENTER of the grid cell
           if (showLabels) {
-            var labelLon = lon + unit - (unit / lcor);
-            var labelLat = lat + (unit / 2) + (unit / lcor * c);
+            // Simply center in the cell
+            var labelLon = lon + unit;
+            var labelLat = lat + unit / 2;
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, p);
             
             var size = (title_size[Math.round(zoom)] || 12) + 'px';
