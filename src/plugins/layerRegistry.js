@@ -19,6 +19,7 @@ import * as GreatCirclePlugin from './layers/useGreatCircle.js';
 import * as VOACAPHeatmapPlugin from './layers/useVOACAPHeatmap.js';
 import * as MUFMapPlugin from './layers/useMUFMap.js';
 import * as SatellitePlugin from './layers/useSatelliteLayer.js';
+import * as MaidenheadGridPlugin from './layers/MaidenheadGrid/useMaidenheadGrid.js';
 
 const layerPlugins = [
   OWMCloudsPlugin,
@@ -38,6 +39,7 @@ const layerPlugins = [
   GreatCirclePlugin,
   VOACAPHeatmapPlugin,
   MUFMapPlugin,
+  MaidenheadGridPlugin,
 ];
 
 // Memoize the layer list - it never changes at runtime
