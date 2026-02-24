@@ -1,8 +1,7 @@
 /**
  * Maidenhead Grid Overlay Plugin
  */
-import { useState } from 'react';
-import { useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // Grid precision options
 export const GRID_PRECISIONS = {
@@ -36,20 +35,6 @@ export function latLonToMaidenhead(lat, lon, precision = 4) {
     const squareLat = Math.floor(lat % 10);
     result.push(String.fromCharCode(48 + (squareLon % 10)));
     result.push(String.fromCharCode(48 + (squareLat % 10)));
-  }
-
-  if (precision >= 6) {
-    const subLon = Math.floor(((lon % 2) / 5) * 24);
-    const subLat = Math.floor(((lat % 1) / 2.5) * 24);
-    result.push(String.fromCharCode(97 + (subLon % 24)));
-    result.push(String.fromCharCode(97 + (subLat % 24)));
-  }
-
-  if (precision >= 8) {
-    const extLon = Math.floor((((lon % (2 / 60)) / (30 / 3600)) * 10));
-    const extLat = Math.floor((((lat % (1 / 60)) / (15 / 3600)) * 10));
-    result.push(String.fromCharCode(48 + (extLon % 10)));
-    result.push(String.fromCharCode(48 + (extLat % 10)));
   }
 
   return result.slice(0, precision).join('');
@@ -125,23 +110,6 @@ export function calculateGridForBounds(bounds, precision) {
     }
   }
 
-  // Sub-square lines
-  if (precision >= 6) {
-    const subLonStep = 5 / 60;
-    const subLatStep = 2.5 / 60;
-    for (let lon = Math.floor(west / subLonStep) * subLonStep; lon <= Math.ceil(east / subLonStep) * subLonStep; lon += subLonStep) {
-      const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
-      if (nLon > -180 && nLon < 180 && lon % lonStep !== 0) {
-        lines.push({ type: 'vertical', value: nLon, from: south, to: north, minor: true });
-      }
-    }
-    for (let lat = Math.floor(south / subLatStep) * subLatStep; lat <= Math.ceil(north / subLatStep) * subLatStep; lat += subLatStep) {
-      if (lat > -90 && lat < 90 && lat % latStep !== 0) {
-        lines.push({ type: 'horizontal', value: lat, from: west, to: east, minor: true });
-      }
-    }
-  }
-
   // Labels
   if (precision >= 2) {
     const labelStepLon = precision >= 4 ? 2 : 20;
@@ -172,155 +140,29 @@ export const metadata = {
   localOnly: false,
 };
 
+// Main plugin hook - minimal version
 export function useLayer({ map, enabled, opacity }) {
-  // TEMPORARILY COMMENTED OUT TO DEBUG
-  // if (typeof window === 'undefined' || !window.L) {
-  //   return null;
-  // }
-  //
-  // const [precision, setPrecision] = useState(4);
-  // const [showLabels, setShowLabels] = useState(true);
-  // const canvasRef = useRef(null);
-  //
-  // // Load saved preferences
-  // useEffect(() => {
-  //   const savedPrecision = localStorage.getItem('maidenhead-grid-precision');
-  //   const savedLabels = localStorage.getItem('maidenhead-grid-labels');
-  //
-  //   if (savedPrecision) {
-  //     const parsed = parseInt(savedPrecision, 10);
-  //     if ([2, 4, 6, 8].includes(parsed)) {
-  //       setPrecision(parsed);
-  //     }
-  //   }
-  //
-  //   if (savedLabels !== null) {
-  //     setShowLabels(savedLabels !== 'false');
-  //   }
-  // }, []);
-  //
-  // // Draw grid function
-  // const drawGrid = useCallback(() => {
-  //   if (!map || !canvasRef.current || !enabled) return;
-  //
-  //   const L = window.L;
-  //   if (!L) return;
-  //
-  //   const canvas = canvasRef.current;
-  //   const ctx = canvas.getContext('2d');
-  //   const bounds = map.getBounds();
-  //
-  //   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  //
-  //   if (opacity <= 0) return;
-  //
-  //   const majorColor = 'rgba(255, 180, 50, ' + (opacity * 0.8) + ')';
-  //   const minorColor = 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')';
-  //   const labelColor = 'rgba(255, 255, 255, ' + opacity + ')';
-  //
-  //   const zoom = map.getZoom();
-  //   const gridLevels = getGridLevelsForZoom(zoom);
-  //
-  //   let displayPrecision = precision;
-  //   if (precision >= 4 && !gridLevels.squares) displayPrecision = 2;
-  //   if (precision >= 6 && !gridLevels.subSquares) displayPrecision = 4;
-  //
-  //   const gridData = calculateGridForBounds(
-  //     { south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() },
-  //     displayPrecision
-  //   );
-  //
-  //   ctx.lineWidth = 1;
-  //
-  //   gridData.lines.forEach(function(line) {
-  //     ctx.strokeStyle = line.minor ? minorColor : majorColor;
-  //     const p1 = map.latLngToContainerPoint([line.from, line.value]);
-  //     const p2 = map.latLngToContainerPoint([line.to, line.value]);
-  //     ctx.beginPath();
-  //     ctx.moveTo(p1.x, p1.y);
-  //     ctx.lineTo(p2.x, p2.y);
-  //     ctx.stroke();
-  //   });
-  //
-  //   if (showLabels && gridLevels.labels) {
-  //     ctx.font = Math.max(10, 12 - zoom * 0.5) + 'px monospace';
-  //     ctx.fillStyle = labelColor;
-  //     ctx.textAlign = 'center';
-  //     ctx.textBaseline = 'middle';
-  //
-  //     const labelFilter = precision >= 6 ? 1 : precision >= 4 ? 2 : 4;
-  //     let labelCount = 0;
-  //
-  //     gridData.labels.forEach(function(label) {
-  //       if (labelCount % labelFilter === 0) {
-  //         const point = map.latLngToContainerPoint([label.lat, label.lon]);
-  //         if (point.x > 0 && point.x < canvas.width && point.y > 0 && point.y < canvas.height) {
-  //           const textWidth = ctx.measureText(label.text).width;
-  //           ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.5) + ')';
-  //           ctx.fillRect(point.x - textWidth / 2 - 2, point.y - 7, textWidth + 4, 14);
-  //           ctx.fillStyle = labelColor;
-  //           ctx.fillText(label.text, point.x, point.y);
-  //           labelCount++;
-  //         }
-  //       }
-  //     });
-  //   }
-  // }, [map, enabled, opacity, precision, showLabels]);
-  //
-  // // Initialize canvas
-  // useEffect(function() {
-  //   if (!map || typeof L === 'undefined') return;
-  //
-  //   const L = window.L;
-  //   const CanvasLayer = L.Layer.extend({
-  //     onAdd: function(m) {
-  //       const pane = m.getPane('overlayPane');
-  //       if (!canvasRef.current) {
-  //         canvasRef.current = document.createElement('canvas');
-  //         canvasRef.current.style.cssText = 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 400;';
-  //       }
-  //       pane.appendChild(canvasRef.current);
-  //       this.resizeCanvas(m);
-  //       m.on('moveend', this.redraw, this);
-  //       m.on('zoomend', this.redraw, this);
-  //       this.redraw();
-  //     },
-  //     onRemove: function(m) {
-  //       m.off('moveend', this.redraw, this);
-  //       m.off('zoomend', this.redraw, this);
-  //       if (canvasRef.current && canvasRef.current.parentNode) {
-  //         canvasRef.current.parentNode.removeChild(canvasRef.current);
-  //       }
-  //     },
-  //     resizeCanvas: function(m) {
-  //       if (canvasRef.current) {
-  //         const size = m.getSize();
-  //         canvasRef.current.width = size.x;
-  //         canvasRef.current.height = size.y;
-  //       }
-  //     },
-  //     redraw: function() {
-  //       if (enabled && canvasRef.current) {
-  //         this.resizeCanvas(map);
-  //         drawGrid();
-  //       }
-  //     },
-  //   });
-  //
-  //   const layer = new CanvasLayer();
-  //   layer.addTo(map);
-  //
-  //   return function() {
-  //     map.removeLayer(layer);
-  //   };
-  // }, [map, drawGrid, enabled]);
-  //
-  // // Update on changes
-  // useEffect(function() {
-  //   if (enabled && canvasRef.current && map) {
-  //     drawGrid();
-  //   }
-  // }, [enabled, opacity, precision, showLabels, drawGrid, map]);
+  const [precision, setPrecision] = useState(4);
+  const [showLabels, setShowLabels] = useState(true);
+  const canvasRef = useRef(null);
 
+  // Load saved preferences
+  useEffect(() => {
+    const savedPrecision = localStorage.getItem('maidenhead-grid-precision');
+    const savedLabels = localStorage.getItem('maidenhead-grid-labels');
+
+    if (savedPrecision) {
+      const parsed = parseInt(savedPrecision, 10);
+      if ([2, 4, 6, 8].includes(parsed)) {
+        setPrecision(parsed);
+      }
+    }
+
+    if (savedLabels !== null) {
+      setShowLabels(savedLabels !== 'false');
+    }
+  }, []);
+
+  // Return null for now - canvas rendering disabled for debugging
   return null;
 }
