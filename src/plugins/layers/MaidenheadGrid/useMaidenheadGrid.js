@@ -44,13 +44,6 @@ export function latLonToMaidenhead(lat, lon, precision = 4) {
     result.push(String.fromCharCode(97 + (subLat % 24)));
   }
 
-  if (precision >= 8) {
-    const extLon = Math.floor((((lon % (2 / 60)) / (30 / 3600)) * 10));
-    const extLat = Math.floor((((lat % (1 / 60)) / (15 / 3600)) * 10));
-    result.push(String.fromCharCode(48 + (extLon % 10)));
-    result.push(String.fromCharCode(48 + (extLat % 10)));
-  }
-
   return result.slice(0, precision).join('');
 }
 
@@ -103,33 +96,40 @@ export function calculateGridForBounds(bounds, precision) {
 
   const south = Math.max(-90, bounds.south);
   const north = Math.min(90, bounds.north);
-  const west = ((bounds.west + 180) % 360 + 360) % 360;
-  const east = ((bounds.east + 180) % 360 + 360) % 360;
+  let west = bounds.west;
+  let east = bounds.east;
+
+  // Normalize to -180 to 180
+  west = ((west + 180) % 360 + 360) % 360 - 180;
+  east = ((east + 180) % 360 + 360) % 360 - 180;
+
+  // Handle antimeridian (when east < west)
+  const crossingAntimeridian = east < west;
 
   // Field lines (20 deg x 10 deg) - always show
-  for (let lon = Math.floor(west / 20) * 20; lon <= Math.ceil(east / 20) * 20; lon += 20) {
+  for (let lon = Math.floor(west / 20) * 20; lon <= Math.ceil(east / 20) * 20 + (crossingAntimeridian ? 360 : 0); lon += 20) {
     const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
     if (nLon > -180 && nLon < 180) {
-      lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'field' });
+      lines.push({ lat1: south, lng1: nLon, lat2: north, lng2: nLon, level: 'field' });
     }
   }
   for (let lat = Math.floor(south / 10) * 10; lat <= Math.ceil(north / 10) * 10; lat += 10) {
     if (lat > -90 && lat < 90) {
-      lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'field' });
+      lines.push({ lat1: lat, lng1: west, lat2: lat, lng2: east, level: 'field' });
     }
   }
 
   // Square lines (2 deg x 1 deg) - show at precision 4+
   if (precision >= 4) {
-    for (let lon = Math.floor(west / 2) * 2; lon <= Math.ceil(east / 2) * 2; lon += 2) {
+    for (let lon = Math.floor(west / 2) * 2; lon <= Math.ceil(east / 2) * 2 + (crossingAntimeridian ? 360 : 0); lon += 2) {
       const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
-      if (nLon > -180 && nLon < 180 && lon % 20 !== 0) {
-        lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'square' });
+      if (nLon > -180 && nLon < 180) {
+        lines.push({ lat1: south, lng1: nLon, lat2: north, lng2: nLon, level: 'square' });
       }
     }
     for (let lat = Math.floor(south); lat <= Math.ceil(north); lat++) {
-      if (lat > -90 && lat < 90 && lat % 10 !== 0) {
-        lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'square' });
+      if (lat > -90 && lat < 90) {
+        lines.push({ lat1: lat, lng1: west, lat2: lat, lng2: east, level: 'square' });
       }
     }
   }
@@ -138,15 +138,15 @@ export function calculateGridForBounds(bounds, precision) {
   if (precision >= 6) {
     const subLonStep = 5 / 60;
     const subLatStep = 2.5 / 60;
-    for (let lon = Math.floor(west / subLonStep) * subLonStep; lon <= Math.ceil(east / subLonStep) * subLonStep; lon += subLonStep) {
+    for (let lon = Math.floor(west / subLonStep) * subLonStep; lon <= Math.ceil(east / subLonStep) * subLonStep + (crossingAntimeridian ? 360 : 0); lon += subLonStep) {
       const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
-      if (nLon > -180 && nLon < 180 && lon % 2 !== 0) {
-        lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'subsquare' });
+      if (nLon > -180 && nLon < 180) {
+        lines.push({ lat1: south, lng1: nLon, lat2: north, lng2: nLon, level: 'subsquare' });
       }
     }
     for (let lat = Math.floor(south / subLatStep) * subLatStep; lat <= Math.ceil(north / subLatStep) * subLatStep; lat += subLatStep) {
-      if (lat > -90 && lat < 90 && lat % 1 !== 0) {
-        lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'subsquare' });
+      if (lat > -90 && lat < 90) {
+        lines.push({ lat1: lat, lng1: west, lat2: lat, lng2: east, level: 'subsquare' });
       }
     }
   }
@@ -155,11 +155,12 @@ export function calculateGridForBounds(bounds, precision) {
   if (precision >= 2) {
     const labelStepLon = precision >= 4 ? 2 : 20;
     const labelStepLat = precision >= 4 ? 1 : 10;
-    for (let lon = Math.floor(west / labelStepLon) * labelStepLon + labelStepLon / 2; lon < Math.ceil(east / labelStepLon) * labelStepLon; lon += labelStepLon) {
-      for (let lat = Math.floor(south / labelStepLat) * labelStepLat + labelStepLat / 2; lat < Math.ceil(north / labelStepLat) * labelStepLat; lat += labelStepLat) {
-        const grid = latLonToMaidenhead(lat, lon, precision);
-        if (grid) {
-          labels.push({ text: grid, lat, lon: ((lon + 180) % 360 + 360) % 360 - 180 });
+    for (let lon = Math.floor(west / labelStepLon) * labelStepLon + labelStepLon / 2; lon <= Math.ceil(east / labelStepLon) * labelStepLon + (crossingAntimeridian ? 360 : 0); lon += labelStepLon) {
+      const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
+      for (let lat = Math.floor(south / labelStepLat) * labelStepLat + labelStepLat / 2; lat <= Math.ceil(north / labelStepLat) * labelStepLat; lat += labelStepLat) {
+        const grid = latLonToMaidenhead(lat, nLon, precision);
+        if (grid && lat > -90 && lat < 90) {
+          labels.push({ text: grid, lat: lat, lng: nLon });
         }
       }
     }
@@ -181,12 +182,11 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook
+// Main plugin hook - using Leaflet polylines
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
-  const canvasRef = useRef(null);
-  const layerRef = useRef(null);
+  const layersRef = useRef([]);
 
   // Load saved preferences
   useEffect(() => {
@@ -205,27 +205,23 @@ export function useLayer({ map, enabled, opacity }) {
     }
   }, []);
 
-  // Draw function
+  // Draw grid using Leaflet polylines
   const drawGrid = () => {
-    if (!map || !canvasRef.current || !enabled) return;
+    if (!map || typeof L === 'undefined') return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    // Clear existing layers
+    layersRef.current.forEach((layer) => {
+      try {
+        map.removeLayer(layer);
+      } catch (e) {
+        // Ignore errors
+      }
+    });
+    layersRef.current = [];
+
+    if (!enabled || opacity <= 0) return;
 
     const bounds = map.getBounds();
-
-    // Resize canvas to match map
-    const size = map.getSize();
-    if (canvas.width !== size.x || canvas.height !== size.y) {
-      canvas.width = size.x;
-      canvas.height = size.y;
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (opacity <= 0) return;
-
     const zoom = map.getZoom();
     const gridLevels = getGridLevelsForZoom(zoom);
 
@@ -238,102 +234,83 @@ export function useLayer({ map, enabled, opacity }) {
       displayPrecision
     );
 
-    // Colors for different grid levels
-    const colors = {
-      field: 'rgba(255, 180, 50, ' + (opacity * 0.9) + ')',
-      square: 'rgba(255, 180, 50, ' + (opacity * 0.7) + ')',
-      subsquare: 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')',
+    // Line styles for different levels
+    const lineStyles = {
+      field: { color: '#FFB432', weight: 2, opacity: opacity * 0.9, fillOpacity: 0 },
+      square: { color: '#FFB432', weight: 1, opacity: opacity * 0.7, fillOpacity: 0 },
+      subsquare: { color: '#FFB432', weight: 0.5, opacity: opacity * 0.4, fillOpacity: 0 },
     };
-    const labelColor = 'rgba(255, 255, 255, ' + opacity + ')';
 
-    // Draw lines
-    gridData.lines.forEach(function(line) {
-      ctx.strokeStyle = colors[line.level] || colors.field;
-      ctx.lineWidth = line.level === 'field' ? 2 : line.level === 'square' ? 1 : 0.5;
-      const p1 = map.latLngToContainerPoint([line.from, line.value]);
-      const p2 = map.latLngToContainerPoint([line.to, line.value]);
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
+    // Draw lines using polylines
+    gridData.lines.forEach((line) => {
+      const style = lineStyles[line.level] || lineStyles.field;
+      const polyline = L.polyline(
+        [
+          [line.lat1, line.lng1],
+          [line.lat2, line.lng2],
+        ],
+        style
+      );
+      polyline.addTo(map);
+      layersRef.current.push(polyline);
     });
 
-    // Draw labels
+    // Draw labels using divIcon
     if (showLabels && gridLevels.labels) {
-      ctx.font = 'bold 12px monospace';
-      ctx.fillStyle = labelColor;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      gridData.labels.forEach(function(label) {
-        const point = map.latLngToContainerPoint([label.lat, label.lon]);
-        if (point.x > 0 && point.x < canvas.width && point.y > 0 && point.y < canvas.height) {
-          const textWidth = ctx.measureText(label.text).width;
-          ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.6) + ')';
-          ctx.fillRect(point.x - textWidth / 2 - 2, point.y - 7, textWidth + 4, 14);
-          ctx.fillStyle = labelColor;
-          ctx.fillText(label.text, point.x, point.y);
-        }
+      gridData.labels.forEach((label) => {
+        const labelIcon = L.divIcon({
+          className: 'maidenhead-label',
+          html: `<div style="background: rgba(0,0,0,${opacity * 0.6}); color: white; padding: 2px 4px; font-size: 11px; font-family: monospace; font-weight: bold; border-radius: 3px; white-space: nowrap;">${label.text}</div>`,
+          iconSize: [60, 20],
+          iconAnchor: [30, 10],
+        });
+        const marker = L.marker([label.lat, label.lng], { icon: labelIcon });
+        marker.addTo(map);
+        layersRef.current.push(marker);
       });
     }
   };
 
-  // Initialize canvas and setup event listeners
+  // Draw when map moves or zooms
   useEffect(() => {
-    if (!map || !enabled) return;
-    if (layerRef.current) return;
+    if (!map || typeof L === 'undefined') return;
+    if (!enabled) return;
 
-    const L = window.L;
-    if (!L) return;
-
-    // Create canvas element
-    const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 400;';
-    canvas.width = map.getSize().x;
-    canvas.height = map.getSize().y;
-    canvasRef.current = canvas;
-
-    // Get overlay pane and append canvas
-    const pane = map.getPane('overlayPane');
-    if (pane) {
-      pane.appendChild(canvas);
-    }
-
-    // Draw initial grid
     drawGrid();
 
-    // Listen for map events
     const handleMove = () => drawGrid();
     const handleZoom = () => drawGrid();
 
     map.on('moveend', handleMove);
     map.on('zoomend', handleZoom);
 
-    // Cleanup
-    layerRef.current = {
-      remove: () => {
-        map.off('moveend', handleMove);
-        map.off('zoomend', handleZoom);
-        if (canvas.parentNode) {
-          canvas.parentNode.removeChild(canvas);
-        }
-        layerRef.current = null;
-      }
-    };
-
     return () => {
-      if (layerRef.current) {
-        layerRef.current.remove();
-      }
+      map.off('moveend', handleMove);
+      map.off('zoomend', handleZoom);
+      layersRef.current.forEach((layer) => {
+        try {
+          map.removeLayer(layer);
+        } catch (e) {
+          // Ignore
+        }
+      });
+      layersRef.current = [];
     };
-  }, [map, enabled]);
+  }, [map, enabled, precision, showLabels]);
 
-  // Redraw when opacity or precision changes
+  // Update opacity without redrawing
   useEffect(() => {
-    if (enabled && canvasRef.current) {
-      drawGrid();
-    }
-  }, [opacity, precision, showLabels, enabled]);
+    if (!enabled) return;
+    layersRef.current.forEach((layer) => {
+      try {
+        if (layer.setOpacity) {
+          layer.setOpacity(opacity);
+        }
+      } catch (e) {
+        // Ignore
+      }
+    });
+  }, [opacity, enabled]);
 
   return null;
 }
