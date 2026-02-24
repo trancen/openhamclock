@@ -11,7 +11,7 @@ import {
   getGridLevelsForZoom,
   calculateGridForBounds,
   GRID_PRECISIONS,
-} from './MaidenheadGrid/useMaidenheadGrid.js';
+} from './useMaidenheadGrid.js';
 
 describe('Maidenhead Grid Utilities', () => {
   describe('latLonToMaidenhead - Basic Conversion', () => {

@@ -171,7 +171,6 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
@@ -317,5 +316,3 @@ export function useLayer({ map, enabled, opacity }) {
     }
   }, [enabled, opacity, precision, showLabels, drawGrid, map]);
 }
-
-export default { metadata, useLayer };
