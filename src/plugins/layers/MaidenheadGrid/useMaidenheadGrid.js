@@ -37,6 +37,20 @@ export function latLonToMaidenhead(lat, lon, precision = 4) {
     result.push(String.fromCharCode(48 + (squareLat % 10)));
   }
 
+  if (precision >= 6) {
+    const subLon = Math.floor(((lon % 2) / 5) * 24);
+    const subLat = Math.floor(((lat % 1) / 2.5) * 24);
+    result.push(String.fromCharCode(97 + (subLon % 24)));
+    result.push(String.fromCharCode(97 + (subLat % 24)));
+  }
+
+  if (precision >= 8) {
+    const extLon = Math.floor((((lon % (2 / 60)) / (30 / 3600)) * 10));
+    const extLat = Math.floor((((lat % (1 / 60)) / (15 / 3600)) * 10));
+    result.push(String.fromCharCode(48 + (extLon % 10)));
+    result.push(String.fromCharCode(48 + (extLat % 10)));
+  }
+
   return result.slice(0, precision).join('');
 }
 
@@ -92,21 +106,48 @@ export function calculateGridForBounds(bounds, precision) {
   const west = ((bounds.west + 180) % 360 + 360) % 360;
   const east = ((bounds.east + 180) % 360 + 360) % 360;
 
-  const lonStep = precision >= 4 ? 2 : 20;
-  const latStep = precision >= 4 ? 1 : 10;
-
-  // Longitude lines
-  for (let lon = Math.floor(west / lonStep) * lonStep; lon <= Math.ceil(east / lonStep) * lonStep; lon += lonStep) {
+  // Field lines (20 deg x 10 deg) - always show
+  for (let lon = Math.floor(west / 20) * 20; lon <= Math.ceil(east / 20) * 20; lon += 20) {
     const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
     if (nLon > -180 && nLon < 180) {
-      lines.push({ type: 'vertical', value: nLon, from: south, to: north });
+      lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'field' });
+    }
+  }
+  for (let lat = Math.floor(south / 10) * 10; lat <= Math.ceil(north / 10) * 10; lat += 10) {
+    if (lat > -90 && lat < 90) {
+      lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'field' });
     }
   }
 
-  // Latitude lines
-  for (let lat = Math.floor(south / latStep) * latStep; lat <= Math.ceil(north / latStep) * latStep; lat += latStep) {
-    if (lat > -90 && lat < 90) {
-      lines.push({ type: 'horizontal', value: lat, from: west, to: east });
+  // Square lines (2 deg x 1 deg) - show at precision 4+
+  if (precision >= 4) {
+    for (let lon = Math.floor(west / 2) * 2; lon <= Math.ceil(east / 2) * 2; lon += 2) {
+      const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
+      if (nLon > -180 && nLon < 180 && lon % 20 !== 0) {
+        lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'square' });
+      }
+    }
+    for (let lat = Math.floor(south); lat <= Math.ceil(north); lat++) {
+      if (lat > -90 && lat < 90 && lat % 10 !== 0) {
+        lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'square' });
+      }
+    }
+  }
+
+  // Sub-square lines (5 min x 2.5 min) - show at precision 6+
+  if (precision >= 6) {
+    const subLonStep = 5 / 60;
+    const subLatStep = 2.5 / 60;
+    for (let lon = Math.floor(west / subLonStep) * subLonStep; lon <= Math.ceil(east / subLonStep) * subLonStep; lon += subLonStep) {
+      const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
+      if (nLon > -180 && nLon < 180 && lon % 2 !== 0) {
+        lines.push({ type: 'vertical', value: nLon, from: south, to: north, level: 'subsquare' });
+      }
+    }
+    for (let lat = Math.floor(south / subLatStep) * subLatStep; lat <= Math.ceil(north / subLatStep) * subLatStep; lat += subLatStep) {
+      if (lat > -90 && lat < 90 && lat % 1 !== 0) {
+        lines.push({ type: 'horizontal', value: lat, from: west, to: east, level: 'subsquare' });
+      }
     }
   }
 
@@ -140,7 +181,7 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook - with drawing
+// Main plugin hook
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
@@ -197,15 +238,18 @@ export function useLayer({ map, enabled, opacity }) {
       displayPrecision
     );
 
-    const majorColor = 'rgba(255, 180, 50, ' + (opacity * 0.8) + ')';
-    const minorColor = 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')';
+    // Colors for different grid levels
+    const colors = {
+      field: 'rgba(255, 180, 50, ' + (opacity * 0.9) + ')',
+      square: 'rgba(255, 180, 50, ' + (opacity * 0.7) + ')',
+      subsquare: 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')',
+    };
     const labelColor = 'rgba(255, 255, 255, ' + opacity + ')';
-
-    ctx.lineWidth = 1;
 
     // Draw lines
     gridData.lines.forEach(function(line) {
-      ctx.strokeStyle = line.minor ? minorColor : majorColor;
+      ctx.strokeStyle = colors[line.level] || colors.field;
+      ctx.lineWidth = line.level === 'field' ? 2 : line.level === 'square' ? 1 : 0.5;
       const p1 = map.latLngToContainerPoint([line.from, line.value]);
       const p2 = map.latLngToContainerPoint([line.to, line.value]);
       ctx.beginPath();
@@ -216,7 +260,7 @@ export function useLayer({ map, enabled, opacity }) {
 
     // Draw labels
     if (showLabels && gridLevels.labels) {
-      ctx.font = Math.max(10, 12 - zoom * 0.5) + 'px monospace';
+      ctx.font = 'bold 12px monospace';
       ctx.fillStyle = labelColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -225,7 +269,7 @@ export function useLayer({ map, enabled, opacity }) {
         const point = map.latLngToContainerPoint([label.lat, label.lon]);
         if (point.x > 0 && point.x < canvas.width && point.y > 0 && point.y < canvas.height) {
           const textWidth = ctx.measureText(label.text).width;
-          ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.5) + ')';
+          ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.6) + ')';
           ctx.fillRect(point.x - textWidth / 2 - 2, point.y - 7, textWidth + 4, 14);
           ctx.fillStyle = labelColor;
           ctx.fillText(label.text, point.x, point.y);
@@ -237,7 +281,7 @@ export function useLayer({ map, enabled, opacity }) {
   // Initialize canvas and setup event listeners
   useEffect(() => {
     if (!map || !enabled) return;
-    if (layerRef.current) return; // Already initialized
+    if (layerRef.current) return;
 
     const L = window.L;
     if (!L) return;
