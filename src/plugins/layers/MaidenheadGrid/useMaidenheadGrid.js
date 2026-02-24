@@ -27,7 +27,7 @@ function getMaidenheadGrid(lon, lat, precision) {
   var locator = "";
   var x = lon;
   var y = lat;
-  var p = d4[Math.round(precision)] || 4;
+  var p = precision;
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
@@ -80,7 +80,7 @@ export function useLayer({ map, enabled, opacity }) {
     if (!map || typeof L === 'undefined') return;
     if (!enabled) return;
 
-    // Create the Maidenhead layer using Leaflet's LayerGroup
+    // Grid unit sizes per zoom level
     const d3 = [20,10,10,10,10,10,1,1,1,1,1/24,1/24,1/24,1/24,1/24,1/240,1/240,1/240,1/240/24,1/240/24,1/240/24];
     const lat_cor = [0,8,8,8,10,14,6,8,8,8,1.4,2.5,3,3.5,4,4,3.5,3.5,1.47,1.8,1.6];
     
@@ -109,6 +109,11 @@ export function useLayer({ map, enabled, opacity }) {
       var top = Math.ceil(n / unit) * unit;
       var bottom = Math.floor(s / unit) * unit;
       
+      // Determine how many precision levels to show based on zoom
+      var showPrecision = precision;
+      if (zoom < 3 && precision > 2) showPrecision = 2;
+      if (zoom < 6 && precision > 4) showPrecision = 4;
+      
       for (var lon = left; lon < right; lon += (unit * 2)) {
         for (var lat = bottom; lat < top; lat += unit) {
           var rectBounds = [[lat, lon], [lat + unit, lon + (unit * 2)]];
@@ -126,14 +131,14 @@ export function useLayer({ map, enabled, opacity }) {
           if (showLabels) {
             var labelLon = lon + unit - (unit / lcor);
             var labelLat = lat + (unit / 2) + (unit / lcor * c);
-            var gridSquare = getMaidenheadGrid(labelLon, labelLat, precision);
+            var gridSquare = getMaidenheadGrid(labelLon, labelLat, showPrecision);
             
             var title_size = [0,10,12,16,20,26,12,16,24,36,12,14,20,36,60,12,20,36,8,12,24];
             var size = (title_size[Math.round(zoom)] || 12) + 'px';
             
             var myIcon = L.divIcon({
               className: 'maidenhead-label',
-              html: '<span style="color: white; font-size: ' + size + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
+              html: '<span style="color: rgba(255,255,255,' + opacity + '); font-size: ' + size + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
               iconSize: [80, 30],
               iconAnchor: [40, 15]
             });
