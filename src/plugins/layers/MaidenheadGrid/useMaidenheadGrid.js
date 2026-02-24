@@ -32,7 +32,7 @@ function getMaidenheadGrid(lon, lat, zoom) {
   var locator = "";
   var x = lon;
   var y = lat;
-  var p = d4[Math.round(zoom)] || 1;
+  var p = Math.min(d4[Math.round(zoom)] || 1, 2); // Cap at 4 chars (2 pairs)
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
