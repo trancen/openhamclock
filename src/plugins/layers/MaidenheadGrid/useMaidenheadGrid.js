@@ -23,17 +23,15 @@ var lat_cor = [0,8,8,8,10,14,6,8,8,8,1.4,2.5,3,3.5,4,4,3.5,3.5,1.47,1.8,1.6];
 var title_size = [0,10,12,16,20,26,12,16,24,36,12,14,20,36,60,12,20,36,8,12,24];
 
 // Convert lat/lon to Maidenhead grid square
-function getMaidenheadGrid(lon, lat, zoom) {
+function getMaidenheadGrid(lon, lat, precision) {
   var ydiv_arr = [10, 1, 1/24, 1/240, 1/240/24];
   var d1 = "ABCDEFGHIJKLMNOPQR".split("");
   var d2 = "ABCDEFGHIJKLMNOPQRSTUVWX".split("");
-  var d4 = [0,1,1,1,1,1,2,2,2,2,3,3,3,3,3,4,4,4,5,5,5];
   
   var locator = "";
   var x = lon;
   var y = lat;
-  // Cap at 2 pairs (4 chars) to prevent overlap
-  var p = Math.min(d4[Math.round(zoom)] || 1, 2);
+  var p = precision;
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
@@ -56,6 +54,16 @@ function getMaidenheadGrid(lon, lat, zoom) {
   }
   
   return locator;
+}
+
+// Determine precision based on zoom
+function getPrecisionForZoom(zoom) {
+  // Zoom 0-4: 2 chars (fields only) - FN
+  // Zoom 5-10: 4 chars (fields + squares) - FN03
+  // Zoom 11+: 6 chars (fields + squares + subsquares) - FN03cq, cap here
+  if (zoom <= 4) return 1;  // 2 chars
+  if (zoom <= 10) return 2; // 4 chars
+  return 3; // 6 chars, max
 }
 
 // Main plugin hook
@@ -93,10 +101,11 @@ export function useLayer({ map, enabled, opacity }) {
       
       var bounds = map.getBounds();
       var zoom = map.getZoom();
+      var p = getPrecisionForZoom(zoom);
       var unit = d3[Math.round(zoom)];
       var lcor = lat_cor[Math.round(zoom)];
       
-      // Handle lcor = 0 (at zoom 0) by using a default
+      // Handle lcor = 0 (at zoom 0)
       if (lcor === 0) lcor = 8;
       
       var w = bounds.getWest();
@@ -126,25 +135,19 @@ export function useLayer({ map, enabled, opacity }) {
             interactive: false
           }));
           
-          // Add label - centered in cell
+          // Add label - exactly like reference code
           if (showLabels) {
-            var labelLon = lon + unit;
-            var labelLat = lat + unit/2;
-            var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
+            var labelLon = lon + unit - (unit / lcor);
+            var labelLat = lat + (unit / 2) + (unit / lcor * c);
+            var gridSquare = getMaidenheadGrid(labelLon, labelLat, p);
             
-            var fontSize = (title_size[Math.round(zoom)] || 12) + 'px';
-            
-            // Calculate icon size based on text length
-            var charWidth = 8;
-            var textWidth = gridSquare.length * charWidth;
-            var iconWidth = Math.max(textWidth + 10, 50);
-            var iconHeight = 20;
+            var size = (title_size[Math.round(zoom)] || 12) + 'px';
             
             var myIcon = L.divIcon({
-              className: 'maidenhead-label',
-              html: '<span style="color: white; font-size: ' + fontSize + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
-              iconSize: [iconWidth, iconHeight],
-              iconAnchor: [iconWidth / 2, iconHeight / 2]
+              className: 'my-div-icon',
+              html: '<span style="color: white; font-size: ' + size + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
+              iconSize: [80, 30],
+              iconAnchor: [40, 15]
             });
             
             gridLayer.addLayer(L.marker([labelLat, labelLon], {
