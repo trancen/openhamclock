@@ -685,8 +685,5 @@ export function useLayer({ map, enabled, opacity, config }) {
   );
 }
 
-// Export additional API functions for external control
-export { getGridLevelsForZoom, calculateGridForBounds };
-
 // Default export for plugin system
 export default { metadata, useLayer };
