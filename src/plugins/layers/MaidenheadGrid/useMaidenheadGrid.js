@@ -140,11 +140,12 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook - with drawGrid callback
+// Main plugin hook - with canvas initialization
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
   const canvasRef = useRef(null);
+  const layerRef = useRef(null);
 
   // Load saved preferences
   useEffect(() => {
@@ -163,12 +164,44 @@ export function useLayer({ map, enabled, opacity }) {
     }
   }, []);
 
-  // Draw grid function
-  const drawGrid = useCallback(() => {
-    // Placeholder - just logging for now
-    console.log('drawGrid called');
-  }, [map, enabled, opacity, precision, showLabels]);
+  // Initialize canvas layer
+  useEffect(() => {
+    if (!map || !enabled) return;
+    if (layerRef.current) return; // Already initialized
 
-  // Return null for now - canvas rendering disabled for debugging
+    const L = window.L;
+    if (!L) return;
+
+    // Create canvas element
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 400;';
+    canvas.width = map.getSize().x;
+    canvas.height = map.getSize().y;
+    canvasRef.current = canvas;
+
+    // Get overlay pane and append canvas
+    const pane = map.getPane('overlayPane');
+    if (pane) {
+      pane.appendChild(canvas);
+    }
+
+    // Cleanup
+    layerRef.current = {
+      remove: () => {
+        if (canvas.parentNode) {
+          canvas.parentNode.removeChild(canvas);
+        }
+        layerRef.current = null;
+      }
+    };
+
+    return () => {
+      if (layerRef.current) {
+        layerRef.current.remove();
+      }
+    };
+  }, [map, enabled]);
+
+  // Return null - canvas is rendered directly to DOM
   return null;
 }
