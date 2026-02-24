@@ -1,7 +1,8 @@
 /**
  * Maidenhead Grid Overlay Plugin
  */
-// import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 // Grid precision options
 export const GRID_PRECISIONS = {
