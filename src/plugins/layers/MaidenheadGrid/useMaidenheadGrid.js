@@ -172,6 +172,11 @@ export const metadata = {
 };
 
 export function useLayer({ map, enabled, opacity }) {
+  // Return early if Leaflet is not available yet
+  if (typeof window === 'undefined' || !window.L) {
+    return null;
+  }
+
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
   const canvasRef = useRef(null);
