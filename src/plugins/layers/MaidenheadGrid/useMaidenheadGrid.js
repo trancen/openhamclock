@@ -127,8 +127,8 @@ export function useLayer({ map, enabled, opacity }) {
           
           // Add label - exactly like reference code
           if (showLabels) {
-            var labelLon = lon + unit - (unit / lcor);
-            var labelLat = lat + (unit / 2) + (unit / lcor * c);
+            var labelLon = lon + unit; // Center
+            var labelLat = lat + unit/2; // Center
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
             var size = (title_size[Math.round(zoom)] || 12) + 'px';
