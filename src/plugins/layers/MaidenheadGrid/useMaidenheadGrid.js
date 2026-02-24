@@ -1,7 +1,7 @@
 /**
  * Maidenhead Grid Overlay Plugin
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 // Grid precision options
 export const GRID_PRECISIONS = {
@@ -140,7 +140,7 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook - minimal version
+// Main plugin hook - with drawGrid callback
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
@@ -162,6 +162,12 @@ export function useLayer({ map, enabled, opacity }) {
       setShowLabels(savedLabels !== 'false');
     }
   }, []);
+
+  // Draw grid function
+  const drawGrid = useCallback(() => {
+    // Placeholder - just logging for now
+    console.log('drawGrid called');
+  }, [map, enabled, opacity, precision, showLabels]);
 
   // Return null for now - canvas rendering disabled for debugging
   return null;
