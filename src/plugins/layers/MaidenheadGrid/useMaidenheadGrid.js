@@ -1,8 +1,5 @@
 /**
  * Maidenhead Grid Overlay Plugin
- *
- * Displays IARU Maidenhead grid square overlay on the map.
- * Supports multiple precision levels (2, 4, 6, 8 characters) with adaptive grid scaling.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 
@@ -27,7 +24,7 @@ export function latLonToMaidenhead(lat, lon, precision = 4) {
 
   const result = [];
 
-  // Field (20° x 10°)
+  // Field (20 deg x 10 deg)
   const fieldLon = Math.floor(lon / 20);
   const fieldLat = Math.floor(lat / 10);
   result.push(String.fromCharCode(65 + (fieldLon % 18)));
@@ -65,18 +62,16 @@ export function maidenheadToBounds(grid) {
 
   grid = grid.toUpperCase().substring(0, 8);
 
-  let minLon, maxLon, minLat, maxLat;
-
   const fieldLon = grid.charCodeAt(0) - 65;
   const fieldLat = grid.charCodeAt(1) - 65;
-  minLon = fieldLon * 20 - 180;
-  maxLon = minLon + 20;
-  minLat = fieldLat * 10 - 90;
-  maxLat = minLat + 10;
+  let minLon = fieldLon * 20 - 180;
+  let maxLon = minLon + 20;
+  let minLat = fieldLat * 10 - 90;
+  let maxLat = minLat + 10;
 
-  if (grid.length >= 4 && /^\d\d$/.test(grid.substring(2, 4))) {
-    const squareLon = parseInt(grid[2], 10);
-    const squareLat = parseInt(grid[3], 10);
+  if (grid.length >= 4) {
+    const squareLon = parseInt(grid[2], 10) || 0;
+    const squareLat = parseInt(grid[3], 10) || 0;
     minLon = fieldLon * 20 + squareLon * 2;
     maxLon = minLon + 2;
     minLat = fieldLat * 10 + squareLat;
@@ -111,65 +106,35 @@ export function calculateGridForBounds(bounds, precision) {
   const west = ((bounds.west + 180) % 360 + 360) % 360;
   const east = ((bounds.east + 180) % 360 + 360) % 360;
 
-  let lonStep, latStep, lonSubStep, latSubStep;
-
-  switch (precision) {
-    case 2:
-      lonStep = 20;
-      latStep = 10;
-      break;
-    case 4:
-      lonStep = 2;
-      latStep = 1;
-      break;
-    case 6:
-    case 8:
-      lonStep = 2;
-      latStep = 1;
-      lonSubStep = 5 / 60;
-      latSubStep = 2.5 / 60;
-      break;
-    default:
-      lonStep = 2;
-      latStep = 1;
-  }
+  const lonStep = precision >= 4 ? 2 : 20;
+  const latStep = precision >= 4 ? 1 : 10;
 
   // Longitude lines
-  const startLon = Math.floor(west / lonStep) * lonStep;
-  const endLon = Math.ceil(east / lonStep) * lonStep;
-
-  for (let lon = startLon; lon <= endLon; lon += lonStep) {
-    const normalizedLon = ((lon + 180) % 360 + 360) % 360 - 180;
-    if (normalizedLon > -180 && normalizedLon < 180) {
-      lines.push({ type: 'vertical', value: normalizedLon, from: south, to: north });
+  for (let lon = Math.floor(west / lonStep) * lonStep; lon <= Math.ceil(east / lonStep) * lonStep; lon += lonStep) {
+    const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
+    if (nLon > -180 && nLon < 180) {
+      lines.push({ type: 'vertical', value: nLon, from: south, to: north });
     }
   }
 
   // Latitude lines
-  const startLat = Math.floor(south / latStep) * latStep;
-  const endLat = Math.ceil(north / latStep) * latStep;
-
-  for (let lat = startLat; lat <= endLat; lat += latStep) {
+  for (let lat = Math.floor(south / latStep) * latStep; lat <= Math.ceil(north / latStep) * latStep; lat += latStep) {
     if (lat > -90 && lat < 90) {
       lines.push({ type: 'horizontal', value: lat, from: west, to: east });
     }
   }
 
-  // Sub-square lines for precision >= 6
-  if (precision >= 6 && lonSubStep && latSubStep) {
-    const subStartLon = Math.floor(west / lonSubStep) * lonSubStep;
-    const subEndLon = Math.ceil(east / lonSubStep) * lonSubStep;
-    const subStartLat = Math.floor(south / latSubStep) * latSubStep;
-    const subEndLat = Math.ceil(north / latSubStep) * latSubStep;
-
-    for (let lon = subStartLon; lon <= subEndLon; lon += lonSubStep) {
-      const normalizedLon = ((lon + 180) % 360 + 360) % 360 - 180;
-      if (normalizedLon > -180 && normalizedLon < 180 && lon % lonStep !== 0) {
-        lines.push({ type: 'vertical', value: normalizedLon, from: south, to: north, minor: true });
+  // Sub-square lines
+  if (precision >= 6) {
+    const subLonStep = 5 / 60;
+    const subLatStep = 2.5 / 60;
+    for (let lon = Math.floor(west / subLonStep) * subLonStep; lon <= Math.ceil(east / subLonStep) * subLonStep; lon += subLonStep) {
+      const nLon = ((lon + 180) % 360 + 360) % 360 - 180;
+      if (nLon > -180 && nLon < 180 && lon % lonStep !== 0) {
+        lines.push({ type: 'vertical', value: nLon, from: south, to: north, minor: true });
       }
     }
-
-    for (let lat = subStartLat; lat <= subEndLat; lat += latSubStep) {
+    for (let lat = Math.floor(south / subLatStep) * subLatStep; lat <= Math.ceil(north / subLatStep) * subLatStep; lat += subLatStep) {
       if (lat > -90 && lat < 90 && lat % latStep !== 0) {
         lines.push({ type: 'horizontal', value: lat, from: west, to: east, minor: true });
       }
@@ -180,21 +145,11 @@ export function calculateGridForBounds(bounds, precision) {
   if (precision >= 2) {
     const labelStepLon = precision >= 4 ? 2 : 20;
     const labelStepLat = precision >= 4 ? 1 : 10;
-
-    const labelStartLon = Math.floor(west / labelStepLon) * labelStepLon + labelStepLon / 2;
-    const labelEndLon = Math.ceil(east / labelStepLon) * labelStepLon;
-    const labelStartLat = Math.floor(south / labelStepLat) * labelStepLat + labelStepLat / 2;
-    const labelEndLat = Math.ceil(north / labelStepLat) * labelStepLat;
-
-    for (let lon = labelStartLon; lon < labelEndLon; lon += labelStepLon) {
-      for (let lat = labelStartLat; lat < labelEndLat; lat += labelStepLat) {
+    for (let lon = Math.floor(west / labelStepLon) * labelStepLon + labelStepLon / 2; lon < Math.ceil(east / labelStepLon) * labelStepLon; lon += labelStepLon) {
+      for (let lat = Math.floor(south / labelStepLat) * labelStepLat + labelStepLat / 2; lat < Math.ceil(north / labelStepLat) * labelStepLat; lat += labelStepLat) {
         const grid = latLonToMaidenhead(lat, lon, precision);
         if (grid) {
-          labels.push({
-            text: grid,
-            lat,
-            lon: ((lon + 180) % 360 + 360) % 360 - 180,
-          });
+          labels.push({ text: grid, lat, lon: ((lon + 180) % 360 + 360) % 360 - 180 });
         }
       }
     }
@@ -220,9 +175,7 @@ export const metadata = {
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
-
   const canvasRef = useRef(null);
-  const controlRef = useRef(null);
 
   // Load saved preferences
   useEffect(() => {
@@ -256,9 +209,9 @@ export function useLayer({ map, enabled, opacity }) {
 
     if (opacity <= 0) return;
 
-    const majorColor = `rgba(255, 180, 50, ${opacity * 0.8})`;
-    const minorColor = `rgba(255, 180, 50, ${opacity * 0.4})`;
-    const labelColor = `rgba(255, 255, 255, ${opacity})`;
+    const majorColor = 'rgba(255, 180, 50, ' + (opacity * 0.8) + ')';
+    const minorColor = 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')';
+    const labelColor = 'rgba(255, 255, 255, ' + opacity + ')';
 
     const zoom = map.getZoom();
     const gridLevels = getGridLevelsForZoom(zoom);
@@ -266,7 +219,6 @@ export function useLayer({ map, enabled, opacity }) {
     let displayPrecision = precision;
     if (precision >= 4 && !gridLevels.squares) displayPrecision = 2;
     if (precision >= 6 && !gridLevels.subSquares) displayPrecision = 4;
-    if (precision >= 8 && !gridLevels.extended) displayPrecision = 6;
 
     const gridData = calculateGridForBounds(
       { south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() },
@@ -275,7 +227,7 @@ export function useLayer({ map, enabled, opacity }) {
 
     ctx.lineWidth = 1;
 
-    gridData.lines.forEach((line) => {
+    gridData.lines.forEach(function(line) {
       ctx.strokeStyle = line.minor ? minorColor : majorColor;
       const p1 = map.latLngToContainerPoint([line.from, line.value]);
       const p2 = map.latLngToContainerPoint([line.to, line.value]);
@@ -285,8 +237,8 @@ export function useLayer({ map, enabled, opacity }) {
       ctx.stroke();
     });
 
-    if (showLabels && gridLevels.labels && precision >= 2) {
-      ctx.font = `${Math.max(10, 12 - zoom * 0.5)}px monospace`;
+    if (showLabels && gridLevels.labels) {
+      ctx.font = Math.max(10, 12 - zoom * 0.5) + 'px monospace';
       ctx.fillStyle = labelColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -294,12 +246,12 @@ export function useLayer({ map, enabled, opacity }) {
       const labelFilter = precision >= 6 ? 1 : precision >= 4 ? 2 : 4;
       let labelCount = 0;
 
-      gridData.labels.forEach((label) => {
+      gridData.labels.forEach(function(label) {
         if (labelCount % labelFilter === 0) {
           const point = map.latLngToContainerPoint([label.lat, label.lon]);
           if (point.x > 0 && point.x < canvas.width && point.y > 0 && point.y < canvas.height) {
             const textWidth = ctx.measureText(label.text).width;
-            ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.5})`;
+            ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.5) + ')';
             ctx.fillRect(point.x - textWidth / 2 - 2, point.y - 7, textWidth + 4, 14);
             ctx.fillStyle = labelColor;
             ctx.fillText(label.text, point.x, point.y);
@@ -310,111 +262,56 @@ export function useLayer({ map, enabled, opacity }) {
     }
   }, [map, enabled, opacity, precision, showLabels]);
 
-  // Initialize canvas and control
-  useEffect(() => {
+  // Initialize canvas
+  useEffect(function() {
     if (!map || typeof L === 'undefined') return;
 
     const L = window.L;
-
-    // Create canvas
-    if (!canvasRef.current) {
-      canvasRef.current = document.createElement('canvas');
-      canvasRef.current.style.cssText = 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 400;';
-    }
-
-    const pane = map.getPane('overlayPane');
-    if (!canvasRef.current.parentNode) {
-      pane.appendChild(canvasRef.current);
-    }
-
-    const size = map.getSize();
-    canvasRef.current.width = size.x;
-    canvasRef.current.height = size.y;
-
-    // Create control
-    const MaidenheadGridControl = L.Control.extend({
-      options: { position: 'topright' },
-      onAdd: function () {
-        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        container.style.cssText = 'background: rgba(0,0,0,0.8); padding: 8px; border-radius: 4px; min-width: 140px; font-family: monospace;';
-
-        container.innerHTML = `
-          <div style="margin-bottom: 8px;">
-            <label style="color: #aaa; font-size: 10px; display: block; margin-bottom: 4px;">Grid Precision</label>
-            <select id="maidenhead-precision" style="width: 100%; padding: 4px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 11px;">
-              <option value="2" ${precision === 2 ? 'selected' : ''}>Fields (AB)</option>
-              <option value="4" ${precision === 4 ? 'selected' : ''}>Squares (AB12)</option>
-              <option value="6" ${precision === 6 ? 'selected' : ''}>Sub-sq (AB12cd)</option>
-              <option value="8" ${precision === 8 ? 'selected' : ''}>Extended</option>
-            </select>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="maidenhead-labels" ${showLabels ? 'checked' : ''} style="cursor: pointer;">
-            <label for="maidenhead-labels" style="color: #aaa; font-size: 11px; cursor: pointer;">Show Labels</label>
-          </div>
-        `;
-        return container;
+    const CanvasLayer = L.Layer.extend({
+      onAdd: function(m) {
+        const pane = m.getPane('overlayPane');
+        if (!canvasRef.current) {
+          canvasRef.current = document.createElement('canvas');
+          canvasRef.current.style.cssText = 'position: absolute; top: 0; left: 0; pointer-events: none; z-index: 400;';
+        }
+        pane.appendChild(canvasRef.current);
+        this.resizeCanvas(m);
+        m.on('moveend', this.redraw, this);
+        m.on('zoomend', this.redraw, this);
+        this.redraw();
+      },
+      onRemove: function(m) {
+        m.off('moveend', this.redraw, this);
+        m.off('zoomend', this.redraw, this);
+        if (canvasRef.current && canvasRef.current.parentNode) {
+          canvasRef.current.parentNode.removeChild(canvasRef.current);
+        }
+      },
+      resizeCanvas: function(m) {
+        if (canvasRef.current) {
+          const size = m.getSize();
+          canvasRef.current.width = size.x;
+          canvasRef.current.height = size.y;
+        }
+      },
+      redraw: function() {
+        if (enabled && canvasRef.current) {
+          this.resizeCanvas(map);
+          drawGrid();
+        }
       },
     });
 
-    controlRef.current = new MaidenheadGridControl();
-    map.addControl(controlRef.current);
+    const layer = new CanvasLayer();
+    layer.addTo(map);
 
-    // Event handlers
-    setTimeout(() => {
-      const precisionSelect = document.getElementById('maidenhead-precision');
-      const labelsCheckbox = document.getElementById('maidenhead-labels');
-
-      if (precisionSelect) {
-        precisionSelect.addEventListener('change', (e) => {
-          const val = parseInt(e.target.value, 10);
-          if ([2, 4, 6, 8].includes(val)) {
-            setPrecision(val);
-            localStorage.setItem('maidenhead-grid-precision', val);
-          }
-        });
-      }
-
-      if (labelsCheckbox) {
-        labelsCheckbox.addEventListener('change', (e) => {
-          setShowLabels(e.target.checked);
-          localStorage.setItem('maidenhead-grid-labels', e.target.checked);
-        });
-      }
-    }, 100);
-
-    // Map events
-    const handleMoveEnd = () => {
-      if (enabled) {
-        const size = map.getSize();
-        canvasRef.current.width = size.x;
-        canvasRef.current.height = size.y;
-        drawGrid();
-      }
+    return function() {
+      map.removeLayer(layer);
     };
+  }, [map, drawGrid, enabled]);
 
-    map.on('moveend', handleMoveEnd);
-    map.on('zoomend', handleMoveEnd);
-
-    if (enabled) {
-      drawGrid();
-    }
-
-    return () => {
-      map.off('moveend', handleMoveEnd);
-      map.off('zoomend', handleMoveEnd);
-      if (controlRef.current) {
-        map.removeControl(controlRef.current);
-        controlRef.current = null;
-      }
-      if (canvasRef.current && canvasRef.current.parentNode) {
-        canvasRef.current.parentNode.removeChild(canvasRef.current);
-      }
-    };
-  }, [map, drawGrid, enabled, precision, showLabels]);
-
-  // Redraw on changes
-  useEffect(() => {
+  // Update on changes
+  useEffect(function() {
     if (enabled && canvasRef.current && map) {
       drawGrid();
     }
