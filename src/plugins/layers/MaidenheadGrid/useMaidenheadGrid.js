@@ -34,6 +34,8 @@ function getMaidenheadGrid(lon, lat, zoom) {
   var y = lat;
   var p = d4[Math.round(zoom)] || 1;
   
+  console.log('DEBUG: getMaidenheadGrid lon=' + lon + ' lat=' + lat + ' zoom=' + zoom + ' p=' + p);
+  
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
   
@@ -54,6 +56,7 @@ function getMaidenheadGrid(lon, lat, zoom) {
     }
   }
   
+  console.log('DEBUG: Final grid=' + locator);
   return locator;
 }
 
@@ -92,6 +95,10 @@ export function useLayer({ map, enabled, opacity }) {
       
       var bounds = map.getBounds();
       var zoom = map.getZoom();
+      var d4 = [0,1,1,1,1,1,2,2,2,2,3,3,3,3,3,4,4,4,5,5,5];
+      var p = d4[Math.round(zoom)] || 1;
+      
+      console.log('DEBUG: zoom=' + zoom + ', d4[zoom]=' + p + ', expected chars=' + (2 + p*2));
       
       var unit = d3[Math.round(zoom)];
       var lcor = lat_cor[Math.round(zoom)];
@@ -113,6 +120,9 @@ export function useLayer({ map, enabled, opacity }) {
       var top = Math.ceil(n / unit) * unit;
       var bottom = Math.floor(s / unit) * unit;
       
+      console.log('DEBUG: unit=' + unit + ', lcor=' + lcor + ', c=' + c);
+      console.log('DEBUG: left=' + left + ', right=' + right + ', top=' + top + ', bottom=' + bottom);
+      
       for (var lon = left; lon < right; lon += (unit * 2)) {
         for (var lat = bottom; lat < top; lat += unit) {
           var rectBounds = [[lat, lon], [lat + unit, lon + (unit * 2)]];
@@ -131,6 +141,8 @@ export function useLayer({ map, enabled, opacity }) {
             var labelLon = lon + unit - (unit / lcor);
             var labelLat = lat + (unit / 2) + (unit / lcor * c);
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
+            
+            console.log('DEBUG: cell lon=' + lon + ' lat=' + lat + ' -> label at lon=' + labelLon + ' lat=' + labelLat + ' = ' + gridSquare);
             
             var size = (title_size[Math.round(zoom)] || 12) + 'px';
             
