@@ -18,7 +18,7 @@ export const metadata = {
 };
 
 // Convert lat/lon to Maidenhead grid square
-function getMaidenheadGrid(lon, lat, precision) {
+function getMaidenheadGrid(lon, lat, zoom) {
   var ydiv_arr = [10, 1, 1/24, 1/240, 1/240/24];
   var d1 = "ABCDEFGHIJKLMNOPQR".split("");
   var d2 = "ABCDEFGHIJKLMNOPQRSTUVWX".split("");
@@ -28,7 +28,7 @@ function getMaidenheadGrid(lon, lat, precision) {
   var locator = "";
   var x = lon;
   var y = lat;
-  var p = d4[Math.round(precision)] || 2;
+  var p = d4[Math.round(zoom)] || 1;
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
@@ -111,15 +111,6 @@ export function useLayer({ map, enabled, opacity }) {
       var top = Math.ceil(n / unit) * unit;
       var bottom = Math.floor(s / unit) * unit;
       
-      // Determine precision based on zoom (not user setting)
-      // zoom 0-5: 2 chars (field only)
-      // zoom 6-10: 4 chars (field + square)  
-      // zoom 11-14: 6 chars (field + square + subsquare)
-      // zoom 15+: 8 chars
-      var showPrecision = Math.round(zoom);
-      if (showPrecision < 2) showPrecision = 2;
-      if (showPrecision > 6) showPrecision = 6;
-      
       for (var lon = left; lon < right; lon += (unit * 2)) {
         for (var lat = bottom; lat < top; lat += unit) {
           var rectBounds = [[lat, lon], [lat + unit, lon + (unit * 2)]];
@@ -133,25 +124,19 @@ export function useLayer({ map, enabled, opacity }) {
             interactive: false
           }));
           
-          // Add label - centered in the grid cell
+          // Add label - using exact formula from reference
           if (showLabels) {
-            // Center of the cell
             var labelLon = lon + unit - (unit / lcor);
             var labelLat = lat + (unit / 2) + (unit / lcor * c);
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
-            // Calculate font size to fit within the grid cell
-            // At zoom 3, unit is 10 deg = very large, so small font
-            // At zoom 10+, unit is tiny, so need proportionally larger font
-            var baseFontSize = title_size[Math.round(zoom)] || 12;
-            // Scale font based on grid cell size relative to screen
-            var fontSize = Math.max(8, Math.min(24, baseFontSize * 0.7));
+            var fontSize = title_size[Math.round(zoom)] || 12;
             
             var myIcon = L.divIcon({
               className: 'maidenhead-label',
               html: '<span style="color: rgba(255,255,255,' + opacity + '); font-size: ' + fontSize + 'px; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black; white-space: nowrap;">' + gridSquare + '</span>',
-              iconSize: [fontSize * 5, fontSize * 1.5],
-              iconAnchor: [fontSize * 2.5, fontSize * 0.75]
+              iconSize: [fontSize * 6, fontSize * 1.8],
+              iconAnchor: [fontSize * 3, fontSize * 0.9]
             });
             
             gridLayer.addLayer(L.marker([labelLat, labelLon], {
