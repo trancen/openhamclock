@@ -136,8 +136,8 @@ export function useLayer({ map, enabled, opacity }) {
           // Add label - centered in the grid cell
           if (showLabels) {
             // Center of the cell
-            var labelLon = lon + unit;
-            var labelLat = lat + unit / 2;
+            var labelLon = lon + unit - (unit / lcor);
+            var labelLat = lat + (unit / 2) + (unit / lcor * c);
             var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
             // Calculate font size to fit within the grid cell
