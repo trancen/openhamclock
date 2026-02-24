@@ -22,12 +22,13 @@ function getMaidenheadGrid(lon, lat, precision) {
   var ydiv_arr = [10, 1, 1/24, 1/240, 1/240/24];
   var d1 = "ABCDEFGHIJKLMNOPQR".split("");
   var d2 = "ABCDEFGHIJKLMNOPQRSTUVWX".split("");
+  // Precision mapping: zoom level -> how many pairs of chars
   var d4 = [0,1,1,1,1,1,2,2,2,2,3,3,3,3,3,4,4,4,5,5,5];
   
   var locator = "";
   var x = lon;
   var y = lat;
-  var p = precision;
+  var p = d4[Math.round(precision)] || 2;
   
   while (x < -180) { x += 360; }
   while (x > 180) { x -= 360; }
@@ -80,14 +81,15 @@ export function useLayer({ map, enabled, opacity }) {
     if (!map || typeof L === 'undefined') return;
     if (!enabled) return;
 
-    // Grid unit sizes per zoom level
-    const d3 = [20,10,10,10,10,10,1,1,1,1,1/24,1/24,1/24,1/24,1/24,1/240,1/240,1/240,1/240/24,1/240/24,1/240/24];
-    const lat_cor = [0,8,8,8,10,14,6,8,8,8,1.4,2.5,3,3.5,4,4,3.5,3.5,1.47,1.8,1.6];
+    // Grid unit sizes per zoom level (d3[zoom])
+    var d3 = [20,10,10,10,10,10,1,1,1,1,1/24,1/24,1/24,1/24,1/24,1/240,1/240,1/240,1/240/24,1/240/24,1/240/24];
+    var lat_cor = [0,8,8,8,10,14,6,8,8,8,1.4,2.5,3,3.5,4,4,3.5,3.5,1.47,1.8,1.6];
+    // Font sizes per zoom level
+    var title_size = [0,10,12,16,20,26,12,16,24,36,12,14,20,36,60,12,20,36,8,12,24];
     
-    const gridLayer = L.layerGroup();
+    var gridLayer = L.layerGroup();
     
-    // Store the redraw function
-    const redrawGrid = function() {
+    var redrawGrid = function() {
       gridLayer.clearLayers();
       
       var bounds = map.getBounds();
@@ -109,10 +111,14 @@ export function useLayer({ map, enabled, opacity }) {
       var top = Math.ceil(n / unit) * unit;
       var bottom = Math.floor(s / unit) * unit;
       
-      // Determine how many precision levels to show based on zoom
-      var showPrecision = precision;
-      if (zoom < 3 && precision > 2) showPrecision = 2;
-      if (zoom < 6 && precision > 4) showPrecision = 4;
+      // Determine precision based on zoom (not user setting)
+      // zoom 0-5: 2 chars (field only)
+      // zoom 6-10: 4 chars (field + square)  
+      // zoom 11-14: 6 chars (field + square + subsquare)
+      // zoom 15+: 8 chars
+      var showPrecision = Math.round(zoom);
+      if (showPrecision < 2) showPrecision = 2;
+      if (showPrecision > 6) showPrecision = 6;
       
       for (var lon = left; lon < right; lon += (unit * 2)) {
         for (var lat = bottom; lat < top; lat += unit) {
@@ -127,20 +133,25 @@ export function useLayer({ map, enabled, opacity }) {
             interactive: false
           }));
           
-          // Add label
+          // Add label - centered in the grid cell
           if (showLabels) {
-            var labelLon = lon + unit - (unit / lcor);
-            var labelLat = lat + (unit / 2) + (unit / lcor * c);
-            var gridSquare = getMaidenheadGrid(labelLon, labelLat, showPrecision);
+            // Center of the cell
+            var labelLon = lon + unit;
+            var labelLat = lat + unit / 2;
+            var gridSquare = getMaidenheadGrid(labelLon, labelLat, zoom);
             
-            var title_size = [0,10,12,16,20,26,12,16,24,36,12,14,20,36,60,12,20,36,8,12,24];
-            var size = (title_size[Math.round(zoom)] || 12) + 'px';
+            // Calculate font size to fit within the grid cell
+            // At zoom 3, unit is 10 deg = very large, so small font
+            // At zoom 10+, unit is tiny, so need proportionally larger font
+            var baseFontSize = title_size[Math.round(zoom)] || 12;
+            // Scale font based on grid cell size relative to screen
+            var fontSize = Math.max(8, Math.min(24, baseFontSize * 0.7));
             
             var myIcon = L.divIcon({
               className: 'maidenhead-label',
-              html: '<span style="color: rgba(255,255,255,' + opacity + '); font-size: ' + size + '; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black;">' + gridSquare + '</span>',
-              iconSize: [80, 30],
-              iconAnchor: [40, 15]
+              html: '<span style="color: rgba(255,255,255,' + opacity + '); font-size: ' + fontSize + 'px; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 2px black; white-space: nowrap;">' + gridSquare + '</span>',
+              iconSize: [fontSize * 5, fontSize * 1.5],
+              iconAnchor: [fontSize * 2.5, fontSize * 0.75]
             });
             
             gridLayer.addLayer(L.marker([labelLat, labelLon], {
