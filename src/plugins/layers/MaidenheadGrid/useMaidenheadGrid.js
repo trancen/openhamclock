@@ -1,7 +1,7 @@
 /**
  * Maidenhead Grid Overlay Plugin
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 // Grid precision options
 export const GRID_PRECISIONS = {
@@ -140,7 +140,7 @@ export const metadata = {
   localOnly: false,
 };
 
-// Main plugin hook - with canvas initialization
+// Main plugin hook - with drawing
 export function useLayer({ map, enabled, opacity }) {
   const [precision, setPrecision] = useState(4);
   const [showLabels, setShowLabels] = useState(true);
@@ -164,7 +164,77 @@ export function useLayer({ map, enabled, opacity }) {
     }
   }, []);
 
-  // Initialize canvas layer
+  // Draw function
+  const drawGrid = () => {
+    if (!map || !canvasRef.current || !enabled) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bounds = map.getBounds();
+
+    // Resize canvas to match map
+    const size = map.getSize();
+    if (canvas.width !== size.x || canvas.height !== size.y) {
+      canvas.width = size.x;
+      canvas.height = size.y;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (opacity <= 0) return;
+
+    const zoom = map.getZoom();
+    const gridLevels = getGridLevelsForZoom(zoom);
+
+    let displayPrecision = precision;
+    if (precision >= 4 && !gridLevels.squares) displayPrecision = 2;
+    if (precision >= 6 && !gridLevels.subSquares) displayPrecision = 4;
+
+    const gridData = calculateGridForBounds(
+      { south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() },
+      displayPrecision
+    );
+
+    const majorColor = 'rgba(255, 180, 50, ' + (opacity * 0.8) + ')';
+    const minorColor = 'rgba(255, 180, 50, ' + (opacity * 0.4) + ')';
+    const labelColor = 'rgba(255, 255, 255, ' + opacity + ')';
+
+    ctx.lineWidth = 1;
+
+    // Draw lines
+    gridData.lines.forEach(function(line) {
+      ctx.strokeStyle = line.minor ? minorColor : majorColor;
+      const p1 = map.latLngToContainerPoint([line.from, line.value]);
+      const p2 = map.latLngToContainerPoint([line.to, line.value]);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    });
+
+    // Draw labels
+    if (showLabels && gridLevels.labels) {
+      ctx.font = Math.max(10, 12 - zoom * 0.5) + 'px monospace';
+      ctx.fillStyle = labelColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      gridData.labels.forEach(function(label) {
+        const point = map.latLngToContainerPoint([label.lat, label.lon]);
+        if (point.x > 0 && point.x < canvas.width && point.y > 0 && point.y < canvas.height) {
+          const textWidth = ctx.measureText(label.text).width;
+          ctx.fillStyle = 'rgba(0, 0, 0, ' + (opacity * 0.5) + ')';
+          ctx.fillRect(point.x - textWidth / 2 - 2, point.y - 7, textWidth + 4, 14);
+          ctx.fillStyle = labelColor;
+          ctx.fillText(label.text, point.x, point.y);
+        }
+      });
+    }
+  };
+
+  // Initialize canvas and setup event listeners
   useEffect(() => {
     if (!map || !enabled) return;
     if (layerRef.current) return; // Already initialized
@@ -185,9 +255,21 @@ export function useLayer({ map, enabled, opacity }) {
       pane.appendChild(canvas);
     }
 
+    // Draw initial grid
+    drawGrid();
+
+    // Listen for map events
+    const handleMove = () => drawGrid();
+    const handleZoom = () => drawGrid();
+
+    map.on('moveend', handleMove);
+    map.on('zoomend', handleZoom);
+
     // Cleanup
     layerRef.current = {
       remove: () => {
+        map.off('moveend', handleMove);
+        map.off('zoomend', handleZoom);
         if (canvas.parentNode) {
           canvas.parentNode.removeChild(canvas);
         }
@@ -202,6 +284,12 @@ export function useLayer({ map, enabled, opacity }) {
     };
   }, [map, enabled]);
 
-  // Return null - canvas is rendered directly to DOM
+  // Redraw when opacity or precision changes
+  useEffect(() => {
+    if (enabled && canvasRef.current) {
+      drawGrid();
+    }
+  }, [opacity, precision, showLabels, enabled]);
+
   return null;
 }
